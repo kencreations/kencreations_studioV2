@@ -1,0 +1,6 @@
+import { createHotContext as __vite__createHotContext } from "/@vite/client";import.meta.hot = __vite__createHotContext("/src/pages/KeycapEditor.tsx");const React = __vite__cjsImport0_react; const useState = __vite__cjsImport0_react["useState"]; const useCallback = __vite__cjsImport0_react["useCallback"]; const useRef = __vite__cjsImport0_react["useRef"];const JSZip = __vite__cjsImport7_jszip;const _jsxDEV = __vite__cjsImport8_react_jsxDevRuntime["jsxDEV"];import __vite__cjsImport0_react from "/node_modules/.vite/deps/react.js?v=1abdd831";
+import { Link } from "/node_modules/.vite/deps/react-router-dom.js?v=1abdd831";
+import { ChevronLeft, Camera, Lock, Download, Upload, Search, Smile } from "/node_modules/.vite/deps/lucide-react.js?v=1abdd831";
+import * as THREE from "/node_modules/.vite/deps/three.js?v=1abdd831";
+import SceneKeycap, { FONT_OPTIONS, lettersFromLegends, gridPositions, computeSetBounds } from "/src/components/SceneKeycap.tsx";
+import { STLLoader } from "/node_modules/.v

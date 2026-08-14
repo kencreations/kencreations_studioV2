@@ -1,0 +1,5 @@
+[debug] [vite] connecting...
+[debug] [vite] connected.
+[info] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[warn] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.
+Screenshot saved to screenshot.png

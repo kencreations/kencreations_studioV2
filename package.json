@@ -1,0 +1,92 @@
+{
+    "name": "kencreations-v2",
+    "private": true,
+    "version": "1.0.0-beta",
+    "type": "module",
+    "main": "electron/loader.cjs",
+    "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "lint": "eslint .",
+        "preview": "vite preview",
+        "init-tailwind": "tailwindcss init -p",
+        "electron:dev": "cross-env NODE_ENV=development concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+        "compile:electron": "node electron/compile-electron.cjs",
+        "electron:build": "npm run build && npm run compile:electron && electron-builder"
+    },
+    "build": {
+        "appId": "com.kencreations.generator",
+        "productName": "Kencreations Studio",
+        "publish": [
+            {
+                "provider": "github",
+                "owner": "kensamonte",
+                "repo": "kencreations_studioV2"
+            }
+        ],
+        "directories": {
+            "output": "dist-electron"
+        },
+        "files": [
+            "dist/**/*",
+            "electron/*.jsc",
+            "electron/loader.cjs",
+            "electron/preload.cjs",
+            "package.json",
+            "node_modules/**/*"
+        ],
+        "win": {
+            "target": "nsis"
+        }
+    },
+    "dependencies": {
+        "@fortawesome/fontawesome-free": "^7.3.0",
+        "@react-three/drei": "^10.7.7",
+        "@react-three/fiber": "^9.6.1",
+        "better-sqlite3": "^13.0.3",
+        "bytenode": "^1.6.0",
+        "clipper-lib": "^6.4.2",
+        "d3-contour": "^4.0.2",
+        "electron-updater": "^6.8.9",
+        "fflate": "^0.8.3",
+        "file-saver": "^2.0.5",
+        "lucide": "^1.25.0",
+        "lucide-react": "^1.25.0",
+        "manifold-3d": "^3.5.1",
+        "node-forge": "^1.4.0",
+        "node-machine-id": "^1.1.12",
+        "opentype.js": "^2.0.0",
+        "pica": "^10.0.2",
+        "react": "^19.2.7",
+        "react-dom": "^19.2.7",
+        "react-image-crop": "^11.1.2",
+        "react-router-dom": "^7.18.1",
+        "three": "^0.185.1",
+        "three-3mf-exporter": "^45.2.0",
+        "three-bvh-csg": "^0.0.18",
+        "three-mesh-bvh": "^0.9.13"
+    },
+    "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@types/d3-contour": "^3.0.6",
+        "@types/react": "^19.2.17",
+        "@types/react-dom": "^19.2.3",
+        "@vitejs/plugin-react": "^6.0.3",
+        "@xmldom/xmldom": "^0.9.10",
+        "autoprefixer": "^10.5.2",
+        "bytenode": "^1.6.0",
+        "concurrently": "^10.0.4",
+        "cross-env": "^10.1.0",
+        "electron": "^43.4.0",
+        "electron-builder": "^26.15.3",
+        "eslint": "^10.6.0",
+        "eslint-plugin-react-hooks": "^7.1.1",
+        "eslint-plugin-react-refresh": "^0.5.3",
+        "globals": "^17.7.0",
+        "postcss": "^8.5.16",
+        "puppeteer": "^25.3.0",
+        "tailwindcss": "^3.4.19",
+        "vite": "^8.1.1",
+        "wait-on": "^9.1.0"
+    }
+}
