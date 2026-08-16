@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Home from "./pages/Home";
 import DesktopHome from "./pages/DesktopHome";
 import ActivationScreen from "./components/ActivationScreen";
@@ -8,8 +8,11 @@ import WhatsNewModal from "./components/WhatsNewModal";
 import KeychainEditor from "./pages/KeychainEditor";
 import CharmsEditor from "./pages/CharmsEditor";
 import KeycapEditor from "./pages/KeycapEditor";
+import ClickerEditor from "./pages/ClickerEditor";
+import MacropadEditor from "./pages/MacropadEditor";
 import UpdateToast from "./components/UpdateToast";
-
+import ErrorBoundary from "./components/ErrorBoundary";
+import { ProfileProvider } from "./contexts/ProfileContext";
 /**
  * App.jsx — Root component.
  *
@@ -119,27 +122,38 @@ function App() {
 
     // ── Main App ──────────────────────────────────────────────────────────
     return (
-        <>
-            {/* Global overlay components — rendered above all routes */}
-            {isDesktop && <BannerNotification />}
-            {isDesktop && <WhatsNewModal />}
-            {isDesktop && <UpdateToast />}
+        <ProfileProvider>
+            <ErrorBoundary>
+                {/* Global overlay components — rendered above all routes */}
+                {isDesktop && <BannerNotification />}
+                {isDesktop && <WhatsNewModal />}
+                {isDesktop && <UpdateToast />}
 
-            <Routes>
-                <Route
-                    path="/"
-                    element={
-                        isDesktop
-                            ? <DesktopHome entitlements={entitlements} />
-                            : <Home />
-                    }
-                />
-                <Route path="/editor" element={<Navigate to="/" replace />} />
-                <Route path="/editor/namekeychain" element={<KeychainEditor />} />
-                <Route path="/editor/charms" element={<CharmsEditor />} />
-                <Route path="/editor/keycap-maker" element={<KeycapEditor />} />
-            </Routes>
-        </>
+                <Routes>
+                    <Route
+                        path="/"
+                        element={
+                            isDesktop
+                                ? <DesktopHome entitlements={entitlements} />
+                                : <Home />
+                        }
+                    />
+                    <Route path="/profile" element={
+                        isDesktop ? (
+                            <React.Suspense fallback={<div className="p-8 text-center">Loading Profile...</div>}>
+                                {React.createElement(React.lazy(() => import('./pages/Profile')))}
+                            </React.Suspense>
+                        ) : <Navigate to="/" replace />
+                    } />
+                    <Route path="/editor" element={<Navigate to="/" replace />} />
+                    <Route path="/editor/namekeychain" element={<KeychainEditor />} />
+                    <Route path="/editor/charms" element={<CharmsEditor />} />
+                    <Route path="/editor/keycap-maker" element={<KeycapEditor />} />
+                    <Route path="/editor/clicker" element={<ClickerEditor />} />
+                    <Route path="/editor/macropad" element={<MacropadEditor />} />
+                </Routes>
+            </ErrorBoundary>
+        </ProfileProvider>
     );
 }
 

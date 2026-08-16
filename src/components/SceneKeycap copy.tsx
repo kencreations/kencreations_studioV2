@@ -519,6 +519,20 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
             new Map(),
         );
 
+        // Helper to normalize geometry to ~65 units so SCALE=0.28 works
+        const normalizeGeo = (g) => {
+            const TEMPLATE_RAW_SIZE = 65;
+            const sz = new THREE.Vector3();
+            g.boundingBox.getSize(sz);
+            const longestAxis = Math.max(sz.x, sz.y);
+            if (longestAxis > 0) {
+                const normScale = TEMPLATE_RAW_SIZE / longestAxis;
+                g.scale(normScale, normScale, normScale);
+                g.computeBoundingBox();
+            }
+            return g;
+        };
+
         // Load geometry: prefer customGeo if provided, else fall back to template.stl
         useEffect(() => {
             if (customGeo) {
@@ -526,34 +540,24 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
                 g.computeVertexNormals();
                 g.center();
                 g.computeBoundingBox();
-
-                // Normalize to template STL native scale (~65 units wide).
-                // Uploaded 3MF/STL files are in real mm (e.g. 18mm), so rescale
-                // them to ~65-unit space so SCALE=0.28 and spacing/export work correctly.
-                const TEMPLATE_RAW_SIZE = 65;
-                const sz = new THREE.Vector3();
-                g.boundingBox!.getSize(sz);
-                const longestAxis = Math.max(sz.x, sz.y);
-                if (longestAxis > 0) {
-                    const normScale = TEMPLATE_RAW_SIZE / longestAxis;
-                    g.scale(normScale, normScale, normScale);
-                    g.computeBoundingBox();
-                }
+                normalizeGeo(g);
 
                 setCapGeo(g);
-                const bb = g.boundingBox!.clone();
+                const bb = g.boundingBox.clone();
                 setCapBB(bb);
                 onCapBB?.(bb);
                 return;
             }
             new STLLoader().load(
-                "/models/keycaps/template.stl",
+                "./models/keycaps/template.stl",
                 (g) => {
                     g.computeVertexNormals();
                     g.center();
                     g.computeBoundingBox();
+                    normalizeGeo(g);
+
                     setCapGeo(g);
-                    const bb = g.boundingBox!.clone();
+                    const bb = g.boundingBox.clone();
                     setCapBB(bb);
                     onCapBB?.(bb);
                 },
@@ -563,14 +567,13 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
         }, [customGeo]);
 
         useEffect(() => {
-            const allFonts = [...FONT_OPTIONS, ...((window as any).customFonts || [])];
             const opt =
-                allFonts.find((f) => f.label === state.fontLabel) ??
-                allFonts[0];
+                FONT_OPTIONS.find((f) => f.label === state.fontLabel) ??
+                FONT_OPTIONS[0];
             const fl = new FontLoader();
             const tl = new TTFLoader();
             tl.load(
-                opt.path || opt.url || opt.file_path,
+                opt.path,
                 (json: any) => setFont(fl.parse(json)),
                 undefined,
                 (e) => console.error("Font error", e),
@@ -671,12 +674,6 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
                     // Caps scaled to exactly 18x18mm
                     realPos.forEach((pos) => {
                         const g = capGeo.clone();
-                        // Deep clone attributes so applyMatrix4 doesn't mutate the shared array!
-                        for (const key in g.attributes) {
-                            g.attributes[key] = g.attributes[key].clone();
-                        }
-                        if (g.index) g.index = g.index.clone();
-
                         g.applyMatrix4(
                             new THREE.Matrix4().makeScale(
                                 scaleX,

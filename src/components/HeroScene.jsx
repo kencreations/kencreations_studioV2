@@ -111,7 +111,7 @@ function CubeGrid() {
                 metalness={0.1}
                 thickness={2}
                 ior={1.5}
-                color="#c7d4d4ff"
+                color="#c7d4d4"
                 envMapIntensity={1.5}
                 clearcoat={0.5}
             />

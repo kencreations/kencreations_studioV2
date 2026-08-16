@@ -1,17 +1,12 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { Link } from "react-router-dom";
 import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
-import SceneKeycap, {
-    lettersFromLegends,
-    computeSetBounds,
-    FONT_OPTIONS,
-} from "../components/SceneKeycap";
+import SceneKeycap, { lettersFromLegends, computeSetBounds, FONT_OPTIONS } from "../components/SceneKeycap";
 import { KEYCAP_DEFAULTS } from "../store/appState";
-import { useFilamentBrands } from "../hooks/useFilamentBrands";
+import { colors } from "../data/colors";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader.js";
-import { useProfile } from "../contexts/ProfileContext";
 import * as THREE from "three";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
@@ -39,72 +34,34 @@ function Slider({ label, value, min, max, step, onChange }) {
     );
 }
 
-const getColorName = (hex, allBrands, customColors = []) => {
-    // Check custom colors first
-    const customMatch = customColors.find(c => c.hex_code.toLowerCase() === hex.toLowerCase());
-    if (customMatch) return customMatch.color_name;
-
-    if (!allBrands) return "Custom Color";
-    
-    // Flatten all brand colors to search for the hex
-    const allColors = Object.values(allBrands).flat();
-    
+const getColorName = (hex) => {
+    const allColors = [...colors.BambuLab, ...colors.Esun];
     const match = allColors.find(
         (c) => c.hex.toLowerCase() === hex.toLowerCase(),
     );
     return match ? match.name : "Custom Color";
 };
 
-function ColorSelectionDrawer({ value, onChange, isOpen, onClose, anchorRef }) {
-    const { brands: colors } = useFilamentBrands();
-    const { customColors } = useProfile();
-
-    const mergedColors = useMemo(() => {
-        const merged = JSON.parse(JSON.stringify(colors));
-        customColors.forEach(c => {
-            const b = c.brand || "Custom";
-            if (!merged[b]) merged[b] = [];
-            merged[b].push({ hex: c.hex_code, name: c.color_name });
-        });
-        return merged;
-    }, [colors, customColors]);
-
+function ColorSelectionDrawer({ value, onChange, isOpen, onClose }) {
     const [selectedBrand, setSelectedBrand] = useState("BambuLab");
-    const [drawerStyle, setDrawerStyle] = useState({});
-
-    useEffect(() => {
-        if (isOpen && anchorRef?.current) {
-            const rect = anchorRef.current.getBoundingClientRect();
-            // Position fixed breaks out of the sidebar's overflow: auto!
-            // We anchor it to the top-left of the button, pushing it upwards (bottom: window height - rect.top + margin).
-            setDrawerStyle({
-                position: "fixed",
-                left: rect.left,
-                bottom: window.innerHeight - rect.top + 8,
-                zIndex: 9999,
-            });
-        }
-    }, [isOpen, anchorRef]);
 
     if (!isOpen) return null;
 
     return (
-        <div
-            className="w-96 rounded-2xl border border-secondary bg-white p-4 shadow-2xl"
-            style={drawerStyle}>
-            <div className="flex gap-10 mb-4 border-b pb-2 border-secondary overflow-x-auto">
-                {Object.keys(mergedColors).map((brand) => (
+        <div className="absolute left-0 top-0 z-50 w-72 mt-5 rounded-2xl border border-secondary bg-white p-4 shadow-2xl">
+            <div className="flex gap-10 mb-4 border-b pb-2 border-secondary">
+                {Object.keys(colors).map((brand) => (
                     <button
                         key={brand}
                         onClick={() => setSelectedBrand(brand)}
-                        className={`text-sm font-bold whitespace-nowrap ${selectedBrand === brand ? "text-secondary border-b-2 border-secondary " : "text-gray-400 hover:text-secondary"}`}>
+                        className={`text-sm font-bold ${selectedBrand === brand ? "text-secondary border-b-2 border-secondary " : "text-gray-400 hover:text-secondary"}`}>
                         {brand === "BambuLab" ? "Bambu Lab" : brand}
                     </button>
                 ))}
             </div>
-            <div className="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto pr-1">
-                {mergedColors[selectedBrand]?.map((color) => (
-                    <div key={color.hex + color.name} className="flex flex-col items-center">
+            <div className="grid grid-cols-6 gap-2 max-h-96 overflow-y-auto pr-1">
+                {colors[selectedBrand].map((color) => (
+                    <div key={color.hex} className="flex flex-col items-center">
                         <button
                             onClick={() => {
                                 onChange(color.hex);
@@ -132,28 +89,24 @@ function ColorSelectionDrawer({ value, onChange, isOpen, onClose, anchorRef }) {
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function KeycapEditor() {
-    const { brands: cloudColors } = useFilamentBrands();
-    const { customColors } = useProfile();
     const [state, setState] = useState(KEYCAP_DEFAULTS);
     const [capBB, setCapBB] = useState(null);
     const [customGeo, setCustomGeo] = useState(null);
     const [customBaseName, setCustomBaseName] = useState(null);
     const sceneRef = useRef(null);
     const fileInputRef = useRef(null);
-    const capColorRef = useRef(null);
-    const legendColorRef = useRef(null);
 
     // Handle uploading a custom keycap base (STL or 3MF)
     const handleUploadBase = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const ext = file.name.split(".").pop().toLowerCase();
+        const ext = file.name.split('.').pop().toLowerCase();
         const reader = new FileReader();
         reader.onload = () => {
             const buffer = reader.result;
             try {
                 let geometry;
-                if (ext === "3mf") {
+                if (ext === '3mf') {
                     const loader = new ThreeMFLoader();
                     const group = loader.parse(buffer);
                     // Extract all meshes from the 3MF group and merge them
@@ -166,15 +119,10 @@ export default function KeycapEditor() {
                             geometries.push(g);
                         }
                     });
-                    if (geometries.length === 0)
-                        throw new Error("No geometry found in 3MF");
-                    geometry =
-                        geometries.length === 1
-                            ? geometries[0]
-                            : BufferGeometryUtils.mergeGeometries(
-                                  geometries,
-                                  false,
-                              );
+                    if (geometries.length === 0) throw new Error('No geometry found in 3MF');
+                    geometry = geometries.length === 1
+                        ? geometries[0]
+                        : BufferGeometryUtils.mergeGeometries(geometries, false);
                 } else {
                     // Default: STL
                     const loader = new STLLoader();
@@ -184,18 +132,13 @@ export default function KeycapEditor() {
                 setCustomGeo(geometry);
                 setCustomBaseName(file.name);
             } catch (err) {
-                console.error(
-                    "[KeycapEditor] Failed to parse uploaded file:",
-                    err,
-                );
-                alert(
-                    "Failed to load the file. Please ensure it is a valid STL or 3MF file.",
-                );
+                console.error('[KeycapEditor] Failed to parse uploaded file:', err);
+                alert('Failed to load the file. Please ensure it is a valid STL or 3MF file.');
             }
         };
         reader.readAsArrayBuffer(file);
         // Reset input so the same file can be re-uploaded
-        e.target.value = "";
+        e.target.value = '';
     };
 
     const handleResetBase = () => {
@@ -206,13 +149,10 @@ export default function KeycapEditor() {
     // Font selection state
     const [isFontOpen, setIsFontOpen] = useState(false);
     const [fontSearch, setFontSearch] = useState("");
-    const allFonts = [...FONT_OPTIONS, ...(window.customFonts || [])];
-    const filteredFonts = allFonts.filter((f) =>
+    const filteredFonts = FONT_OPTIONS.filter((f) =>
         f.label.toLowerCase().includes(fontSearch.toLowerCase()),
     );
-    const selectedFont =
-        allFonts.find((f) => f.label === state.fontLabel) ||
-        allFonts[0];
+    const selectedFont = FONT_OPTIONS.find((f) => f.label === state.fontLabel) || FONT_OPTIONS[0];
 
     // Color drawers state
     const [openColorDrawer, setOpenColorDrawer] = useState(null); // 'cap' or 'legend'
@@ -234,24 +174,21 @@ export default function KeycapEditor() {
                     <div className="flex items-center justify-between">
                         <Link
                             to="/"
-                            className="text-xs font-bold text-gray-400 hover:text-gray-800 transition-colors uppercase tracking-wider">
+                            className="text-xs font-bold text-gray-400 hover:text-gray-800 transition-colors uppercase tracking-wider"
+                        >
                             ‹ Back to Studio
                         </Link>
                     </div>
 
                     <p className="text-xs text-gray-500 leading-relaxed">
-                        Generate full mechanical keyboard keycap sets in
-                        seconds. Customize legends, fonts, and colors!
+                        Generate full mechanical keyboard keycap sets in seconds. Customize legends, fonts, and colors!
                     </p>
 
                     {/* Custom Keycap Base Upload */}
                     <div className="rounded-2xl border border-secondary bg-white p-3 shadow-sm space-y-3">
-                        <span className="text-sm font-semibold text-gray-700">
-                            Keycap Base
-                        </span>
+                        <span className="text-sm font-semibold text-gray-700">Keycap Base</span>
                         <p className="text-[10px] text-gray-400 leading-relaxed">
-                            Upload your own .STL or .3MF keycap profile to
-                            replace the default shape.
+                            Upload your own .STL or .3MF keycap profile to replace the default shape.
                         </p>
                         <input
                             type="file"
@@ -263,26 +200,22 @@ export default function KeycapEditor() {
                         {customBaseName ? (
                             <div className="space-y-2">
                                 <div className="flex items-center gap-2 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2">
-                                    <span className="text-teal-600 text-sm">
-                                        ✓
-                                    </span>
-                                    <span
-                                        className="text-xs font-semibold text-teal-700 truncate flex-1"
-                                        title={customBaseName}>
+                                    <span className="text-teal-600 text-sm">✓</span>
+                                    <span className="text-xs font-semibold text-teal-700 truncate flex-1" title={customBaseName}>
                                         {customBaseName}
                                     </span>
                                 </div>
                                 <div className="flex gap-2">
                                     <button
-                                        onClick={() =>
-                                            fileInputRef.current?.click()
-                                        }
-                                        className="flex-1 text-[10px] font-bold text-secondary border border-secondary/30 rounded-lg py-1.5 hover:bg-secondary/10 transition-colors">
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="flex-1 text-[10px] font-bold text-secondary border border-secondary/30 rounded-lg py-1.5 hover:bg-secondary/10 transition-colors"
+                                    >
                                         Replace
                                     </button>
                                     <button
                                         onClick={handleResetBase}
-                                        className="flex-1 text-[10px] font-bold text-gray-500 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-100 transition-colors">
+                                        className="flex-1 text-[10px] font-bold text-gray-500 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-100 transition-colors"
+                                    >
                                         Reset to Default
                                     </button>
                                 </div>
@@ -290,16 +223,9 @@ export default function KeycapEditor() {
                         ) : (
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-secondary/40 bg-secondary/5 px-4 py-3 text-xs font-bold text-secondary hover:bg-secondary/10 hover:border-secondary transition-all">
-                                <svg
-                                    width="16"
-                                    height="16"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2.5"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round">
+                                className="w-full flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-secondary/40 bg-secondary/5 px-4 py-3 text-xs font-bold text-secondary hover:bg-secondary/10 hover:border-secondary transition-all"
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                     <polyline points="17 8 12 3 7 8"></polyline>
                                     <line x1="12" y1="3" x2="12" y2="15"></line>
@@ -313,9 +239,7 @@ export default function KeycapEditor() {
                     <div className="rounded-2xl border border-secondary bg-white p-3 shadow-sm space-y-3">
                         <label className="grid gap-1.5">
                             <div className="flex justify-between">
-                                <span className="text-xs font-semibold text-gray-700">
-                                    Legends
-                                </span>
+                                <span className="text-xs font-semibold text-gray-700">Legends</span>
                                 <span className="text-[10px] font-semibold text-gray-400">
                                     {letters.length} keys · {cols}×{rows}
                                 </span>
@@ -330,14 +254,8 @@ export default function KeycapEditor() {
                         </label>
                         <div className="flex gap-2 flex-wrap">
                             {[
-                                {
-                                    label: "A–Z + 0–9",
-                                    val: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-                                },
-                                {
-                                    label: "A–Z",
-                                    val: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-                                },
+                                { label: "A–Z + 0–9", val: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" },
+                                { label: "A–Z", val: "ABCDEFGHIJKLMNOPQRSTUVWXYZ" },
                                 { label: "0–9", val: "0123456789" },
                             ].map((preset) => (
                                 <button
@@ -352,22 +270,16 @@ export default function KeycapEditor() {
 
                     {/* Font & Appearance */}
                     <div className="rounded-2xl border border-secondary bg-white p-3 shadow-sm space-y-4">
-                        <span className="text-sm font-semibold text-gray-700">
-                            Typography
-                        </span>
-
+                        <span className="text-sm font-semibold text-gray-700">Typography</span>
+                        
                         <div className="grid gap-1.5 relative">
-                            <span className="text-xs font-semibold text-gray-700">
-                                Font Family
-                            </span>
+                            <span className="text-xs font-semibold text-gray-700">Font Family</span>
                             <button
                                 type="button"
                                 onClick={() => setIsFontOpen((o) => !o)}
                                 className="flex w-full items-center justify-between rounded-xl border border-secondary bg-gray-50 px-3 py-2 text-left text-sm text-neutral hover:border-secondary focus:outline-none transition-colors">
                                 <span>{selectedFont.label}</span>
-                                <span className="text-primary text-xs">
-                                    {isFontOpen ? "▲" : "▼"}
-                                </span>
+                                <span className="text-primary text-xs">{isFontOpen ? "▲" : "▼"}</span>
                             </button>
 
                             {isFontOpen && (
@@ -375,9 +287,7 @@ export default function KeycapEditor() {
                                     <input
                                         type="text"
                                         value={fontSearch}
-                                        onChange={(e) =>
-                                            setFontSearch(e.target.value)
-                                        }
+                                        onChange={(e) => setFontSearch(e.target.value)}
                                         placeholder="search fonts..."
                                         autoFocus
                                         className="mb-2 w-full rounded-xl border border-secondary bg-gray-50 px-3 py-2 text-sm outline-none focus:border-secondary"
@@ -388,26 +298,17 @@ export default function KeycapEditor() {
                                                 key={font.label}
                                                 type="button"
                                                 onClick={() => {
-                                                    set(
-                                                        "fontLabel",
-                                                        font.label,
-                                                    );
+                                                    set("fontLabel", font.label);
                                                     setIsFontOpen(false);
                                                     setFontSearch("");
                                                 }}
                                                 className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                                                    font.label ===
-                                                    state.fontLabel
+                                                    font.label === state.fontLabel
                                                         ? "bg-secondary/15 text-neutral font-bold"
                                                         : "hover:bg-white"
                                                 }`}>
                                                 <span>{font.label}</span>
-                                                {font.label ===
-                                                    state.fontLabel && (
-                                                    <span className="text-primary">
-                                                        ✓
-                                                    </span>
-                                                )}
+                                                {font.label === state.fontLabel && <span className="text-primary">✓</span>}
                                             </button>
                                         ))}
                                     </div>
@@ -437,33 +338,20 @@ export default function KeycapEditor() {
 
                     {/* Colors */}
                     <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm space-y-3 relative">
-                        <span className="text-sm font-semibold text-gray-700">
-                            Colors
-                        </span>
+                        <span className="text-sm font-semibold text-gray-700">Colors</span>
                         <div className="grid grid-cols-2 gap-3">
                             {/* Cap Color */}
                             <label className="grid gap-1.5 relative">
-                                <span className="text-xs font-semibold text-gray-500">
-                                    Cap Color
-                                </span>
+                                <span className="text-xs font-semibold text-gray-500">Cap Color</span>
                                 <button
-                                    ref={capColorRef}
-                                    onClick={() =>
-                                        setOpenColorDrawer(
-                                            openColorDrawer === "cap"
-                                                ? null
-                                                : "cap",
-                                        )
-                                    }
+                                    onClick={() => setOpenColorDrawer(openColorDrawer === "cap" ? null : "cap")}
                                     className="flex w-full items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-1.5 pr-3 transition-colors hover:border-secondary">
                                     <div
                                         className="h-6 w-6 rounded-lg shadow-inner border border-black/10"
-                                        style={{
-                                            backgroundColor: state.capColor,
-                                        }}
+                                        style={{ backgroundColor: state.capColor }}
                                     />
                                     <span className="text-xs font-medium text-neutral truncate">
-                                        {getColorName(state.capColor, cloudColors, customColors)}
+                                        {getColorName(state.capColor)}
                                     </span>
                                 </button>
                                 <ColorSelectionDrawer
@@ -471,33 +359,21 @@ export default function KeycapEditor() {
                                     value={state.capColor}
                                     onChange={(hex) => set("capColor", hex)}
                                     onClose={() => setOpenColorDrawer(null)}
-                                    anchorRef={capColorRef}
                                 />
                             </label>
 
                             {/* Legend Color */}
                             <label className="grid gap-1.5 relative">
-                                <span className="text-xs font-semibold text-gray-500">
-                                    Legend Color
-                                </span>
+                                <span className="text-xs font-semibold text-gray-500">Legend Color</span>
                                 <button
-                                    ref={legendColorRef}
-                                    onClick={() =>
-                                        setOpenColorDrawer(
-                                            openColorDrawer === "legend"
-                                                ? null
-                                                : "legend",
-                                        )
-                                    }
+                                    onClick={() => setOpenColorDrawer(openColorDrawer === "legend" ? null : "legend")}
                                     className="flex w-full items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 p-1.5 pr-3 transition-colors hover:border-secondary">
                                     <div
                                         className="h-6 w-6 rounded-lg shadow-inner border border-black/10"
-                                        style={{
-                                            backgroundColor: state.legendColor,
-                                        }}
+                                        style={{ backgroundColor: state.legendColor }}
                                     />
                                     <span className="text-xs font-medium text-neutral truncate">
-                                        {getColorName(state.legendColor, cloudColors, customColors)}
+                                        {getColorName(state.legendColor)}
                                     </span>
                                 </button>
                                 <ColorSelectionDrawer
@@ -505,98 +381,50 @@ export default function KeycapEditor() {
                                     value={state.legendColor}
                                     onChange={(hex) => set("legendColor", hex)}
                                     onClose={() => setOpenColorDrawer(null)}
-                                    anchorRef={legendColorRef}
                                 />
                             </label>
                         </div>
                     </div>
-
+                    
                     {/* Settings */}
                     <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm space-y-3">
-                        <span className="text-sm font-semibold text-gray-700">
-                            Advanced
-                        </span>
-
+                        <span className="text-sm font-semibold text-gray-700">Advanced</span>
+                        
                         <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={state.topBorder}
-                                onChange={(e) =>
-                                    set("topBorder", e.target.checked)
-                                }
+                            <input 
+                                type="checkbox" 
+                                checked={state.topBorder} 
+                                onChange={e => set("topBorder", e.target.checked)}
                                 className="w-4 h-4 accent-secondary rounded"
                             />
                             <div className="flex flex-col">
-                                <span className="text-xs font-semibold text-gray-700">
-                                    Add Border
-                                </span>
-                                <span className="text-[10px] text-gray-400">
-                                    Adds an extruded border around the cap edge
-                                </span>
+                                <span className="text-xs font-semibold text-gray-700">Add Border</span>
+                                <span className="text-[10px] text-gray-400">Adds an extruded border around the cap edge</span>
                             </div>
                         </label>
 
                         <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={state.mergeForExport}
-                                onChange={(e) =>
-                                    set("mergeForExport", e.target.checked)
-                                }
+                            <input 
+                                type="checkbox" 
+                                checked={state.mergeForExport} 
+                                onChange={e => set("mergeForExport", e.target.checked)}
                                 className="w-4 h-4 accent-secondary rounded"
                             />
                             <div className="flex flex-col">
-                                <span className="text-xs font-semibold text-gray-700">
-                                    Merge Colors (STL only)
-                                </span>
-                                <span className="text-[10px] text-gray-400">
-                                    Merges caps and legends into a single 3D
-                                    object
-                                </span>
+                                <span className="text-xs font-semibold text-gray-700">Merge Colors (STL only)</span>
+                                <span className="text-[10px] text-gray-400">Merges caps and legends into a single 3D object</span>
                             </div>
                         </label>
                     </div>
+
                 </div>
             }>
-            <EditorCanvas
-                dims={bounds}
-                title="Keycap_Set"
-                getCustomExportScene={() => {
-                    if (!sceneRef.current) return null;
-                    const geo = sceneRef.current.buildExportGeo();
-                    if (!geo) return null;
-
-                    const group = new THREE.Group();
-
-                    // Create basic materials for export (3MF exporter uses color, STL ignores it)
-                    const capMat = new THREE.MeshStandardMaterial({
-                        color: state.capColor,
-                    });
-                    const legMat = new THREE.MeshStandardMaterial({
-                        color: state.legendColor,
-                    });
-
-                    if (state.mergeForExport) {
-                        // Merge them into one mesh if requested (usually for STL)
-                        const merged = BufferGeometryUtils.mergeGeometries(
-                            [geo.caps, geo.legends],
-                            false,
-                        );
-                        group.add(new THREE.Mesh(merged, capMat));
-                    } else {
-                        // Add as separate meshes
-                        group.add(new THREE.Mesh(geo.caps, capMat));
-                        group.add(new THREE.Mesh(geo.legends, legMat));
-                    }
-
-                    // The returned group will be directly parsed by STLExporter/exportTo3MF
-                    return group;
-                }}>
-                <SceneKeycap
-                    ref={sceneRef}
-                    state={state}
-                    onCapBB={handleCapBB}
-                    customGeo={customGeo}
+            <EditorCanvas dims={bounds} title="Keycap_Set">
+                <SceneKeycap 
+                    ref={sceneRef} 
+                    state={state} 
+                    onCapBB={handleCapBB} 
+                    customGeo={customGeo} 
                 />
             </EditorCanvas>
         </EditorLayout>

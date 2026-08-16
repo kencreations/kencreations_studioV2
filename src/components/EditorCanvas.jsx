@@ -113,7 +113,14 @@ const CaptureHelper = ({ captureRef, buildPlateRef, gizmoRef, title }) => {
  *     <Center>{your meshes}</Center>
  *   </EditorCanvas>
  */
-export default function EditorCanvas({ dims, title, children, cameraPosition = [0, 80, 120], cameraTarget = [0, 0, 0] }) {
+export default function EditorCanvas({
+    dims,
+    title,
+    children,
+    cameraPosition = [0, 80, 120],
+    cameraTarget = [0, 0, 0],
+    getCustomExportScene,
+}) {
     const exportGroupRef = useRef();
     const captureRef = useRef();
     const buildPlateRef = useRef();
@@ -122,6 +129,9 @@ export default function EditorCanvas({ dims, title, children, cameraPosition = [
     const [isExporting, setIsExporting] = useState(false);
 
     const getExportScene = () => {
+        if (getCustomExportScene) {
+            return getCustomExportScene();
+        }
         if (!exportGroupRef.current) return null;
         const clone = exportGroupRef.current.clone();
         // Reset rotation and position to export in native coordinates (XY plane = bed, Z = thickness)
@@ -133,10 +143,13 @@ export default function EditorCanvas({ dims, title, children, cameraPosition = [
     };
 
     const handleExportSTL = async () => {
-        const exportScene = getExportScene();
-        if (!exportScene) return;
         setIsExporting(true);
         try {
+            const exportScene = getExportScene();
+            if (!exportScene) {
+                setIsExporting(false);
+                return;
+            }
             const exporter = new STLExporter();
             const stlData = exporter.parse(exportScene, { binary: true });
             const blob = new Blob([stlData], { type: "application/octet-stream" });
@@ -164,10 +177,14 @@ export default function EditorCanvas({ dims, title, children, cameraPosition = [
     }, [children, dims, title]);
 
     const handleExport3MF = async () => {
-        const exportScene = getExportScene();
-        if (!exportScene) return;
         setIsExporting(true);
         try {
+
+            const exportScene = getExportScene();
+            if (!exportScene) {
+                setIsExporting(false);
+                return;
+            }
             const data = await exportTo3MF(exportScene);
             const blob = data instanceof Blob ? data : new Blob([data], { type: "model/3mf" });
             const url = URL.createObjectURL(blob);
@@ -219,7 +236,7 @@ export default function EditorCanvas({ dims, title, children, cameraPosition = [
                     <BuildPlate />
                 </group>
 
-                <OrbitControls makeDefault target={cameraTarget} />
+                <OrbitControls makeDefault target={cameraTarget} enableDamping dampingFactor={0.05} zoomSpeed={1.5} panSpeed={1.2} />
 
                 <group ref={gizmoRef}>
                     <GizmoHelper alignment="top-right" margin={[190, 70]}>

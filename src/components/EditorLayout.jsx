@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 export default function EditorLayout({
     title,
@@ -14,15 +15,15 @@ export default function EditorLayout({
             {/* Top Navigation */}
             <nav className="flex items-center justify-between px-6 py-3.5 bg-white shadow-sm z-10 drop-shadow-xl">
                 <div className="flex items-center space-x-4">
-                    <a
-                        href="/"
+                    <Link
+                        to="/"
                         className="flex items-center text-xl font-black tracking-tighter">
                         <span className="text-teal-500">K</span>
                         <span className="text-orange-500">C</span>
                         <span className="ml-2 text-gray-800 font-bold tracking-normal text-lg">
                             KENCREATIONS
                         </span>
-                    </a>
+                    </Link>
                     <div className="h-6 w-px bg-gray-200" />
                 </div>
 
@@ -50,8 +51,8 @@ export default function EditorLayout({
             {/* Main Workspace */}
             <main className="flex flex-1 overflow-hidden p-4 gap-4 w-full">
                 {/* Sidebar */}
-                <aside className=" w-1/5 flex flex-col bg-white rounded-2xl shadow-md flex-shrink-0 overflow-hidden border border-secondary">
-                    <div className="bg-secondary text-white text-sm font-bold text-center py-3.5 tracking-widest uppercase">
+                <aside className=" w-1/5 flex flex-col bg-white rounded-2xl shadow-md flex-shrink-0 border border-secondary">
+                    <div className="bg-secondary text-white text-sm font-bold text-center py-3.5 tracking-widest uppercase rounded-t-2xl">
                         {title}
                     </div>
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-4">

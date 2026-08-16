@@ -20,8 +20,9 @@
 
 const { net } = require('electron');
 const https = require('https');
-const db = require('./db.cjs');
-const { firestoreGet, parseFirestoreDoc } = require('./licenseManager.cjs');
+const getMod = (n) => { try { return require(`./${n}.cjs`); } catch(e) { return require(`./${n}.jsc`); } };
+const db = getMod('db');
+const { firestoreGet, parseFirestoreDoc } = getMod('licenseManager');
 
 const FIREBASE_PROJECT_ID = 'kencreations-studio';
 const FIREBASE_API_KEY = 'AIzaSyDLHUB-DGP_pnkOZJijAih3CU7BJB2lwaw';
@@ -304,6 +305,43 @@ async function syncUpdates(mainWindow) {
   }
 }
 
+// ─── App Config Sync ─────────────────────────────────────────────────────────
+
+/**
+ * Fetches the global filament brands and colors configuration.
+ */
+async function syncFilamentBrands(mainWindow) {
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/app_config/filament_brands?key=${FIREBASE_API_KEY}`;
+    
+    // We use standard GET for a single document
+    const res = await new Promise((resolve, reject) => {
+      const req = https.get(url, (r) => {
+        let data = '';
+        r.on('data', chunk => data += chunk);
+        r.on('end', () => {
+          if (r.statusCode >= 400 && r.statusCode !== 404) reject(new Error(`HTTP ${r.statusCode}`));
+          else resolve(data ? JSON.parse(data) : null);
+        });
+      });
+      req.on('error', reject);
+    });
+
+    if (res && res.fields) {
+      // The document is stored as a JSON string under a "data" field to avoid deep mapValue nesting limits
+      const brandsData = res.fields.data ? res.fields.data.stringValue : null;
+      if (brandsData) {
+        db.setAppConfig('filament_brands', brandsData);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('filament-brands-updated');
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[syncWorker] syncFilamentBrands error:', err.message);
+  }
+}
+
 // ─── Main Sync Cycle ─────────────────────────────────────────────────────────
 
 /**
@@ -332,6 +370,7 @@ async function runSyncCycle(mainWindow, licenseKey, hwid) {
       syncEntitlements(licenseKey, hwid, mainWindow),
       syncNotifications(licenseKey, mainWindow),
       syncUpdates(mainWindow),
+      syncFilamentBrands(mainWindow),
     ]);
 
     db.setSyncMeta('last_full_sync', new Date().toISOString());

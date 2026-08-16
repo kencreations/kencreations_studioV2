@@ -117,7 +117,41 @@ function initDb(userDataPath, hwid) {
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS app_config (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_profile (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      username TEXT NOT NULL DEFAULT 'User',
+      total_exports INTEGER NOT NULL DEFAULT 0
+    );
+    INSERT OR IGNORE INTO user_profile (id, username, total_exports) VALUES (1, 'User', 0);
+
+    CREATE TABLE IF NOT EXISTS custom_fonts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      font_name TEXT NOT NULL UNIQUE,
+      file_path TEXT NOT NULL,
+      added_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS custom_colors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      color_name TEXT NOT NULL,
+      hex_code TEXT NOT NULL,
+      brand TEXT DEFAULT 'Custom',
+      added_at TEXT NOT NULL
+    );
   `);
+
+  try {
+    _db.exec(`ALTER TABLE custom_colors ADD COLUMN brand TEXT DEFAULT 'Custom'`);
+  } catch (err) {
+    // Column might already exist
+  }
 
   return _db;
 }
@@ -254,6 +288,76 @@ function setSyncMeta(key, value) {
   db.prepare('INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)').run(key, String(value));
 }
 
+// ─── App Config ─────────────────────────────────────────────────────────────
+
+function getAppConfig(key) {
+  const db = getDb();
+  const row = db.prepare('SELECT value FROM app_config WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+
+function setAppConfig(key, value) {
+  const db = getDb();
+  db.prepare(`
+    INSERT OR REPLACE INTO app_config (key, value, updated_at)
+    VALUES (?, ?, ?)
+  `).run(key, value, new Date().toISOString());
+}
+
+// ─── User Profile ───────────────────────────────────────────────────────────
+
+function getProfile() {
+  const db = getDb();
+  return db.prepare('SELECT * FROM user_profile WHERE id = 1').get();
+}
+
+function updateProfile(username) {
+  const db = getDb();
+  db.prepare('UPDATE user_profile SET username = ? WHERE id = 1').run(username);
+}
+
+function incrementExports() {
+  const db = getDb();
+  db.prepare('UPDATE user_profile SET total_exports = total_exports + 1 WHERE id = 1').run();
+}
+
+// ─── Custom Fonts ───────────────────────────────────────────────────────────
+
+function addCustomFont(fontName, filePath) {
+  const db = getDb();
+  const info = db.prepare('INSERT INTO custom_fonts (font_name, file_path, added_at) VALUES (?, ?, ?)').run(fontName, filePath, new Date().toISOString());
+  return { id: info.lastInsertRowid, font_name: fontName, file_path: filePath };
+}
+
+function getCustomFonts() {
+  const db = getDb();
+  return db.prepare('SELECT * FROM custom_fonts ORDER BY added_at DESC').all();
+}
+
+function removeCustomFont(id) {
+  const db = getDb();
+  db.prepare('DELETE FROM custom_fonts WHERE id = ?').run(id);
+}
+
+// ─── Custom Colors ──────────────────────────────────────────────────────────
+
+function addCustomColor(colorName, hexCode, brand = 'Custom') {
+  const db = getDb();
+  const stmt = db.prepare('INSERT INTO custom_colors (color_name, hex_code, brand, added_at) VALUES (?, ?, ?, ?)');
+  const res = stmt.run(colorName, hexCode, brand, new Date().toISOString());
+  return { id: res.lastInsertRowid, colorName, hexCode, brand };
+}
+
+function getCustomColors() {
+  const db = getDb();
+  return db.prepare('SELECT * FROM custom_colors ORDER BY added_at DESC').all();
+}
+
+function removeCustomColor(id) {
+  const db = getDb();
+  db.prepare('DELETE FROM custom_colors WHERE id = ?').run(id);
+}
+
 module.exports = {
   initDb,
   getDb,
@@ -271,4 +375,19 @@ module.exports = {
   // Meta
   getSyncMeta,
   setSyncMeta,
+  // Config
+  getAppConfig,
+  setAppConfig,
+  // Profile
+  getProfile,
+  updateProfile,
+  incrementExports,
+  // Fonts
+  addCustomFont,
+  getCustomFonts,
+  removeCustomFont,
+  // Colors
+  addCustomColor,
+  getCustomColors,
+  removeCustomColor,
 };

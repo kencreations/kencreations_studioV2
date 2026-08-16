@@ -6,7 +6,7 @@ import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUti
 import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
 import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
 import { TTFLoader } from "three/addons/loaders/TTFLoader.js";
-import { FONT_OPTIONS } from "../pages/KeychainEditor.jsx";
+import { FONT_OPTIONS } from "../utils/fonts";
 
 export default function CharmMesh({ charm }) {
     const {
@@ -43,8 +43,9 @@ export default function CharmMesh({ charm }) {
                 const s = await getShapesFromIconify(iconId, size);
                 if (active) setShapes(s);
             } else if (type === "text") {
-                const fontOption = FONT_OPTIONS.find((f) => f.id === fontId) || FONT_OPTIONS[0];
-                new TTFLoader().load(fontOption.url, (ttf) => {
+                const allFonts = [...FONT_OPTIONS, ...(window.customFonts || [])];
+                const fontOption = allFonts.find((f) => f.id === fontId) || allFonts[0];
+                new TTFLoader().load(fontOption.url || fontOption.file_path, (ttf) => {
                     if (!active) return;
                     const font = new FontLoader().parse(ttf);
                     const s = createTextShapesWithSpacing(text || " ", font, size, 0);

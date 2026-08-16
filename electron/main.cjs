@@ -15,14 +15,15 @@
 
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, net, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { machineIdSync } = require('node-machine-id');
 
-const db = require('./db.cjs');
-const { deriveHwid, verifyLicFile, activateWithKey, checkLocalLicense } = require('./licenseManager.cjs');
-const { startSyncWorker, stopSyncWorker } = require('./syncWorker.cjs');
+const getMod = (n) => { try { return require(`./${n}.cjs`); } catch(e) { return require(`./${n}.jsc`); } };
+const db = getMod('db');
+const { deriveHwid, verifyLicFile, activateWithKey, checkLocalLicense } = getMod('licenseManager');
+const { startSyncWorker, stopSyncWorker } = getMod('syncWorker');
 const { autoUpdater } = require('electron-updater');
 
 const isDev = process.env.NODE_ENV === 'development';
@@ -98,7 +99,20 @@ function createWindow() {
 
 // ─── App Lifecycle ───────────────────────────────────────────────────────────
 
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'local-font',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true }
+  }
+]);
+
 app.whenReady().then(() => {
+  protocol.handle('local-font', (request) => {
+    const url = request.url.replace('local-font://', '');
+    const decodedUrl = decodeURIComponent(url);
+    const resolvedPath = path.normalize(decodedUrl);
+    return net.fetch(`file://${resolvedPath}`);
+  });
   // Init DB with HWID-derived encryption key
   const userDataPath = app.getPath('userData');
   const hwid = getHwid();
@@ -287,9 +301,27 @@ ipcMain.handle('mark-notification-seen', (event, id) => {
 
 // ─── IPC: Custom Fonts ───────────────────────────────────────────────────────
 
-ipcMain.handle('save-custom-font', async (event, fontData) => {
+ipcMain.handle('upload-custom-font', async () => {
   try {
-    const { name, buffer } = fontData;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select a Font File',
+      filters: [{ name: 'Fonts', extensions: ['ttf', 'otf'] }],
+      properties: ['openFile'],
+    });
+
+    if (result.canceled || !result.filePaths.length) {
+      return { success: false, message: 'No file selected.' };
+    }
+
+    const filePath = result.filePaths[0];
+    const stat = fs.statSync(filePath);
+    
+    // 5MB Limit
+    if (stat.size > 5 * 1024 * 1024) {
+      return { success: false, message: 'Font file exceeds 5MB limit.' };
+    }
+
+    const fileName = path.basename(filePath);
     const userDataPath = app.getPath('userData');
     const fontsDir = path.join(userDataPath, 'custom_fonts');
 
@@ -297,38 +329,132 @@ ipcMain.handle('save-custom-font', async (event, fontData) => {
       fs.mkdirSync(fontsDir, { recursive: true });
     }
 
-    const fontPath = path.join(fontsDir, name);
-    fs.writeFileSync(fontPath, Buffer.from(buffer));
-    return { success: true, path: fontPath };
+    const destPath = path.join(fontsDir, fileName);
+    fs.copyFileSync(filePath, destPath);
+
+    const fontObj = db.addCustomFont(fileName, destPath);
+    return { success: true, font: fontObj };
   } catch (error) {
-    console.error('[main] Failed to save font:', error);
-    return { success: false, error: error.message };
+    console.error('[main] Failed to upload font:', error);
+    return { success: false, message: error.message };
   }
 });
 
-ipcMain.handle('load-custom-fonts', async () => {
+ipcMain.handle('get-custom-fonts', () => {
+  return db.getCustomFonts();
+});
+
+ipcMain.handle('remove-custom-font', (event, id) => {
+  db.removeCustomFont(id);
+  return { success: true };
+});
+
+/**
+ * Reads a font file from disk and returns its raw bytes as a Buffer.
+ * The renderer uses this to parse the TTF with opentype.js directly,
+ * bypassing all web protocol security restrictions.
+ */
+ipcMain.handle('read-font-buffer', async (event, filePath) => {
   try {
-    const userDataPath = app.getPath('userData');
-    const fontsDir = path.join(userDataPath, 'custom_fonts');
-
-    if (!fs.existsSync(fontsDir)) return [];
-
-    const files = fs.readdirSync(fontsDir);
-    const fonts = [];
-
-    for (const file of files) {
-      if (file.endsWith('.ttf') || file.endsWith('.otf')) {
-        const filePath = path.join(fontsDir, file);
-        const buffer = fs.readFileSync(filePath);
-        fonts.push({ name: file, buffer: new Uint8Array(buffer) });
-      }
-    }
-
-    return fonts;
-  } catch (error) {
-    console.error('[main] Failed to load fonts:', error);
-    return [];
+    const buffer = await fs.promises.readFile(filePath);
+    return buffer;
+  } catch (err) {
+    console.error('[main] Failed to read font file:', err);
+    return null;
   }
+});
+
+// ─── IPC: User Profile ───────────────────────────────────────────────────────
+
+ipcMain.handle('get-profile', () => {
+  return db.getProfile();
+});
+
+ipcMain.handle('update-profile', async (event, username) => {
+  db.updateProfile(username);
+  
+  // Attempt to sync to Firestore if license exists
+  const state = db.getLicenseState();
+  if (state && state.licenseKey && net.isOnline()) {
+    try {
+      const projectId = 'kencreations-v2'; // Note: hardcoded for now, could be dynamic
+      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/licenses/${state.licenseKey}?updateMask.fieldPaths=username`;
+      
+      const payload = {
+        fields: {
+          username: { stringValue: username }
+        }
+      };
+
+      await net.fetch(url, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (err) {
+      console.error('[main] Failed to sync username to Firestore:', err);
+    }
+  }
+
+  return { success: true };
+});
+
+ipcMain.handle('increment-exports', () => {
+  db.incrementExports();
+  return { success: true };
+});
+
+// ─── IPC: Custom Colors ──────────────────────────────────────────────────────
+
+ipcMain.handle('add-custom-color', (event, colorName, hexCode, brand = 'Custom') => {
+  const color = db.addCustomColor(colorName, hexCode, brand);
+  return { success: true, color };
+});
+
+/**
+ * Increments the totalCustomFonts field on the user's Firestore license document.
+ * Fonts are stored locally — this is just a lightweight count for the admin dashboard.
+ * Uses Firebase REST PATCH with FieldTransform (increment) — no Storage cost.
+ */
+ipcMain.handle('increment-custom-fonts', async () => {
+  try {
+    const state = db.getLicenseState();
+    if (!state?.licenseKey || !net.isOnline()) return { success: false };
+
+    const projectId = 'kencreations-v2';
+    const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`;
+
+    const body = {
+      writes: [{
+        transform: {
+          document: `projects/${projectId}/databases/(default)/documents/licenses/${state.licenseKey}`,
+          fieldTransforms: [{
+            fieldPath: 'totalCustomFonts',
+            increment: { integerValue: 1 }
+          }]
+        }
+      }]
+    };
+
+    await net.fetch(url, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return { success: true };
+  } catch (err) {
+    console.error('[main] Failed to increment custom fonts count:', err);
+    return { success: false };
+  }
+});
+
+ipcMain.handle('get-custom-colors', () => {
+  return db.getCustomColors();
+});
+
+ipcMain.handle('remove-custom-color', (event, id) => {
+  db.removeCustomColor(id);
+  return { success: true };
 });
 
 // ─── IPC: Start SyncWorker on demand ────────────────────────────────────────
@@ -344,4 +470,9 @@ ipcMain.handle('start-sync', () => {
     return { success: true };
   }
   return { success: false };
+});
+
+// ─── IPC: App Config ────────────────────────────────────────────────────────
+ipcMain.handle('get-app-config', (event, key) => {
+  return db.getAppConfig(key);
 });

@@ -1,7 +1,7 @@
 {
     "name": "kencreations-v2",
     "private": true,
-    "version": "1.0.0-beta",
+    "version": "1.0.6-beta",
     "type": "module",
     "main": "electron/loader.cjs",
     "scripts": {
@@ -11,7 +11,7 @@
         "preview": "vite preview",
         "init-tailwind": "tailwindcss init -p",
         "electron:dev": "cross-env NODE_ENV=development concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-        "compile:electron": "node electron/compile-electron.cjs",
+        "compile:electron": "electron electron/compile-electron.cjs",
         "electron:build": "npm run build && npm run compile:electron && electron-builder"
     },
     "build": {
@@ -74,7 +74,6 @@
         "@vitejs/plugin-react": "^6.0.3",
         "@xmldom/xmldom": "^0.9.10",
         "autoprefixer": "^10.5.2",
-        "bytenode": "^1.6.0",
         "concurrently": "^10.0.4",
         "cross-env": "^10.1.0",
         "electron": "^43.4.0",

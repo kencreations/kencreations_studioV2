@@ -23,6 +23,7 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
+import { useProfile } from '../contexts/ProfileContext';
 import EditorLayout from '../components/EditorLayout';
 import EditorCanvas from '../components/EditorCanvas';
 import { colors } from '../data/colors';
@@ -162,7 +163,19 @@ function AccordionSection({ number, title, children, defaultOpen = true }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 function ColorAssignDrawer({ currentHex, onSelect, isOpen, onClose, inline = false, popUp = false }) {
+    const { customColors } = useProfile();
     const [brand, setBrand] = useState('BambuLab');
+
+    const mergedColors = useMemo(() => {
+        const merged = JSON.parse(JSON.stringify(colors));
+        customColors.forEach(c => {
+            const b = c.brand || "Custom";
+            if (!merged[b]) merged[b] = [];
+            merged[b].push({ hex: c.hex_code, name: c.color_name });
+        });
+        return merged;
+    }, [customColors]);
+
     if (!isOpen) return null;
 
     let containerClass = "rounded-2xl border border-secondary bg-white p-3 animate-in fade-in ";
@@ -179,16 +192,16 @@ function ColorAssignDrawer({ currentHex, onSelect, isOpen, onClose, inline = fal
 
     return (
         <div className={containerClass}>
-            <div className="flex gap-4 mb-2 border-b border-secondary/30 pb-2">
-                {Object.keys(colors).map((b) => (
+            <div className="flex gap-4 mb-2 border-b border-secondary/30 pb-2 overflow-x-auto">
+                {Object.keys(mergedColors).map((b) => (
                     <button key={b} onClick={() => setBrand(b)}
-                        className={`text-xs font-bold transition-colors ${brand === b ? 'text-secondary border-b-2 border-secondary' : 'text-gray-400 hover:text-secondary'}`}>
+                        className={`text-xs font-bold transition-colors whitespace-nowrap ${brand === b ? 'text-secondary border-b-2 border-secondary' : 'text-gray-400 hover:text-secondary'}`}>
                         {b === 'BambuLab' ? 'Bambu Lab' : b}
                     </button>
                 ))}
             </div>
             <div className="grid grid-cols-6 gap-1.5 max-h-48 overflow-y-auto pr-1">
-                {colors[brand].map((c) => (
+                {mergedColors[brand]?.map((c) => (
                     <div key={c.hex + c.name} className="flex flex-col items-center gap-0.5">
                         <button onClick={() => { onSelect(c); onClose(); }}
                             className={`w-8 h-8 rounded-lg border-2 transition-all ${currentHex === c.hex ? 'border-secondary scale-110 shadow-md' : 'border-gray-200 hover:scale-105 hover:border-secondary/50'}`}
@@ -379,7 +392,16 @@ function IconTab({ selectedIcon, onIconSelect, isLoading }) {
     );
 }
 
-function TextTab({ text, onTextChange, fontId, onFontChange, isLoading }) {
+function TextTab({ text, onTextChange, fontId, onFontChange, isLoading, customFonts = [] }) {
+    const allFonts = useMemo(() => {
+        const mappedCustom = customFonts.map(f => ({
+            id: f.font_name,
+            label: f.font_name,
+            file: `file://${f.file_path}`
+        }));
+        return [...FONT_OPTIONS, ...mappedCustom];
+    }, [customFonts]);
+
     return (
         <div className="space-y-2">
             <input
@@ -390,7 +412,7 @@ function TextTab({ text, onTextChange, fontId, onFontChange, isLoading }) {
                 value={fontId}
                 onChange={(e) => onFontChange(e.target.value)}
                 className="w-full rounded-xl border border-secondary/40 bg-gray-50 px-3 py-1.5 text-xs outline-none focus:border-secondary appearance-none cursor-pointer">
-                {FONT_OPTIONS.map((f) => (
+                {allFonts.map((f) => (
                     <option key={f.id} value={f.id}>{f.label}</option>
                 ))}
             </select>
@@ -437,9 +459,13 @@ function ImportTabs({ importMode, setImportMode, ...tabProps }) {
 // SIDEBAR SECTIONS
 // ────────────────────────────────────────────────────────────────────────────
 
-function ColorsSection({ colorCount, setColorCount, smoothing, setSmoothing, colorLayers, onLayerColorChange, onLayerLiftChange, capBaseColor, setCapBaseColor, shellColor, setShellColor, activePaintLayerId, setActivePaintLayerId }) {
+function ColorsSection({ colorCount, setColorCount, smoothing, setSmoothing, colorLayers, onLayerColorChange, onLayerLiftChange, capBaseColor, setCapBaseColor, shellColor, setShellColor, activePaintLayerId, setActivePaintLayerId, customColors = [] }) {
     const [openDrawer, setOpenDrawer] = useState(null);
-    const colorName = (hex) => ALL_COLORS.find((c) => c.hex.toLowerCase() === hex.toLowerCase())?.name ?? 'Custom';
+    const colorName = (hex) => {
+        const customMatch = customColors.find(c => c.hex_code.toLowerCase() === hex.toLowerCase());
+        if (customMatch) return customMatch.color_name;
+        return ALL_COLORS.find((c) => c.hex.toLowerCase() === hex.toLowerCase())?.name ?? 'Custom';
+    };
     const hasLayers = colorLayers.length > 0;
 
     return (
@@ -1047,6 +1073,8 @@ const CLICKER_CAM_TARGET = [0, 3, 0];
 
 export default function ClickerEditor() {
     const navigate = useNavigate();
+    const { customColors, customFonts } = useProfile();
+    const [state, setState] = useState({ ...CLICKER_DEFAULTS });
 
     // ── Import mode ───────────────────────────────────────────────────────────
     const [importMode, setImportMode] = useState(CLICKER_DEFAULTS.importMode);
@@ -1434,9 +1462,10 @@ export default function ClickerEditor() {
                     /* text tab */
                     textContent={textContent}
                     onTextChange={handleTextChange}
-                    textFont={textFont}
-                    onFontChange={handleFontChange}
-                    isTextLoading={isTextLoading}
+                    fontId={state.fontId}
+                    onFontChange={(v) => setState((s) => ({ ...s, fontId: v }))}
+                    isLoading={isTextLoading}
+                    customFonts={customFonts}
 
                     /* section 1 */
                     colorCount={colorCount}

@@ -64,8 +64,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
   markNotificationSeen: (id) => ipcRenderer.invoke('mark-notification-seen', id),
 
   // ── Fonts ──────────────────────────────────────────────────────────────
-  saveCustomFont: (fontData) => ipcRenderer.invoke('save-custom-font', fontData),
-  loadCustomFonts: () => ipcRenderer.invoke('load-custom-fonts'),
+  uploadCustomFont: () => ipcRenderer.invoke('upload-custom-font'),
+  getCustomFonts: () => ipcRenderer.invoke('get-custom-fonts'),
+  removeCustomFont: (id) => ipcRenderer.invoke('remove-custom-font', id),
+  /** Reads a TTF/OTF file from disk into an ArrayBuffer for direct opentype.js parsing. */
+  readFontBuffer: (filePath) => ipcRenderer.invoke('read-font-buffer', filePath),
+  /** Increments the user's totalCustomFonts counter in Firestore (admin dashboard metric). */
+  incrementCustomFonts: () => ipcRenderer.invoke('increment-custom-fonts'),
+
+  // ── Profile ────────────────────────────────────────────────────────────
+  getProfile: () => ipcRenderer.invoke('get-profile'),
+  updateProfile: (username) => ipcRenderer.invoke('update-profile', username),
+  incrementExports: () => ipcRenderer.invoke('increment-exports'),
+
+  // ── Colors ─────────────────────────────────────────────────────────────
+  addCustomColor: (name, hex, brand) => ipcRenderer.invoke('add-custom-color', name, hex, brand),
+  getCustomColors: () => ipcRenderer.invoke('get-custom-colors'),
+  removeCustomColor: (id) => ipcRenderer.invoke('remove-custom-color', id),
 
   // ── App Info ──────────────────────────────────────────────────────────
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
@@ -135,5 +150,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (event, info) => callback(info);
     ipcRenderer.on('update-downloaded', handler);
     return () => ipcRenderer.removeListener('update-downloaded', handler);
+  },
+
+  // ── App Config ─────────────────────────────────────────────────────────
+  getAppConfig: (key) => ipcRenderer.invoke('get-app-config', key),
+  
+  onFilamentBrandsUpdated: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('filament-brands-updated', handler);
+    return () => ipcRenderer.removeListener('filament-brands-updated', handler);
   },
 });
