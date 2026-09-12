@@ -13,10 +13,12 @@ const GRID_SIZE = 40;
 const SPACING = 1.2;
 const CUBE_SIZE = 1.1;
 
+const sanitizeHex = (hex) => (hex && hex.length > 7 ? hex.substring(0, 7) : hex);
+
 // Base color of the cubes (Jasper style purple)
-const BASE_COLOR = new THREE.Color("#FF6B00"); // Teal
+const BASE_COLOR = new THREE.Color(sanitizeHex("#FF6B00")); // Teal
 // Highlight color when hovered
-const HOVER_COLOR = new THREE.Color("#00A3A3"); // Orange
+const HOVER_COLOR = new THREE.Color(sanitizeHex("#00A3A3")); // Orange
 
 function CubeGrid() {
     const meshRef = useRef();

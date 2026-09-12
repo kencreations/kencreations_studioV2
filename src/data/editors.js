@@ -10,13 +10,35 @@
  *   status              — "Stable" | "Beta" | "Alpha"
  *   icon                — emoji icon for the card
  *   link                — React Router path
- *   exclusive           — if true, this generator requires a license entitlement to access
+ *   isExclusive         — if true, this generator requires a license entitlement to access
  *   requiredEntitlement — the entitlement ID that must appear in the license's entitlements[]
- *                         array. Ignored if exclusive = false.
+ *                         array. Ignored if isExclusive = false.
  *   isFree              — legacy flag; kept for backward compatibility
  */
 
 export const editors = [
+    {
+        id: "whistle-bagtag",
+        title: " Whistle Bagtag",
+        description: "Customizable 3D printed whistle with a lanyard hole.",
+        status: "Beta",
+        icon: "哨",
+        link: "/editor/whistle-bagtag",
+        isExclusive: false,
+        requiredEntitlement: null,
+        isFree: true,
+    },
+    {
+        id: "client-icon-tag",
+        title: " Icon Tag Generator",
+        description: "Exclusive generator for client custom icon tags.",
+        status: "Beta",
+        icon: "🏷️",
+        link: "/editor/client-icon-tag",
+        isExclusive: true,
+        requiredEntitlement: "client-tag",
+        isFree: false,
+    },
     {
         id: "namekeychain",
         title: " Name Keychain",
@@ -26,21 +48,32 @@ export const editors = [
         icon: "🆔",
         link: "/editor/namekeychain",
         // Standard generator — available to all activated users
-        exclusive: false,
+        isExclusive: false,
         requiredEntitlement: null,
         isFree: true,
     },
     {
         id: "charms",
         title: " Chunky Charms",
-        description:
-            "Design chunky 3D charms with SVG icons and paracord holes.",
-        status: "Beta",
+        description: "Design custom 3D icon charms with paracord holes.",
+        status: "Stable",
         icon: "✨",
         link: "/editor/charms",
         // Exclusive — requires entitlement "charms" in the license
-        exclusive: true,
+        isExclusive: true,
         requiredEntitlement: "charms",
+        isFree: false,
+    },
+    {
+        id: "letter-beads",
+        title: " Letter Beads",
+        description: "Create custom 3D text and letter beads.",
+        status: "Stable",
+        icon: "🔤",
+        link: "/editor/letter-beads",
+        // Exclusive — requires entitlement "letter-beads" in the license
+        isExclusive: true,
+        requiredEntitlement: "letter-beads",
         isFree: false,
     },
     {
@@ -52,7 +85,7 @@ export const editors = [
         icon: "⌨️",
         link: "/editor/keycap-maker",
         // Exclusive — requires entitlement "keycap-maker" in the license
-        exclusive: true,
+        isExclusive: true,
         requiredEntitlement: "keycap-maker",
         isFree: false,
     },
@@ -65,7 +98,7 @@ export const editors = [
         icon: "🖱️",
         link: "/editor/clicker",
         // Exclusive — requires entitlement "clicker-v2"
-        exclusive: true,
+        isExclusive: true,
         requiredEntitlement: "clicker-v2",
         isFree: false,
     },
@@ -78,9 +111,54 @@ export const editors = [
         icon: "🎮",
         link: "/editor/macropad",
         // Exclusive — requires entitlement "macropad"
-        exclusive: true,
+        isExclusive: true,
         requiredEntitlement: "macropad",
         isFree: false,
+    },
+    {
+        id: "pencil-sleeve",
+        title: " Pencil Sleeves",
+        description:
+            "Design customizable 3D printable pencil sleeves with embossed names.",
+        status: "Beta",
+        icon: "✏️",
+        link: "/editor/pencil-sleeve",
+        isExclusive: true,
+        requiredEntitlement: "pencil-sleeve",
+        isFree: false,
+    },
+    {
+        id: "straw-toppers",
+        title: " Straw Toppers",
+        description:
+            "Design customizable 3D printable tumbler straw toppers with embossed names.",
+        status: "Beta",
+        icon: "🥤",
+        link: "/editor/straw-toppers",
+        isExclusive: false,
+        requiredEntitlement: null,
+        isFree: true,
+    },
+    {
+        id: "leather-sliders",
+        title: " Leather Sliders",
+        description: "Create custom 3D text sliders for flat leather straps.",
+        status: "Beta",
+        icon: "🏷️",
+        link: "/editor/leather-sliders",
+        isExclusive: false,
+        requiredEntitlement: null,
+    },
+    {
+        id: "qr-standee",
+        title: " QR Standee",
+        description: "Modular QR desk sign with interchangeable snap-in links.",
+        status: "Beta",
+        icon: "📱",
+        link: "/editor/qr-standee",
+        isExclusive: false,
+        requiredEntitlement: null,
+        isFree: true,
     },
 ];
 
@@ -92,8 +170,8 @@ export const editors = [
  * @returns {typeof editors}
  */
 export function getAccessibleEditors(entitlements = []) {
-    return editors.filter(editor => {
-        if (!editor.exclusive) return true;
+    return editors.filter((editor) => {
+        if (!editor.isExclusive) return true;
         return entitlements.includes(editor.requiredEntitlement);
     });
 }

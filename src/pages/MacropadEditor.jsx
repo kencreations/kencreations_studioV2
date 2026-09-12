@@ -6,6 +6,8 @@ import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
 import { useMacropadWorker } from "../hooks/useMacropadWorker";
 import { MACROPAD_DEFAULTS } from "../store/appState";
+import { HistoryControls } from "../components/HistoryControls";
+import { useHistoryState } from "../hooks/useHistoryState";
 
 // UI Helpers
 function Slider({ label, value, min, max, step, onChange }) {
@@ -152,22 +154,39 @@ function MacropadModel({ parts, onBoundsCalculated }) {
 }
 
 export default function MacropadEditor() {
-    const [rows, setRows] = useState(MACROPAD_DEFAULTS.rows);
-    const [columns, setColumns] = useState(MACROPAD_DEFAULTS.columns);
-    const [pitchX, setPitchX] = useState(MACROPAD_DEFAULTS.pitchX);
-    const [pitchY, setPitchY] = useState(MACROPAD_DEFAULTS.pitchY);
-    const [style, setStyle] = useState(MACROPAD_DEFAULTS.style);
-    const [baseShape, setBaseShape] = useState(MACROPAD_DEFAULTS.baseShape);
-    const [margin, setMargin] = useState(MACROPAD_DEFAULTS.margin);
-    const [floorThickness, setFloorThickness] = useState(MACROPAD_DEFAULTS.floorThickness);
-    const [sidePattern, setSidePattern] = useState(MACROPAD_DEFAULTS.sidePattern);
-    const [socketTol, setSocketTol] = useState(MACROPAD_DEFAULTS.socketToleranceMm);
-    const [shellColor, setShellColor] = useState(MACROPAD_DEFAULTS.shellColor);
-    
-    // Keychain
-    const [keychainHole, setKeychainHole] = useState(MACROPAD_DEFAULTS.keychainHole);
-    const [keychainHoleDiam, setKeychainHoleDiam] = useState(MACROPAD_DEFAULTS.keychainHoleDiam);
-    const [keychainSlideOffset, setKeychainSlideOffset] = useState(MACROPAD_DEFAULTS.keychainSlideOffset);
+    const [state, setState, { undo, redo, reset, canUndo, canRedo }] = useHistoryState({
+        rows: MACROPAD_DEFAULTS.rows,
+        columns: MACROPAD_DEFAULTS.columns,
+        pitchX: MACROPAD_DEFAULTS.pitchX,
+        pitchY: MACROPAD_DEFAULTS.pitchY,
+        style: MACROPAD_DEFAULTS.style,
+        baseShape: MACROPAD_DEFAULTS.baseShape,
+        margin: MACROPAD_DEFAULTS.margin,
+        floorThickness: MACROPAD_DEFAULTS.floorThickness,
+        sidePattern: MACROPAD_DEFAULTS.sidePattern,
+        socketTol: MACROPAD_DEFAULTS.socketToleranceMm,
+        shellColor: MACROPAD_DEFAULTS.shellColor,
+        keychainHole: MACROPAD_DEFAULTS.keychainHole,
+        keychainHoleDiam: MACROPAD_DEFAULTS.keychainHoleDiam,
+        keychainSlideOffset: MACROPAD_DEFAULTS.keychainSlideOffset,
+    });
+
+    const { rows, columns, pitchX, pitchY, style, baseShape, margin, floorThickness, sidePattern, socketTol, shellColor, keychainHole, keychainHoleDiam, keychainSlideOffset } = state;
+
+    const setRows = (val) => setState(p => ({...p, rows: typeof val === 'function' ? val(p.rows) : val}));
+    const setColumns = (val) => setState(p => ({...p, columns: typeof val === 'function' ? val(p.columns) : val}));
+    const setPitchX = (val) => setState(p => ({...p, pitchX: typeof val === 'function' ? val(p.pitchX) : val}));
+    const setPitchY = (val) => setState(p => ({...p, pitchY: typeof val === 'function' ? val(p.pitchY) : val}));
+    const setStyle = (val) => setState(p => ({...p, style: typeof val === 'function' ? val(p.style) : val}));
+    const setBaseShape = (val) => setState(p => ({...p, baseShape: typeof val === 'function' ? val(p.baseShape) : val}));
+    const setMargin = (val) => setState(p => ({...p, margin: typeof val === 'function' ? val(p.margin) : val}));
+    const setFloorThickness = (val) => setState(p => ({...p, floorThickness: typeof val === 'function' ? val(p.floorThickness) : val}));
+    const setSidePattern = (val) => setState(p => ({...p, sidePattern: typeof val === 'function' ? val(p.sidePattern) : val}));
+    const setSocketTol = (val) => setState(p => ({...p, socketTol: typeof val === 'function' ? val(p.socketTol) : val}));
+    const setShellColor = (val) => setState(p => ({...p, shellColor: typeof val === 'function' ? val(p.shellColor) : val}));
+    const setKeychainHole = (val) => setState(p => ({...p, keychainHole: typeof val === 'function' ? val(p.keychainHole) : val}));
+    const setKeychainHoleDiam = (val) => setState(p => ({...p, keychainHoleDiam: typeof val === 'function' ? val(p.keychainHoleDiam) : val}));
+    const setKeychainSlideOffset = (val) => setState(p => ({...p, keychainSlideOffset: typeof val === 'function' ? val(p.keychainSlideOffset) : val}));
 
     const [actualDims, setActualDims] = useState(null);
 
@@ -269,7 +288,16 @@ export default function MacropadEditor() {
 
     return (
         <EditorLayout
-            title="Macropad Editor"
+            title="Macropad Builder"
+            topBarActions={
+                <HistoryControls 
+                    canUndo={canUndo} 
+                    canRedo={canRedo} 
+                    onUndo={undo} 
+                    onRedo={redo} 
+                    onReset={reset} 
+                />
+            }
             sidebarContent={sidebar}
         >
             <div className="relative w-full h-full bg-gray-50/30">

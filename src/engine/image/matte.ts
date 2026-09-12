@@ -86,43 +86,26 @@ export function removeBackground(img: RgbaImage, tol = 2000): RgbaImage {
     }
   }
 
-  // Detect a solid matte: Sample 8 points along the bounding box border.
-  // If the majority agree on a color, we consider it the solid background.
-  // This is much more robust for tightly cropped images where some borders touch the subject.
+  // Detect a solid matte: the four corners of the opaque bbox (or the whole image
+  // when fully opaque) must be opaque and mutually similar.
   let matte: RGB | null = null;
   if (maxX >= minX) {
-    const midX = (minX + maxX) >> 1;
-    const midY = (minY + maxY) >> 1;
     const corners = [
-      [minX, minY], [maxX, minY], [minX, maxY], [maxX, maxY]
+      [minX, minY],
+      [maxX, minY],
+      [minX, maxY],
+      [maxX, maxY],
     ].map(([x, y]) => y * W + x);
-
-    // If the image already has a transparent background (isCutout), we should NOT aggressively 
-    // remove a solid color unless it clearly forms a bounding box (corners are opaque).
-    // This prevents deleting the white outline of irregular stickers.
-    if (!isCutout || corners.every(p => !isTransparent(p))) {
-      const pts = [
-        ...corners,
-        [midX, minY], [maxX, midY], [midX, maxY], [minX, midY]
-      ].filter(p => !isTransparent(p));
-
-      if (pts.length > 0) {
-      const colors = pts.map(colorAt);
-      let bestCluster: RGB[] = [];
-      for (const c1 of colors) {
-        const cluster = colors.filter(c2 => dist2(c1, c2) <= tol * 3);
-        if (cluster.length > bestCluster.length) {
-          bestCluster = cluster;
-        }
+    if (corners.every((p) => !isTransparent(p))) {
+      const cs = corners.map(colorAt);
+      const uniform = cs.every((c) => dist2(c, cs[0]) <= tol * 3);
+      if (uniform) {
+        matte = [
+          (cs[0][0] + cs[1][0] + cs[2][0] + cs[3][0]) / 4,
+          (cs[0][1] + cs[1][1] + cs[2][1] + cs[3][1]) / 4,
+          (cs[0][2] + cs[1][2] + cs[2][2] + cs[3][2]) / 4,
+        ];
       }
-      
-      // If at least half of the valid edge points agree (min 3), it's the background.
-      if (bestCluster.length >= Math.max(3, pts.length * 0.4)) {
-        let r = 0, g = 0, b = 0;
-        for (const c of bestCluster) { r += c[0]; g += c[1]; b += c[2]; }
-        matte = [ r / bestCluster.length, g / bestCluster.length, b / bestCluster.length ];
-      }
-    }
     }
   }
 

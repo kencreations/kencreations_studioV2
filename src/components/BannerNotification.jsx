@@ -133,17 +133,26 @@ export default function BannerNotification() {
     }, []);
 
     useEffect(() => {
-        if (!window.electronAPI?.onNotification) return;
-
-        const unsub = window.electronAPI.onNotification((notif) => {
+        const handleNotif = (notif) => {
             setQueue(prev => {
                 // Deduplicate by id
                 if (prev.find(n => n.id === notif.id)) return prev;
                 return [...prev, { ...notif, receivedAt: Date.now() }];
             });
-        });
+        };
 
-        return unsub;
+        let unsub;
+        if (window.electronAPI?.onNotification) {
+            unsub = window.electronAPI.onNotification(handleNotif);
+        }
+
+        const handleLocal = (e) => handleNotif(e.detail);
+        window.addEventListener('local-notification', handleLocal);
+
+        return () => {
+            if (unsub) unsub();
+            window.removeEventListener('local-notification', handleLocal);
+        };
     }, []);
 
     if (!queue.length) return null;

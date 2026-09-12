@@ -1,0 +1,633 @@
+﻿/**
+ * Notifications.tsx — Notification & Banner Engine + Update Manager
+ *
+ * PRIMARY DELIVERABLE — Admin Dashboard
+ *
+ * Two tab panels:
+ *   [1] Notification & Banner Engine
+ *       - Compose: title, body, type, target (global or specific keys)
+ *       - Live preview of the banner as it appears in the Electron app
+ *       - Active notifications list with deactivate toggle
+ *
+ *   [2] Update Manager (What's New)
+ *       - Publish a new changelog entry with version string
+ *       - Force-prompt toggle, active/inactive toggle
+ *       - Published updates list
+ */
+import { useEffect, useState, useCallback } from "react";
+import {
+  collection, addDoc, getDocs, doc, updateDoc,
+  serverTimestamp, query, orderBy, Timestamp
+} from "firebase/firestore";
+import { auth, db } from "../lib/firebase";
+import {
+  Bell, GitBranch, Send, AlertTriangle, Info, CheckCircle,
+  Zap, Eye, Globe, Target, ToggleLeft, ToggleRight,
+  Plus, Megaphone
+} from "lucide-react";
+
+// ── Types ────────────────────────────────────────────────────────────────
+type NotifType   = "info" | "warning" | "critical" | "success";
+type NotifTarget = "global" | "targeted";
+
+interface NotifDoc {
+  id: string;
+  title: string;
+  body: string;
+  type: NotifType;
+  target: NotifTarget;
+  targetKeys: string[];
+  createdAt: Timestamp;
+  expiresAt: Timestamp | null;
+  isActive: boolean;
+  createdBy: string;
+}
+
+interface UpdateDoc {
+  id: string;
+  version: string;
+  title: string;
+  changelog: string;
+  forcePrompt: boolean;
+  isActive: boolean;
+  releasedAt: Timestamp;
+  createdBy: string;
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────
+const TYPE_OPTIONS: { value: NotifType; label: string; icon: React.ElementType; color: string; bg: string; border: string }[] = [
+  { value: "info",     label: "Info",     icon: Info,          color: "text-blue-300",  bg: "bg-blue-900/30",  border: "border-blue-700/50"  },
+  { value: "success",  label: "Success",  icon: CheckCircle,   color: "text-brand-300", bg: "bg-brand-900/30", border: "border-brand-700/50" },
+  { value: "warning",  label: "Warning",  icon: AlertTriangle, color: "text-amber-300", bg: "bg-amber-900/30", border: "border-amber-700/50" },
+  { value: "critical", label: "Critical", icon: Zap,           color: "text-red-300",   bg: "bg-red-900/30",   border: "border-red-700/50"   },
+];
+
+const TYPE_PREVIEW_STYLE: Record<NotifType, { bg: string; title: string; body: string; icon: string }> = {
+  info:     { bg: "bg-blue-50",   title: "text-blue-900",  body: "text-blue-700",  icon: "💬" },
+  success:  { bg: "bg-green-50",  title: "text-green-900", body: "text-green-700", icon: "✅" },
+  warning:  { bg: "bg-amber-50",  title: "text-amber-900", body: "text-amber-700", icon: "⚠️" },
+  critical: { bg: "bg-red-50",    title: "text-red-900",   body: "text-red-700",   icon: "🚨" },
+};
+
+function ts(t: Timestamp | null | undefined): string {
+  if (!t) return "—";
+  return t.toDate().toLocaleDateString("en-SG", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// ── Banner Live Preview ──────────────────────────────────────────────────
+function BannerPreview({ title, body, type }: { title: string; body: string; type: NotifType }) {
+  const s = TYPE_PREVIEW_STYLE[type];
+  return (
+    <div className={`rounded-2xl border p-4 max-w-sm w-full shadow-xl relative overflow-hidden ${s.bg} border-gray-200`}>
+      <div className="absolute bottom-0 left-0 h-0.5 w-3/4 bg-current opacity-20" />
+      <div className="flex items-start gap-3">
+        <span className="text-xl leading-none mt-0.5 flex-shrink-0">{s.icon}</span>
+        <div className="flex-1 pr-5">
+          <p className={`font-bold text-sm leading-tight mb-1 ${s.title}`}>
+            {title || "Notification title..."}
+          </p>
+          <p className={`text-xs leading-relaxed ${s.body}`}>
+            {body || "Your notification message will appear here."}
+          </p>
+        </div>
+      </div>
+      <button className="absolute top-3 right-3 text-gray-400 text-lg leading-none">×</button>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 1: Notification Composer & Engine
+// ═══════════════════════════════════════════════════════════════════════════
+function NotificationEngine() {
+  // Composer state
+  const [title,      setTitle]      = useState("");
+  const [body,       setBody]       = useState("");
+  const [type,       setType]       = useState<NotifType>("info");
+  const [target,     setTarget]     = useState<NotifTarget>("global");
+  const [targetKeys, setTargetKeys] = useState("");
+  const [hasExpiry,  setHasExpiry]  = useState(false);
+  const [expiresAt,  setExpiresAt]  = useState("");
+  const [sending,    setSending]    = useState(false);
+  const [sent,       setSent]       = useState(false);
+
+  // List state
+  const [notifications, setNotifications] = useState<NotifDoc[]>([]);
+  const [loadingList,   setLoadingList]   = useState(true);
+
+  const loadNotifications = useCallback(async () => {
+    setLoadingList(true);
+    try {
+      const snap = await getDocs(query(collection(db, "notifications"), orderBy("createdAt", "desc")));
+      setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() })) as NotifDoc[]);
+    } finally { setLoadingList(false); }
+  }, []);
+
+  useEffect(() => { loadNotifications(); }, [loadNotifications]);
+
+  const handleSend = async () => {
+    if (!title.trim() || !body.trim()) return;
+    setSending(true);
+    try {
+      const parsedKeys = target === "targeted"
+        ? targetKeys.split(",").map(k => k.trim()).filter(Boolean)
+        : [];
+
+      await addDoc(collection(db, "notifications"), {
+        title:     title.trim(),
+        body:      body.trim(),
+        type,
+        target,
+        targetKeys: parsedKeys,
+        createdAt:  serverTimestamp(),
+        expiresAt:  hasExpiry && expiresAt
+          ? Timestamp.fromDate(new Date(expiresAt))
+          : null,
+        isActive:  true,
+        createdBy: auth.currentUser?.email ?? "admin",
+        readBy:    [],
+      });
+
+      // Reset
+      setTitle(""); setBody(""); setType("info");
+      setTarget("global"); setTargetKeys(""); setHasExpiry(false); setExpiresAt("");
+      setSent(true);
+      setTimeout(() => setSent(false), 3000);
+      loadNotifications();
+    } finally { setSending(false); }
+  };
+
+  const toggleActive = async (n: NotifDoc) => {
+    await updateDoc(doc(db, "notifications", n.id), { isActive: !n.isActive });
+    setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, isActive: !x.isActive } : x));
+  };
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      {/* ── Composer ──────────────────────────────────────────────── */}
+      <div className="xl:col-span-2 space-y-6">
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-8 h-8 rounded-xl bg-brand-600/20 flex items-center justify-center">
+              <Megaphone size={15} className="text-brand-400" />
+            </div>
+            <div>
+              <h3 className="font-bold text-surface-50 text-sm">Compose Notification</h3>
+              <p className="text-surface-500 text-xs">Published banners sync to active desktop clients within 60 seconds.</p>
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            {/* Type Selector */}
+            <div>
+              <label className="label">Notification Type</label>
+              <div className="grid grid-cols-4 gap-2">
+                {TYPE_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setType(opt.value)}
+                    className={`flex flex-col items-center gap-2 py-3 rounded-xl border text-xs font-semibold transition-all ${
+                      type === opt.value
+                        ? `${opt.bg} ${opt.border} ${opt.color}`
+                        : "bg-surface-800 border-surface-700 text-surface-500 hover:border-surface-600"
+                    }`}
+                  >
+                    <opt.icon size={16} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Title */}
+            <div>
+              <label className="label">Title</label>
+              <input
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                className="input"
+                placeholder="Maintenance Window, New Feature, Important Alert..."
+                maxLength={80}
+              />
+              <p className="text-[10px] text-surface-500 mt-1 text-right">{title.length}/80</p>
+            </div>
+
+            {/* Body */}
+            <div>
+              <label className="label">Message Body</label>
+              <textarea
+                value={body}
+                onChange={e => setBody(e.target.value)}
+                className="input h-28 resize-none"
+                placeholder="Full notification message shown in the desktop app banner..."
+                maxLength={300}
+              />
+              <p className="text-[10px] text-surface-500 mt-1 text-right">{body.length}/300</p>
+            </div>
+
+            {/* Target */}
+            <div>
+              <label className="label">Broadcast Target</label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setTarget("global")}
+                  className={`flex-1 flex items-center gap-2 justify-center py-3 rounded-xl border text-sm font-semibold transition-all ${
+                    target === "global"
+                      ? "bg-brand-600/20 border-brand-500/60 text-brand-300"
+                      : "bg-surface-800 border-surface-700 text-surface-400 hover:border-surface-600"
+                  }`}
+                >
+                  <Globe size={14} /> Global Broadcast
+                </button>
+                <button
+                  onClick={() => setTarget("targeted")}
+                  className={`flex-1 flex items-center gap-2 justify-center py-3 rounded-xl border text-sm font-semibold transition-all ${
+                    target === "targeted"
+                      ? "bg-violet-600/20 border-violet-500/60 text-violet-300"
+                      : "bg-surface-800 border-surface-700 text-surface-400 hover:border-surface-600"
+                  }`}
+                >
+                  <Target size={14} /> Targeted Keys
+                </button>
+              </div>
+              {target === "targeted" && (
+                <div className="mt-3">
+                  <input
+                    value={targetKeys}
+                    onChange={e => setTargetKeys(e.target.value)}
+                    className="input"
+                    placeholder="KC-ABC123, KC-DEF456, KC-GHI789 (comma-separated)"
+                  />
+                  <p className="text-[10px] text-surface-500 mt-1">
+                    Only clients with these license keys will receive the notification.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Expiry */}
+            <div className="flex items-center gap-4 flex-wrap">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div
+                  onClick={() => setHasExpiry(!hasExpiry)}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${hasExpiry ? "bg-brand-600" : "bg-surface-700"}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${hasExpiry ? "translate-x-5" : "translate-x-0.5"}`}/>
+                </div>
+                <span className="text-sm text-surface-200 font-medium">Set Expiry</span>
+              </label>
+              {hasExpiry && (
+                <input
+                  type="datetime-local"
+                  value={expiresAt}
+                  onChange={e => setExpiresAt(e.target.value)}
+                  className="input w-auto"
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Send Button */}
+          <div className="mt-6 pt-5 border-t border-surface-800 flex items-center gap-4">
+            <button
+              onClick={handleSend}
+              disabled={sending || !title.trim() || !body.trim()}
+              className="btn-primary px-6 py-3"
+            >
+              {sending ? (
+                <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Dispatching...</>
+              ) : sent ? (
+                <><CheckCircle size={15} className="text-brand-200"/>Notification Sent!</>
+              ) : (
+                <><Send size={14}/>Dispatch Notification</>
+              )}
+            </button>
+            <p className="text-surface-500 text-xs">
+              {target === "global" ? "→ All active desktop clients" : `→ ${targetKeys.split(",").filter(Boolean).length} specific key(s)`}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Preview + Active List ──────────────────────────────────── */}
+      <div className="space-y-6">
+        {/* Live Preview */}
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Eye size={13} className="text-surface-400"/>
+            <span className="text-xs font-semibold text-surface-400 uppercase tracking-widest">Live Preview</span>
+          </div>
+          <div className="bg-surface-800 rounded-xl p-4 flex items-center justify-center min-h-[120px]">
+            <BannerPreview title={title} body={body} type={type} />
+          </div>
+          <p className="text-[10px] text-surface-500 mt-3 text-center">
+            This is how the banner appears in the Electron desktop app.
+          </p>
+        </div>
+
+        {/* Active Notifications */}
+        <div className="card p-5">
+          <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-widest mb-4">
+            Published Notifications
+          </h3>
+          {loadingList ? (
+            <div className="flex justify-center py-8">
+              <div className="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"/>
+            </div>
+          ) : notifications.length === 0 ? (
+            <p className="text-surface-500 text-xs text-center py-8">No notifications published yet.</p>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {notifications.map(n => {
+                const typeCfg = TYPE_OPTIONS.find(t => t.value === n.type)!;
+                return (
+                  <div
+                    key={n.id}
+                    className={`rounded-xl border p-3 transition-all ${n.isActive ? "border-surface-700 bg-surface-800/60" : "border-surface-800 bg-surface-900 opacity-50"}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <typeCfg.icon size={12} className={`${typeCfg.color} mt-0.5 flex-shrink-0`}/>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-surface-100 truncate">{n.title}</p>
+                        <p className="text-[10px] text-surface-400 truncate mt-0.5">{n.body}</p>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${typeCfg.bg} ${typeCfg.color}`}>{n.type}</span>
+                          <span className="text-[9px] text-surface-500">{n.target === "global" ? "🌐 Global" : `🎯 ${n.targetKeys?.length ?? 0} keys`}</span>
+                          <span className="text-[9px] text-surface-600">{ts(n.createdAt)}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => toggleActive(n)}
+                        className="flex-shrink-0 transition-colors"
+                        title={n.isActive ? "Deactivate" : "Activate"}
+                      >
+                        {n.isActive
+                          ? <ToggleRight size={18} className="text-brand-400"/>
+                          : <ToggleLeft size={18} className="text-surface-600"/>}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 2: Update Manager
+// ═══════════════════════════════════════════════════════════════════════════
+function UpdateManager() {
+  const [version,     setVersion]     = useState("");
+  const [title,       setTitle]       = useState("");
+  const [changelog,   setChangelog]   = useState("");
+  const [forcePrompt, setForcePrompt] = useState(false);
+  const [publishing,  setPublishing]  = useState(false);
+  const [published,   setPublished]   = useState(false);
+
+  const [updates,     setUpdates]     = useState<UpdateDoc[]>([]);
+  const [loadingList, setLoadingList] = useState(true);
+
+  const loadUpdates = useCallback(async () => {
+    setLoadingList(true);
+    try {
+      const snap = await getDocs(query(collection(db, "updates"), orderBy("releasedAt", "desc")));
+      setUpdates(snap.docs.map(d => ({ id: d.id, ...d.data() })) as UpdateDoc[]);
+    } finally { setLoadingList(false); }
+  }, []);
+
+  useEffect(() => { loadUpdates(); }, [loadUpdates]);
+
+  const handlePublish = async () => {
+    if (!version.trim() || !title.trim() || !changelog.trim()) return;
+    setPublishing(true);
+    try {
+      const docId = version.trim().startsWith("v") ? version.trim() : `v${version.trim()}`;
+      await updateDoc(doc(db, "updates", docId), {}).catch(async () => {
+        // Doc doesn't exist yet, create it
+        await addDoc(collection(db, "updates"), {
+          version: docId,
+          title: title.trim(),
+          changelog: changelog.trim(),
+          forcePrompt,
+          isActive: true,
+          releasedAt: serverTimestamp(),
+          createdBy: auth.currentUser?.email ?? "admin",
+        });
+      });
+
+      // Use setDoc to ensure doc with version as ID
+      const { setDoc: fsSetDoc } = await import("firebase/firestore");
+      await fsSetDoc(doc(db, "updates", docId), {
+        version: docId,
+        title: title.trim(),
+        changelog: changelog.trim(),
+        forcePrompt,
+        isActive: true,
+        releasedAt: serverTimestamp(),
+        createdBy: auth.currentUser?.email ?? "admin",
+      });
+
+      setVersion(""); setTitle(""); setChangelog(""); setForcePrompt(false);
+      setPublished(true);
+      setTimeout(() => setPublished(false), 3000);
+      loadUpdates();
+    } finally { setPublishing(false); }
+  };
+
+  const toggleUpdateActive = async (u: UpdateDoc) => {
+    await updateDoc(doc(db, "updates", u.id), { isActive: !u.isActive });
+    setUpdates(prev => prev.map(x => x.id === u.id ? { ...x, isActive: !x.isActive } : x));
+  };
+
+  const CHANGELOG_TEMPLATE = `## New Features\n- Feature one\n- Feature two\n\n## Improvements\n- Performance improvement\n\n## Bug Fixes\n- Fixed issue with export`;
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      {/* ── Publisher ─────────────────────────────────────────────── */}
+      <div className="xl:col-span-2 space-y-6">
+        <div className="card p-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-8 h-8 rounded-xl bg-violet-600/20 flex items-center justify-center">
+              <GitBranch size={15} className="text-violet-400" />
+            </div>
+            <div>
+              <h3 className="font-bold text-surface-50 text-sm">Publish Update</h3>
+              <p className="text-surface-500 text-xs">The "What's New" modal will appear on all active desktop clients within 60 seconds.</p>
+            </div>
+          </div>
+
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="label">Version String</label>
+                <input
+                  value={version}
+                  onChange={e => setVersion(e.target.value)}
+                  className="input font-mono"
+                  placeholder="v1.2.0"
+                />
+              </div>
+              <div>
+                <label className="label">Modal Title</label>
+                <input
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  className="input"
+                  placeholder="What's New in v1.2.0"
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="label mb-0">Changelog (Markdown)</label>
+                <button
+                  onClick={() => setChangelog(CHANGELOG_TEMPLATE)}
+                  className="text-[10px] text-brand-400 hover:text-brand-300 font-semibold"
+                >
+                  Insert template
+                </button>
+              </div>
+              <textarea
+                value={changelog}
+                onChange={e => setChangelog(e.target.value)}
+                className="input font-mono text-xs h-48 resize-none"
+                placeholder="## New Features&#10;- ...&#10;&#10;## Bug Fixes&#10;- ..."
+              />
+            </div>
+
+            <div className="flex items-center gap-6 flex-wrap">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div
+                  onClick={() => setForcePrompt(!forcePrompt)}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${forcePrompt ? "bg-violet-600" : "bg-surface-700"}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${forcePrompt ? "translate-x-5" : "translate-x-0.5"}`}/>
+                </div>
+                <div>
+                  <span className="text-sm text-surface-200 font-medium">Force Prompt</span>
+                  <p className="text-[10px] text-surface-500">Re-show modal even if user previously dismissed.</p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div className="mt-6 pt-5 border-t border-surface-800 flex items-center gap-4">
+            <button
+              onClick={handlePublish}
+              disabled={publishing || !version.trim() || !title.trim() || !changelog.trim()}
+              className="btn-primary px-6 py-3 bg-violet-600 hover:bg-violet-500"
+            >
+              {publishing ? (
+                <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Publishing...</>
+              ) : published ? (
+                <><CheckCircle size={15}/>Update Published!</>
+              ) : (
+                <><Plus size={14}/>Publish Update</>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Published Updates List ─────────────────────────────────── */}
+      <div>
+        <div className="card p-5">
+          <h3 className="text-xs font-semibold text-surface-400 uppercase tracking-widest mb-4">Published Updates</h3>
+          {loadingList ? (
+            <div className="flex justify-center py-8">
+              <div className="w-5 h-5 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"/>
+            </div>
+          ) : updates.length === 0 ? (
+            <p className="text-surface-500 text-xs text-center py-8">No updates published yet.</p>
+          ) : (
+            <div className="space-y-3 max-h-[600px] overflow-y-auto">
+              {updates.map(u => (
+                <div
+                  key={u.id}
+                  className={`rounded-xl border p-4 transition-all ${u.isActive ? "border-surface-700 bg-surface-800/60" : "border-surface-800 bg-surface-900 opacity-50"}`}
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-black text-violet-300 font-mono">{u.version}</span>
+                        {u.forcePrompt && (
+                          <span className="text-[9px] font-bold text-amber-300 bg-amber-900/30 px-1.5 py-0.5 rounded-full">FORCE</span>
+                        )}
+                        {u.isActive && (
+                          <span className="text-[9px] font-bold text-brand-300 bg-brand-900/30 px-1.5 py-0.5 rounded-full">LIVE</span>
+                        )}
+                      </div>
+                      <p className="text-xs font-semibold text-surface-100 truncate">{u.title}</p>
+                      <p className="text-[10px] text-surface-400 mt-0.5 line-clamp-2 font-mono">{u.changelog.slice(0, 80)}...</p>
+                      <p className="text-[9px] text-surface-600 mt-2">{ts(u.releasedAt)}</p>
+                    </div>
+                    <button
+                      onClick={() => toggleUpdateActive(u)}
+                      className="flex-shrink-0 mt-0.5"
+                      title={u.isActive ? "Deactivate" : "Activate"}
+                    >
+                      {u.isActive
+                        ? <ToggleRight size={18} className="text-violet-400"/>
+                        : <ToggleLeft  size={18} className="text-surface-600"/>}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN PAGE — Tab container
+// ═══════════════════════════════════════════════════════════════════════════
+const TABS = [
+  { id: "notifications", label: "Notification & Banner Engine", icon: Bell },
+  { id: "updates",       label: "Update Manager",               icon: GitBranch },
+] as const;
+
+type Tab = typeof TABS[number]["id"];
+
+export default function Notifications() {
+  const [activeTab, setActiveTab] = useState<Tab>("notifications");
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h2 className="text-2xl font-bold text-surface-50">Broadcasts & Updates</h2>
+        <p className="text-surface-400 text-sm mt-1">
+          Push real-time notifications and publish "What's New" changelogs to all active desktop clients.
+        </p>
+      </div>
+
+      {/* Tab Switcher */}
+      <div className="flex gap-1 p-1 bg-surface-900 border border-surface-800 rounded-xl w-fit">
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === tab.id
+                ? "bg-surface-700 text-surface-50 shadow"
+                : "text-surface-400 hover:text-surface-200"
+            }`}
+          >
+            <tab.icon size={14}/>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === "notifications" ? <NotificationEngine /> : <UpdateManager />}
+    </div>
+  );
+}
+

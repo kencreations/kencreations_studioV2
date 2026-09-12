@@ -6,9 +6,53 @@ import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUti
 import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
 import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
 import { TTFLoader } from "three/addons/loaders/TTFLoader.js";
-import { FONT_OPTIONS } from "../utils/fonts";
+import { BUNDLED_FONTS } from "../utils/fontManager.js";
+import CsgWorker from "../engine/workers/csg.worker.js?worker";
+
+const csgWorker = new CsgWorker();
+let messageId = 0;
+const pendingCSG = new Map();
+
+csgWorker.onmessage = (e) => {
+    if (e.data.type === 'result' || e.data.type === 'error') {
+        const resolve = pendingCSG.get(e.data.id);
+        if (resolve) {
+            resolve(e.data);
+            pendingCSG.delete(e.data.id);
+        }
+    }
+};
+
+csgWorker.onerror = (err) => {
+    console.error("CSG Worker failed to load or threw a fatal error:", err.message);
+    if (!window.hasAlertedCSG) {
+        alert("Worker Fatal Error: " + err.message);
+        window.hasAlertedCSG = true;
+    }
+};
+
+function computeCSGAsync(position, index, params) {
+    return new Promise((resolve) => {
+        const id = messageId++;
+        pendingCSG.set(id, resolve);
+        
+        const posCopy = position.slice();
+        const idxCopy = index ? index.slice() : null;
+        
+        csgWorker.postMessage({
+            type: 'computeCSG',
+            id,
+            position: posCopy,
+            index: idxCopy,
+            params
+        });
+    });
+}
+
+import { useProfile } from "../contexts/ProfileContext";
 
 export default function CharmMesh({ charm }) {
+    const { allFonts = [] } = useProfile();
     const {
         type = "icon",
         iconId,
@@ -26,6 +70,12 @@ export default function CharmMesh({ charm }) {
         holeDiameter,
         holeCount = 1,
         holeDistance = 10,
+        holeYOffset = 0,
+        holeZOffset = 0,
+        holeShape = "cylinder",
+        strapWidth = 10,
+        strapThickness = 2.5,
+        enableBase = true,
         bubbleMode = false,
         bubbleSize = 2,
     } = charm;
@@ -43,34 +93,15 @@ export default function CharmMesh({ charm }) {
                 const s = await getShapesFromIconify(iconId, size);
                 if (active) setShapes(s);
             } else if (type === "text") {
-                const allFonts = [...FONT_OPTIONS, ...(window.customFonts || [])];
-                const fontOption = allFonts.find((f) => f.id === fontId) || allFonts[0];
+                const fallbackFonts = allFonts.length > 0 ? allFonts : BUNDLED_FONTS;
+                const fontOption = fallbackFonts.find((f) => f.id === fontId || f.label === fontId) || fallbackFonts[0];
+                if (!fontOption) return;
+                
                 new TTFLoader().load(fontOption.url || fontOption.file_path, (ttf) => {
                     if (!active) return;
                     const font = new FontLoader().parse(ttf);
-                    const s = createTextShapesWithSpacing(text || " ", font, size, 0);
-                    // Center the text shapes
-                    if (s.length > 0) {
-                        const tempGeo = new THREE.ShapeGeometry(s);
-                        tempGeo.computeBoundingBox();
-                        const bb = tempGeo.boundingBox;
-                        const cx = (bb.max.x + bb.min.x) / 2;
-                        const cy = (bb.max.y + bb.min.y) / 2;
-                        
-                        const centeredShapes = [];
-                        for (const shape of s) {
-                            const pts = shape.getPoints().map(p => new THREE.Vector2(p.x - cx, p.y - cy));
-                            const newShape = new THREE.Shape(pts);
-                            for (const hole of shape.holes) {
-                                const hPts = hole.getPoints().map(p => new THREE.Vector2(p.x - cx, p.y - cy));
-                                newShape.holes.push(new THREE.Path(hPts));
-                            }
-                            centeredShapes.push(newShape);
-                        }
-                        setShapes(centeredShapes);
-                    } else {
-                        setShapes(s);
-                    }
+                    const s = font.generateShapes(text || " ", size);
+                    setShapes(s);
                 });
             }
         }
@@ -79,124 +110,126 @@ export default function CharmMesh({ charm }) {
         return () => {
             active = false;
         };
-    }, [type, iconId, text, fontId, size]);
+    }, [type, iconId, text, fontId, size, allFonts]);
 
-    // 1. Get inner charm geometry
-    const { charmGeo, baseGeo } = useMemo(() => {
-        if (!shapes || shapes.length === 0)
-            return { charmGeo: null, baseGeo: null };
+    const centerOffset = useMemo(() => {
+        if (!shapes || shapes.length === 0) return { cx: 0, cy: 0 };
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        shapes.forEach(shape => {
+            const pts = shape.getPoints(16);
+            pts.forEach(p => {
+                if (p.x < minX) minX = p.x;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.y > maxY) maxY = p.y;
+            });
+        });
+        return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+    }, [shapes]);
 
-        // Extrude inner charm
-        // In bubble mode, bevelThickness = depth/2 so the top surface is fully domed.
-        // bevelSize rounds the silhouette edges inward.
+    const charmGeo = useMemo(() => {
+        if (!shapes || shapes.length === 0) return null;
+
         const clampedBevel = Math.min(bubbleSize, depth / 2 - 0.01);
         const cGeo = new THREE.ExtrudeGeometry(shapes, {
             depth: bubbleMode ? depth - clampedBevel : depth,
             bevelEnabled: bubbleMode,
             bevelThickness: bubbleMode ? clampedBevel : 0,
             bevelSize: bubbleMode ? clampedBevel : 0,
-            bevelSegments: 12,
-            curveSegments: 24,
+            bevelSegments: 4,
+            curveSegments: 6,
         });
+        cGeo.translate(-centerOffset.cx, -centerOffset.cy, 0);
 
-        // 2. Build base geometry via Clipper offset
+        if (cGeo.attributes.uv) cGeo.deleteAttribute("uv");
+        
+        let mergedGeo = BufferGeometryUtils.mergeVertices(cGeo, 1e-6);
+        mergedGeo.computeVertexNormals();
+        return mergedGeo;
+    }, [shapes, depth, bubbleMode, bubbleSize, centerOffset]);
+
+    const rawBaseGeo = useMemo(() => {
+        if (!shapes || shapes.length === 0) return null;
         const solidShapes = unionShapes(shapes);
         const bShapes = offsetShapes(solidShapes, baseOffset);
+        let rawBase = bShapes.length > 0
+            ? new THREE.ExtrudeGeometry(bShapes, { depth: baseHeight, bevelEnabled: false, curveSegments: 8 })
+            : new THREE.BoxGeometry(size, size, baseHeight);
 
-        // Base always stays flat — only the charm gets the bubble/dome effect.
-        let rawBase =
-            bShapes.length > 0
-                ? new THREE.ExtrudeGeometry(bShapes, {
-                      depth: baseHeight,
-                      bevelEnabled: false,
-                      curveSegments: 24,
-                  })
-                : new THREE.BoxGeometry(size, size, baseHeight);
-
-        // Position base correctly (shift Z down so charm sits on top)
-        rawBase.translate(0, 0, -baseHeight);
-
-        // 3. Cut paracord hole using CSG
-        const csgEvaluator = new Evaluator();
-        csgEvaluator.useGroups = false;
-
-        let bGeo = BufferGeometryUtils.mergeVertices(rawBase);
+        // Center the base in XY, and center it in Z so it goes from -baseHeight/2 to +baseHeight/2
+        rawBase.translate(-centerOffset.cx, -centerOffset.cy, -baseHeight / 2);
+        let bGeo = BufferGeometryUtils.mergeVertices(rawBase, 1e-6);
         bGeo.computeVertexNormals();
-        const baseMesh = new Brush(bGeo, new THREE.MeshBasicMaterial());
+        return bGeo;
+    }, [shapes, baseOffset, baseHeight, size, centerOffset]);
 
-        const drillLength = size + baseOffset * 4;
-        const drillRadius = holeDiameter / 2;
+    const [csgBaseGeo, setCsgBaseGeo] = useState(null);
 
-        const zOffset = -(baseHeight / 2); // middle of base
-        const isHorizontal = holeOrientation === "horizontal";
+    useEffect(() => {
+        const targetGeo = enableBase ? rawBaseGeo : charmGeo;
+        if (!targetGeo) {
+            setCsgBaseGeo(null);
+            return;
+        }
 
-        let finalBaseGeo;
+        let active = true;
+        setCsgBaseGeo(null); // Revert to fake hole preview while computing
 
-        if (holeCount === 2) {
-            // holeDistance is edge-to-edge gap; center-to-center = gap + diameter.
-            // Subtract each cylinder separately — merging them first creates a
-            // self-intersecting mesh that breaks the BVH CSG evaluator when the
-            // cylinders overlap (negative gap / Venn-diagram mode).
-            const centerToCenterDist = holeDistance + holeDiameter;
-            const halfDist = centerToCenterDist / 2;
-
-            const makeDrill = (offset) => {
-                const cyl = new THREE.CylinderGeometry(drillRadius, drillRadius, drillLength, 32);
-                const drill = new Brush(cyl, new THREE.MeshBasicMaterial());
-                if (isHorizontal) {
-                    drill.rotation.z = Math.PI / 2;
-                    drill.position.set(0, offset, zOffset);
-                } else {
-                    drill.position.set(offset, 0, zOffset);
+        async function doCSG() {
+            window.dispatchEvent(new CustomEvent('csg-compute-start'));
+            try {
+                const result = await computeCSGAsync(
+                    targetGeo.attributes.position.array,
+                    targetGeo.index ? targetGeo.index.array : null,
+                    { size, baseOffset, baseHeight, holeOrientation, holeDiameter, holeCount, holeDistance, holeYOffset, holeZOffset, holeShape, strapWidth, strapThickness }
+                );
+                
+                if (!active) return;
+                
+                if (result.type === 'result') {
+                    const finalGeo = new THREE.BufferGeometry();
+                    finalGeo.setAttribute('position', new THREE.BufferAttribute(result.position, 3));
+                    if (result.normal) finalGeo.setAttribute('normal', new THREE.BufferAttribute(result.normal, 3));
+                    if (result.index) finalGeo.setIndex(new THREE.BufferAttribute(result.index, 1));
+                    setCsgBaseGeo(finalGeo);
+                } else if (result.type === 'error') {
+                    console.error("CSG Worker internal error:", result.error);
+                    // Instead of a main-thread fallback that freezes the UI, 
+                    // we just fail gracefully and render the uncut geometry.
+                    setCsgBaseGeo(null);
                 }
-                drill.updateMatrixWorld(true);
-                return drill;
-            };
-
-            baseMesh.updateMatrixWorld(true);
-            const after1 = csgEvaluator.evaluate(baseMesh, makeDrill(halfDist), SUBTRACTION);
-            after1.updateMatrixWorld(true);
-            const finalBase = csgEvaluator.evaluate(after1, makeDrill(-halfDist), SUBTRACTION);
-            finalBaseGeo = finalBase.geometry;
-        } else {
-            // Single hole
-            const cyl = new THREE.CylinderGeometry(drillRadius, drillRadius, drillLength, 32);
-            const drillMesh = new Brush(cyl, new THREE.MeshBasicMaterial());
-            if (isHorizontal) {
-                drillMesh.rotation.z = Math.PI / 2;
-                drillMesh.position.set(0, 0, zOffset);
-            } else {
-                drillMesh.position.set(0, 0, zOffset);
+            } catch (err) {
+                console.error("CSG Worker Error", err);
+            } finally {
+                window.dispatchEvent(new CustomEvent('csg-compute-end'));
             }
-            drillMesh.updateMatrixWorld(true);
-            baseMesh.updateMatrixWorld(true);
-            const finalBase = csgEvaluator.evaluate(baseMesh, drillMesh, SUBTRACTION);
-            finalBaseGeo = finalBase.geometry;
         }
+        
+        doCSG();
+        
+        return () => { active = false; };
+    }, [rawBaseGeo, charmGeo, enableBase, size, baseOffset, baseHeight, holeOrientation, holeDiameter, holeCount, holeDistance, holeYOffset, holeZOffset, holeShape, strapWidth, strapThickness]);
 
-        // Clean up UVs for 3MF exporter
-        if (finalBaseGeo.attributes.uv) {
-            finalBaseGeo.deleteAttribute("uv");
-        }
-        if (cGeo.attributes.uv) {
-            cGeo.deleteAttribute("uv");
-        }
+    if (!charmGeo || !rawBaseGeo) return null;
 
-        return { charmGeo: cGeo, baseGeo: finalBaseGeo };
-    }, [shapes, depth, baseOffset, baseHeight, holeOrientation, holeDiameter, holeCount, holeDistance, size, bubbleMode, bubbleSize]);
-
-
-    if (!charmGeo || !baseGeo) return null;
+    const activeBaseGeo = csgBaseGeo || rawBaseGeo;
+    const isHorizontal = holeOrientation === "horizontal";
+    const drillLength = 2000;
+    const drillRadius = holeDiameter / 2;
+    const zOffset = holeZOffset || 0;
+    const halfDist = (holeDistance + holeDiameter) / 2;
 
     return (
         <group position={[x, y, 0]} ref={baseRef}>
-            {/* Base (with paracord hole) */}
-            <mesh geometry={baseGeo} name="charmBase">
-                <meshStandardMaterial color={baseColor} />
-            </mesh>
+            {/* Base */}
+            {enableBase && (
+                <mesh geometry={activeBaseGeo} name="charmBase">
+                    <meshStandardMaterial color={baseColor} />
+                </mesh>
+            )}
 
             {/* Inner Charm / Text */}
-            <mesh geometry={charmGeo} name="charmInner">
+            <mesh geometry={enableBase ? charmGeo : (csgBaseGeo || charmGeo)} position={enableBase ? [0, 0, baseHeight / 2] : [0, 0, 0]} name="charmInner">
                 <meshStandardMaterial color={charmColor} />
             </mesh>
         </group>

@@ -1,7 +1,7 @@
 {
-    "name": "kencreations-v2",
+    "name": "kencreations-studio",
     "private": true,
-    "version": "1.0.6-beta",
+    "version": "1.2.0",
     "type": "module",
     "main": "electron/loader.cjs",
     "scripts": {
@@ -17,10 +17,11 @@
     "build": {
         "appId": "com.kencreations.generator",
         "productName": "Kencreations Studio",
+        "icon": "public/icon.png",
         "publish": [
             {
                 "provider": "github",
-                "owner": "kensamonte",
+                "owner": "kencreations",
                 "repo": "kencreations_studioV2"
             }
         ],
@@ -33,33 +34,46 @@
             "electron/loader.cjs",
             "electron/preload.cjs",
             "package.json",
-            "node_modules/**/*"
+            "node_modules/**/*",
+            "!src/**",
+            "!public/**",
+            "!assets/**"
         ],
+        "asar": true,
         "win": {
             "target": "nsis"
         }
     },
     "dependencies": {
         "@fortawesome/fontawesome-free": "^7.3.0",
+        "@react-three/csg": "^4.0.0",
         "@react-three/drei": "^10.7.7",
         "@react-three/fiber": "^9.6.1",
         "better-sqlite3": "^13.0.3",
+        "bonjour-service": "^1.1.1",
         "bytenode": "^1.6.0",
         "clipper-lib": "^6.4.2",
         "d3-contour": "^4.0.2",
+        "electron-log": "^5.4.4",
+        "electron-store": "^8.1.0",
         "electron-updater": "^6.8.9",
         "fflate": "^0.8.3",
         "file-saver": "^2.0.5",
+        "firebase": "^12.18.0",
+        "jsqr": "^1.4.0",
         "lucide": "^1.25.0",
         "lucide-react": "^1.25.0",
         "manifold-3d": "^3.5.1",
+        "mqtt": "^5.15.2",
         "node-forge": "^1.4.0",
         "node-machine-id": "^1.1.12",
         "opentype.js": "^2.0.0",
         "pica": "^10.0.2",
+        "qrcode-generator": "^2.0.4",
         "react": "^19.2.7",
         "react-dom": "^19.2.7",
         "react-image-crop": "^11.1.2",
+        "react-markdown": "^10.1.0",
         "react-router-dom": "^7.18.1",
         "three": "^0.185.1",
         "three-3mf-exporter": "^45.2.0",

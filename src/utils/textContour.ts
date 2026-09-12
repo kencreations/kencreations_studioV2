@@ -53,6 +53,49 @@ export function createTextShapesWithSpacing(
         currentX += advance + letterSpacing;
     }
 
+    if (allShapes.length > 0) {
+        // Calculate the bounding box of the generated 2D shapes
+        let minX = Infinity,
+            minY = Infinity,
+            maxX = -Infinity,
+            maxY = -Infinity;
+
+        for (const shape of allShapes) {
+            const points = shape.getPoints(16);
+            for (const p of points) {
+                if (p.x < minX) minX = p.x;
+                if (p.x > maxX) maxX = p.x;
+                if (p.y < minY) minY = p.y;
+                if (p.y > maxY) maxY = p.y;
+            }
+        }
+
+        const cx = (minX + maxX) / 2;
+        const cy = (minY + maxY) / 2;
+
+        // Recreate all shapes centered
+        const centeredShapes: THREE.Shape[] = [];
+        for (const shape of allShapes) {
+            const outerPoints = shape.getPoints(16);
+            const translatedOuter = outerPoints.map(
+                (p) => new THREE.Vector2(p.x - cx, p.y - cy)
+            );
+            const newShape = new THREE.Shape(translatedOuter);
+
+            for (const hole of shape.holes) {
+                const holePoints = hole.getPoints(16);
+                const translatedHole = holePoints.map(
+                    (p) => new THREE.Vector2(p.x - cx, p.y - cy)
+                );
+                const newHole = new THREE.Path(translatedHole);
+                newShape.holes.push(newHole);
+            }
+
+            centeredShapes.push(newShape);
+        }
+        return centeredShapes;
+    }
+
     return allShapes;
 }
 
@@ -109,6 +152,21 @@ export function offsetShapes(
     return polyTreeToShapes(polyTree, scale);
 }
 
+function filterClosePoints(pts: THREE.Vector2[], tolerance: number): THREE.Vector2[] {
+    if (pts.length < 3) return pts;
+    const result = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+        if (pts[i].distanceTo(result[result.length - 1]) > tolerance) {
+            result.push(pts[i]);
+        }
+    }
+    // Check if last point is too close to first point
+    if (result.length > 2 && result[result.length - 1].distanceTo(result[0]) <= tolerance) {
+        result.pop();
+    }
+    return result;
+}
+
 function polyTreeToShapes(polyNode: any, scale: number): THREE.Shape[] {
     const shapes: THREE.Shape[] = [];
 
@@ -116,9 +174,18 @@ function polyTreeToShapes(polyNode: any, scale: number): THREE.Shape[] {
         const child = polyNode.Childs()[i];
         if (!child.IsHole()) {
             const contour = child.Contour();
-            const pts = contour.map(
+            let pts = contour.map(
                 (p: any) => new THREE.Vector2(p.X / scale, p.Y / scale)
             );
+            
+            // Filter points that are too close to prevent Earcut degenerate triangles (NaN normals)
+            pts = filterClosePoints(pts, 0.05);
+
+            if (pts.length < 3) continue;
+
+            if (THREE.ShapeUtils.isClockWise(pts)) {
+                pts.reverse();
+            }
             const shape = new THREE.Shape(pts);
 
             // Retrieve child holes
@@ -126,9 +193,16 @@ function polyTreeToShapes(polyNode: any, scale: number): THREE.Shape[] {
                 const holeNode = child.Childs()[j];
                 if (holeNode.IsHole()) {
                     const holeContour = holeNode.Contour();
-                    const holePts = holeContour.map(
+                    let holePts = holeContour.map(
                         (p: any) => new THREE.Vector2(p.X / scale, p.Y / scale)
                     );
+                    
+                    holePts = filterClosePoints(holePts, 0.05);
+                    if (holePts.length < 3) continue;
+
+                    if (!THREE.ShapeUtils.isClockWise(holePts)) {
+                        holePts.reverse();
+                    }
                     const holePath = new THREE.Path(holePts);
                     shape.holes.push(holePath);
 

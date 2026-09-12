@@ -393,7 +393,12 @@ function checkLocalLicense(hwid) {
         }
     }
 
-    return { activated: true, entitlements: state.entitlements };
+    return { 
+        activated: true, 
+        entitlements: state.entitlements,
+        plan_type: state.certPayload?.plan_type || 'standard',
+        expires_at: state.expiresAt
+    };
 }
 
 module.exports = {

@@ -36,55 +36,57 @@ export default function UpdateToast() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 w-80 bg-zinc-900 border border-zinc-700/50 shadow-2xl rounded-xl overflow-hidden z-50 animate-in slide-in-from-bottom-5">
-      <div className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-teal-500/10 p-2 rounded-lg text-teal-400">
-              {status === 'downloading' ? (
-                <Download className="w-5 h-5 animate-pulse" />
-              ) : (
-                <RefreshCw className="w-5 h-5" />
-              )}
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-zinc-100">
-                {status === 'available' && 'Update Available'}
-                {status === 'downloading' && 'Downloading Update...'}
-                {status === 'downloaded' && 'Update Ready'}
-              </h4>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                {info ? `Version ${info.version}` : 'New version available'}
-              </p>
-            </div>
+    <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none">
+      <div className="pointer-events-auto rounded-2xl border p-4 w-80 shadow-xl relative overflow-hidden bg-white border-neutral/10 transition-all duration-300 animate-in slide-in-from-bottom-5">
+        <div className="absolute bottom-0 left-0 h-0.5 w-3/4 bg-secondary opacity-20" />
+        
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex-shrink-0 text-secondary">
+            {status === 'downloading' ? (
+              <Download className="w-5 h-5 animate-pulse" />
+            ) : (
+              <RefreshCw className="w-5 h-5" />
+            )}
           </div>
-          {status !== 'downloading' && (
-            <button
-              onClick={() => setVisible(false)}
-              className="text-zinc-500 hover:text-zinc-300 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          
+          <div className="flex-1 pr-5">
+            <p className="font-bold text-sm leading-tight mb-1 text-neutral">
+              {status === 'available' && 'Update Available'}
+              {status === 'downloading' && 'Downloading Update...'}
+              {status === 'downloaded' && 'Update Ready'}
+            </p>
+            <p className="text-xs leading-relaxed text-neutral/80">
+              {info ? `Version ${info.version}` : 'New version available'}
+            </p>
+
+            {status === 'downloading' && (
+              <div className="mt-4">
+                <div className="h-1.5 w-full bg-secondary/20 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-secondary transition-all duration-300 ease-out"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {status === 'downloaded' && (
+              <button
+                onClick={() => window.electronAPI.installUpdate()}
+                className="mt-4 w-full py-2 bg-secondary hover:brightness-110 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
+              >
+                Restart to Install
+              </button>
+            )}
+          </div>
         </div>
 
-        {status === 'downloading' && (
-          <div className="mt-4">
-            <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-teal-500 transition-all duration-300 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {status === 'downloaded' && (
-          <button
-            onClick={() => window.electronAPI.installUpdate()}
-            className="mt-4 w-full py-2 bg-teal-500 hover:bg-teal-400 text-teal-950 text-sm font-medium rounded-lg transition-colors"
+        {status !== 'downloading' && (
+          <button 
+            onClick={() => setVisible(false)}
+            className="absolute top-3 right-3 text-neutral/40 hover:text-neutral/70 text-lg leading-none transition-colors"
           >
-            Restart to Install
+            ×
           </button>
         )}
       </div>

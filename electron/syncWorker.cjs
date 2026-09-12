@@ -75,12 +75,12 @@ function httpsPost(url, body) {
  * Firestore REST query — returns array of matching documents.
  * Used to query notifications and updates collections.
  */
-async function firestoreQuery(collection, filters) {
+async function firestoreQuery(collection, filters, orderByField = 'createdAt') {
   const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery?key=${FIREBASE_API_KEY}`;
   const body = {
     structuredQuery: {
       from: [{ collectionId: collection }],
-      orderBy: [{ field: { fieldPath: 'createdAt' }, direction: 'DESCENDING' }],
+      orderBy: [{ field: { fieldPath: orderByField }, direction: 'DESCENDING' }],
       limit: 20,
     },
   };
@@ -275,13 +275,14 @@ async function syncUpdates(mainWindow) {
   try {
     const lastSeenVersion = db.getSyncMeta('last_seen_update_version') || '';
 
-    const updates = await firestoreQuery('updates', []);
+    // The 'updates' collection uses 'releasedAt' instead of 'createdAt' for ordering
+    const updates = await firestoreQuery('updates', [], 'releasedAt');
 
     // Filter to only active updates locally
     const activeUpdates = updates.filter(u => u.isActive === true);
     if (!activeUpdates.length) return;
 
-    const latest = activeUpdates[0]; // Already sorted by createdAt DESC
+    const latest = activeUpdates[0]; // Already sorted by releasedAt DESC
     if (!latest || !latest.version) return;
 
     const isNew = latest.version !== lastSeenVersion;

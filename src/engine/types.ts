@@ -41,7 +41,7 @@ export interface PaletteEntry {
   coverage: number; // fraction of foreground pixels
 }
 
-export type BaseShapeKind = 'outline' | 'circle' | 'square' | 'hexagon' | 'heart' | 'star' | 'egg';
+export type BaseShapeKind = 'outline' | 'circle' | 'square' | 'rect' | 'hexagon' | 'heart' | 'star' | 'egg';
 export type ViewMode = 'assembled' | 'exploded' | 'section';
 
 /** Which interaction mode the viewport is in. */
@@ -67,6 +67,10 @@ export interface SwitchPlacement {
   x: number;
   y: number;
   rotation: number;
+  /** Seat height for the PREVIEW switch mesh (mm above the frame's Z 0). A clicker body
+   *  latches the switch at Z 0; a letter block keeps a slightly thicker plate around the
+   *  cut-out, so its switch (and its keycap) sit that much higher. Undefined = 0. */
+  z?: number;
 }
 
 /** Keychain attachment settings. */
@@ -126,6 +130,10 @@ export interface BuildParams {
    *  switch: +looser (opens the cross socket, easier to press on), −tighter. 0 = as
    *  authored. Only the XY footprint scales — Z is kept so the cap rest height is fixed. */
   stemTolerance: number;
+  /** Nudge (mm) of the design within a preset base shape. The shape grows to keep
+   *  containing it, so the artwork can sit off-centre (a heart reads better with its
+   *  design a little high). Ignored when the base follows the outline. */
+  imageOffset: { x: number; y: number };
   colorBleed: number; // tiny outward grow on each color so neighbors never leave a gap
   stepHeight: number; // mm per height level for raised color relief
   travel: number; // switch press travel the well must clear (~3.5–4 mm)
@@ -143,23 +151,41 @@ export interface BuildParams {
   edgeSettings: EdgeSetting[];
   /** Global toggle: chamfer the top edge of every raised (extruded) color part. */
   extrudeChamfer: boolean;
+  // ---- Letter-block mode ----
+  /** Arrangement: a row, a column, or a grid that wraps at `blockColumns`. */
+  blockOrientation?: BlockOrientation;
+  /** Columns per row when the layout is 'grid'. */
+  blockColumns?: number;
+  /** Legend size multiplier on the keycap (1 = the default fit). */
+  legendScale?: number;
+  /** Outward offset applied to every legend outline, mm — the "boldness" control. */
+  legendBold?: number;
+  /** Which side of the block set the keyring loop hangs off (blocks mode). */
+  keychainEnd?: KeychainSide;
+  /** Per-part colour overrides (partName -> rgb), for parts the user recoloured one at a
+   *  time by clicking them in the viewport. The left-hand palette sets the whole group and
+   *  clears these. */
+  partOverrides?: Record<string, RGB>;
 }
 
-export interface MacropadBuildParams {
-  rows: number;
-  columns: number;
-  pitchX: number; // e.g. 19.05 mm
-  pitchY: number;
-  style: 'joined' | 'unified';
-  baseShape: BaseShapeKind; // 'square', 'circle', 'hexagon', etc
-  margin: number; // thickness around the switches
-  floorThickness: number; // bottom base thickness
-  sidePattern: 'none' | 'ribbed' | 'knurled' | 'wavy' | 'brick';
-  socketToleranceMm: number; // switch socket fit
-  keychain: KeychainParams;
-  bodyColorRgb: RGB;
-  edgeSettings: EdgeSetting[];
-}
+/** One cell of a block arrangement: a glyph, a Lucide symbol, or a deliberate hole (which
+ *  keeps its place in the grid so shapes like WASD are possible). */
+export type BlockSlot =
+  | { kind: 'char'; ch: string }
+  | { kind: 'icon'; name: string }
+  | { kind: 'empty' };
+
+/** 'grid' is implemented in the geometry (and covered by the headless tests) but is NOT
+ *  offered in the UI, because the current shells can't tile one cleanly:
+ *   • They are 0.34 mm wider than they are deep, and a grid puts neighbours 90° apart, so
+ *     every rotated joint pairs a wide face with a narrow one (0.17–0.34 mm of slop).
+ *   • A wall with no neighbour stays FULL, which is 0.875 mm thicker than a halved one —
+ *     so in a non-rectangular shape (an L, a WASD cluster) two diagonal blocks run their
+ *     full outer walls into each other's corner.
+ *  Both go away if the block CAD is made square; then this can be re-exposed as-is. */
+export type KeychainSide = 'left' | 'right' | 'top' | 'bottom';
+
+export type BlockOrientation = 'horizontal' | 'vertical' | 'grid';
 
 /** Mesh payload (transferable). First 3 of each `numProp` stride are x,y,z. */
 export interface MeshData {
@@ -191,7 +217,19 @@ export interface BuildRegion {
 
 // ---- Worker messages ----
 export type GeometryRequest =
-  | { type: 'init'; socket: ArrayBuffer; stem: ArrayBuffer; switch: ArrayBuffer }
+  | { 
+      type: 'init'; 
+      socket: ArrayBuffer; 
+      stem: ArrayBuffer; 
+      switch: ArrayBuffer;
+      blockNoSides?: ArrayBuffer;
+      blockSouth?: ArrayBuffer;
+      blockNorthSouth?: ArrayBuffer;
+      blockNorthWest?: ArrayBuffer;
+      blockNorthSouthWest?: ArrayBuffer;
+      blockAllSides?: ArrayBuffer;
+      keycapJson?: any;
+    }
   | {
       type: 'buildClicker';
       regions: BuildRegion[];
@@ -199,8 +237,9 @@ export type GeometryRequest =
       params: BuildParams;
     }
   | {
-      type: 'buildMacropad';
-      params: MacropadBuildParams;
+      type: 'buildBlocks';
+      regions: BuildRegion[];
+      params: BuildParams;
     };
 
 export type GeometryResponse =

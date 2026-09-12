@@ -34,7 +34,7 @@ export default function Home() {
                         <button className="hover:text-black transition-colors">Resources</button>
                         <button className="hover:text-black transition-colors">Pricing</button>
                         <div className="flex items-center space-x-4 pl-4 border-l border-gray-400/30">
-                            <button className="hover:text-black transition-colors">Log In</button>
+                            <button onClick={() => navigate('/bambu-login')} className="hover:text-black transition-colors">Log In</button>
                             <button className="px-4 py-2 bg-[#00A3A3] text-white rounded-lg hover:bg-[#008f8f] transition-colors shadow-lg shadow-teal-500/30">
                                 Open Studio
                             </button>

@@ -13,20 +13,10 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { SVGLoader } from "three/examples/jsm/loaders/SVGLoader.js";
 import { FontLoader, Font } from "three/examples/jsm/loaders/FontLoader.js";
 import { TTFLoader } from "three/examples/jsm/loaders/TTFLoader.js";
+import { useProfile } from "../contexts/ProfileContext";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
-// ── Available fonts ───────────────────────────────────────────────────────────
-export const FONT_OPTIONS = [
-    { label: "Titan One", path: "/fonts/TitanOne.ttf" },
-    { label: "Showpop", path: "/fonts/Showpop.ttf" },
-    { label: "Bebas Neue", path: "/fonts/BebasNeue.ttf" },
-    { label: "Kindergo", path: "/fonts/Kindergo.ttf" },
-    { label: "Retro Dolly", path: "/fonts/RetroDolly.ttf" },
-    { label: "DynaPuff", path: "/fonts/DynaPuff.ttf" },
-    { label: "Pacifico", path: "/fonts/Pacifico.ttf" },
-    { label: "Coiny", path: "/fonts/Coiny.ttf" },
-];
-export const AVAILABLE_FONTS = FONT_OPTIONS.map((f) => f.label);
+import { load3DFont } from "../utils/fontManager";
 
 // ── State ─────────────────────────────────────────────────────────────────────
 export type KeycapState = {
@@ -515,9 +505,8 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
         const [capBB, setCapBB] = useState<THREE.Box3 | null>(null);
         const [font, setFont] = useState<Font | null>(null);
         // Map of iconId → fetched SVG text for icons currently in the legends
-        const [iconSvgMap, setIconSvgMap] = useState<Map<string, string>>(
-            new Map(),
-        );
+        const [iconSvgMap, setIconSvgMap] = useState<Map<string, string>>(new Map());
+        const { allFonts } = useProfile();
 
         // Load geometry: prefer customGeo if provided, else fall back to template.stl
         useEffect(() => {
@@ -546,8 +535,12 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
                 onCapBB?.(bb);
                 return;
             }
+            const getAssetPath = (path) => {
+                if (!path) return path;
+                return path.startsWith('/') ? '.' + path : path;
+            };
             new STLLoader().load(
-                "/models/keycaps/template.stl",
+                getAssetPath("/models/keycaps/template.stl"),
                 (g) => {
                     g.computeVertexNormals();
                     g.center();
@@ -563,19 +556,19 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
         }, [customGeo]);
 
         useEffect(() => {
-            const allFonts = [...FONT_OPTIONS, ...((window as any).customFonts || [])];
             const opt =
-                allFonts.find((f) => f.label === state.fontLabel) ??
+                allFonts.find((f: any) => f.label === state.fontLabel) ??
                 allFonts[0];
-            const fl = new FontLoader();
-            const tl = new TTFLoader();
-            tl.load(
-                opt.path || opt.url || opt.file_path,
-                (json: any) => setFont(fl.parse(json)),
-                undefined,
-                (e) => console.error("Font error", e),
-            );
-        }, [state.fontLabel]);
+            
+            (async () => {
+                try {
+                    const parsed = await load3DFont(opt);
+                    setFont(parsed);
+                } catch (e) {
+                    console.error("Font load error", e);
+                }
+            })();
+        }, [state.fontLabel, allFonts]);
 
         // Fetch SVG data for any icon tokens present in the current legends
         const letters = lettersFromLegends(state.legends);

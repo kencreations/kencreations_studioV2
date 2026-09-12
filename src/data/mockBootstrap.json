@@ -1,0 +1,92 @@
+{
+  "settings": {
+    "promo_all_access": false,
+    "promo_banner_text": ""
+  },
+  "pricing": [
+    {
+      "tier_id": "1mo",
+      "name": "1-Month",
+      "price_formatted": "₱499",
+      "suffix": "/ mo",
+      "features": ["Unlimited Exports", "Standard Generators"]
+    },
+    {
+      "tier_id": "6mo",
+      "name": "6-Month",
+      "price_formatted": "₱2,499",
+      "suffix": "/ 6 mos",
+      "features": ["Unlimited Exports", "Standard Generators"]
+    },
+    {
+      "tier_id": "12mo",
+      "name": "12-Month",
+      "price_formatted": "₱3,999",
+      "suffix": "/ yr",
+      "features": ["Unlimited Exports", "Standard Generators"]
+    },
+    {
+      "tier_id": "lifetime",
+      "name": "Lifetime",
+      "price_formatted": "₱5,999",
+      "suffix": "/ once",
+      "features": ["Perpetual Base Access", "Unlimited Exports", "No Recurring Billing"]
+    },
+    {
+      "tier_id": "vip_all_exclusive",
+      "name": "Unlock All Exclusive (VIP)",
+      "price_formatted": "₱8,999",
+      "suffix": "/ once",
+      "features": ["All Exclusive Generators", "Perpetual Access", "Priority Commercial Use"]
+    },
+    {
+      "tier_id": "single_exclusive",
+      "name": "Unlock Single Exclusive",
+      "price_formatted": "₱2,999",
+      "suffix": "/ per editor",
+      "features": ["Unlock 1 Exclusive Tool", "Perpetual Access to that tool"]
+    }
+  ],
+  "editors": [
+    {
+      "id": "qr-standee",
+      "title": "Modular QR Standee",
+      "description": "Desk stand with snap-fit scannable QR tiles",
+      "image_url": "https://cdn.kencreations.dev/thumbnails/qr-standee.png",
+      "image_hash": "a1b2c3d4",
+      "status": "stable",
+      "is_exclusive": true,
+      "sort_order": 1
+    },
+    {
+      "id": "monogram-insert",
+      "title": "Monogram Insert",
+      "description": "Customizable monogram generator",
+      "image_url": "https://cdn.kencreations.dev/thumbnails/monogram-insert.png",
+      "image_hash": "b2c3d4e5",
+      "status": "stable",
+      "is_exclusive": false,
+      "sort_order": 2
+    },
+    {
+      "id": "monogram-stand",
+      "title": "Standing Monogram V2",
+      "description": "Dual initial standing monogram generator",
+      "image_url": "https://cdn.kencreations.dev/thumbnails/monogram-insert.png",
+      "image_hash": "b2c3d4e6",
+      "status": "stable",
+      "is_exclusive": false,
+      "sort_order": 2.5
+    },
+    {
+      "id": "straw-topper",
+      "title": "Straw Topper",
+      "description": "3D straw toppers for tumblers",
+      "image_url": "https://cdn.kencreations.dev/thumbnails/straw-topper.png",
+      "image_hash": "c3d4e5f6",
+      "status": "coming_soon",
+      "is_exclusive": true,
+      "sort_order": 3
+    }
+  ]
+}

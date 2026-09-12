@@ -105,6 +105,17 @@ export function buildClicker(
   const scaleRings = (rings: Ring[]): Ring[] =>
     rings.map((r) => r.map(([x, y]) => [x * sR, y * sR] as [number, number]));
 
+  // Nudging the design only means something on a PRESET base — when the base follows the
+  // outline, the shape and the artwork are the same thing and moving one moves both.
+  const offX = isOutline ? 0 : (params.imageOffset?.x ?? 0);
+  const offY = isOutline ? 0 : (params.imageOffset?.y ?? 0);
+  /** Scaled rings, moved by the design nudge. Used for the ARTWORK only; the silhouette
+   *  that drives an outline base is left where it is. */
+  const placeRings = (rings: Ring[]): Ring[] =>
+    offX === 0 && offY === 0
+      ? scaleRings(rings)
+      : rings.map((r) => r.map(([x, y]) => [x * sR + offX, y * sR + offY] as [number, number]));
+
   const removeHoles = (cs: Section): Section => {
     if (sectionIsEmpty(cs)) return cs;
     
@@ -286,9 +297,13 @@ export function buildClicker(
     // a circumscribing radius (which clips the image on concave shapes like the star
     // or heart), we scale the shape up just enough that the whole image PLUS the
     // border frame fits inside it.
+    // A rectangle only makes sense if it has proportions, so it takes them from the
+    // artwork: a wide logo gets a wide plate instead of a square one with big empty sides.
+    const rectAspect = Math.min(3, Math.max(0.34, imgH > 0.01 ? imgW / imgH : 1));
     const genShape = (rr: number): Section => {
       switch (params.baseShape) {
         case 'square': return roundedRect(2 * rr, 2 * rr, 2 * rr * 0.22);
+        case 'rect': return roundedRect(2 * rr * rectAspect, 2 * rr, 2 * rr * 0.22);
         case 'hexagon': return makeHexagon(rr);
         case 'heart': return makeHeart(rr);
         case 'star': return makeStar(rr);
@@ -303,7 +318,14 @@ export function buildClicker(
     const halfH = Math.max(imgH / 2 + border, minCap / 2);
     const unit = genShape(1); // test the image rect against the r = 1 shape
     const fits = (k: number): boolean => {
-      const rect = track(CrossSection.square([(2 * halfW) / k, (2 * halfH) / k], true));
+      // The rect sits where the design sits, so a nudged design grows the shape just
+      // enough to keep covering it instead of spilling over the frame.
+      const rect = track(
+        track(CrossSection.square([(2 * halfW) / k, (2 * halfH) / k], true)).translate([
+          offX / k,
+          offY / k,
+        ]),
+      );
       const outside = track(rect.subtract(unit));
       return sectionIsEmpty(outside);
     };
@@ -370,7 +392,7 @@ export function buildClicker(
   }
   const warnings: string[] = [];
   if (pinched && requested.length > 1) {
-    warnings.push('Switches were pulled together to fit the cap — increase Size for more room.');
+    warnings.push('Switches were pulled together to fit the cap. Increase Size for more room.');
   }
 
   // Stem fit: scale the keycap-mount stem in XY so its cross socket opens up (positive
@@ -414,8 +436,18 @@ export function buildClicker(
     );
     wellFp = track(wellFp.add(col));
   }
-  const wellFootprint = simp(wellFp);
-  const bodyFootprint = simp(grow(wellFootprint, Math.max(0.4, params.borderWidth)));
+  // Simplify the well far more finely than anything else in the build. `simplify(eps)`
+  // may move a boundary by up to eps in EITHER direction, and this is the one outline
+  // that has to stay parallel to another: the cap rides inside it with only `tol` to
+  // spare. At the default 0.04 the well drifted independently of the plate it was grown
+  // from, so the gap wandered around the perimeter instead of staying at `tol` — the
+  // halves read as misaligned and the skirt rubbed on whichever side lost clearance.
+  // 0.004 keeps that error under 1% of the gap while still collapsing the collinear runs
+  // the offset leaves behind.
+  const wellFootprint = simp(wellFp, 0.004);
+  // The body's outer wall mates with nothing, so it keeps the cheap default.
+  const borderW = Math.max(0.4, params.borderWidth);
+  const bodyFootprint = simp(grow(wellFootprint, borderW));
 
   // --- Z layout (shared assembly frame: Z = 0 is the switch-plate top) ---
   const cavityFloorZ = socketBB.max[2]; // socket top = plate plane (≈ 0); the well opens to it
@@ -441,6 +473,19 @@ export function buildClicker(
   const skirtThickness = 1.4;
   const skirtBottomZ = stemBB.min[2];
   const skirtLen = slabBottomZ - skirtBottomZ;
+
+  // The skirt is deliberately a PLAIN full-height wall: constant outer profile from the
+  // cap plate to its bottom face, so the top part has one clean silhouette with no step
+  // in it anywhere.
+  //
+  // Tried and rejected (2026-08-16): relieving the lower skirt by 0.3 mm so only a short
+  // band near `bodyTopZ` kept the nominal fit, to stop the wall scraping over the full
+  // travel. It works mechanically, but the band's bottom edge reads as a lip around the
+  // underside of the cap in the slicer and the exploded view, which is not worth it. A
+  // continuous draft (full size at the plate, tapering in toward the bottom) would get
+  // the same relief with no step, and is the thing to build if the scraping needs more
+  // than the uniform-gap fix above — a stacked loft, since manifold's `scaleTop` pivots
+  // about a point and will not hold a constant width on a heart or a star.
 
   const extrudeAt = (cs: Section, h: number, z: number): Solid => {
     if (sectionIsEmpty(cs)) {
@@ -513,7 +558,7 @@ export function buildClicker(
   const holesByLevel = new Map<number, Section>();
 
   for (const { r } of ordered) {
-    const validRings = scaleRings(r.rings).filter(ring => ring.length >= 3 && getRingArea(ring) > 0.001);
+    const validRings = placeRings(r.rings).filter(ring => ring.length >= 3 && getRingArea(ring) > 0.001);
     if (validRings.length === 0) continue;
     let cs: Section = simp(track(new CrossSection(validRings, 'NonZero')), 0.03);
     if (params.colorBleed > 0.001) cs = grow(cs, params.colorBleed);
