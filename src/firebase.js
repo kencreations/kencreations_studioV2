@@ -15,7 +15,7 @@ const firebaseConfig = {
 // Initialize Firebase
 // Emulator mode is development-only and always uses a demo project. Never
 // point fixtures or emulator-clearing tests at the production project.
-const useEmulators = import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
+const useEmulators = Boolean(import.meta.env?.DEV && import.meta.env?.VITE_USE_FIREBASE_EMULATORS === 'true');
 export const app = initializeApp(useEmulators ? { ...firebaseConfig, projectId: 'demo-kencreations-audit', apiKey: 'demo-key' } : firebaseConfig);
 
 import { getAuth, connectAuthEmulator } from "firebase/auth";

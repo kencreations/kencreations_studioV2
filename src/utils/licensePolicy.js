@@ -86,6 +86,46 @@ export function evaluateStudioHubAccess(access = {}) {
     return result('unauthorized', 'SUBSCRIBER_REQUIRED');
 }
 
+export function evaluateBazaarAccess(access = {}) {
+    const result = (state, reason) => ({ state, reason, allowed: state === 'authorized' });
+    if (access.status === 'loading') return result('loading', 'VERIFYING_LICENSE');
+    if (access.status === 'error') return result('error', 'VERIFICATION_ERROR');
+
+    // In web mode, authentication is required
+    if (!access.desktop && !access.currentUser) {
+        return result('unauthenticated', 'AUTH_REQUIRED');
+    }
+
+    // VIP is all-access
+    if (access.isVip) return result('authorized', 'VIP');
+
+    // Promo all-access with active license
+    if (access.promoAllAccess && access.hasActiveLicense) return result('authorized', 'PROMO');
+
+    // Explicit Bazaar Hub entitlement check
+    if (access.entitlements?.includes('bazaar') || access.entitlements?.includes('bazaar-hub') || access.entitlements?.includes('bazaar_hub')) {
+        return result('authorized', 'ENTITLEMENT');
+    }
+
+    // Active subscription tiers
+    const hasActiveSubscription = (access.active || []).some(l => {
+        const tier = String(l.tier || l.tier_id || l.plan_type || l.plan || '').toLowerCase();
+        return ['1mo', '6mo', '12mo', 'lifetime', 'studio_pro', 'pro', 'subscriber', 'subscription', 'standard', 'commercial', 'maker'].includes(tier);
+    });
+
+    if (hasActiveSubscription) return result('authorized', 'SUBSCRIBER');
+
+    // Any active license means the account is on Pro/commercial tier in KenCreations Studio
+    if (access.hasActiveLicense || (access.active && access.active.length > 0)) {
+        return result('authorized', 'ACTIVE_LICENSE');
+    }
+
+    // Expired subscription state
+    if (access.hasExpired) return result('expired', 'SUBSCRIPTION_EXPIRED');
+
+    return result('unauthorized', 'SUBSCRIBER_REQUIRED');
+}
+
 export function validateClaim(license, uid, hwid, now = Date.now()) {
     if (!license) throw new Error('Invalid License Code.');
     if (!['active', 'unclaimed', 'pending'].includes(license.status) || license.disabled === true || license.revoked === true) throw new Error('This license is not available for activation.');

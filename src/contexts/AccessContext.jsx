@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
-import { summarizeLicenses, evaluateGeneratorAccess, evaluateStudioHubAccess, expiryMillis } from '../utils/licensePolicy';
+import { summarizeLicenses, evaluateGeneratorAccess, evaluateStudioHubAccess, evaluateBazaarAccess, expiryMillis } from '../utils/licensePolicy';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -90,6 +90,7 @@ export function AccessProvider({ children }) {
                 ...value,
                 evaluate: generator => evaluateGeneratorAccess(generator, value),
                 evaluateStudioHub: () => evaluateStudioHubAccess(value),
+                evaluateBazaar: () => evaluateBazaarAccess(value),
             }}
         >
             {children}
