@@ -9,36 +9,44 @@ export function useMacropadWorker(socketUrl, stemUrl, switchUrl, params) {
     const workerRef = useRef(null);
     const initDoneRef = useRef(false);
 
+    const latestParams = useRef(params);
+    useEffect(() => { latestParams.current = params; }, [params]);
+
     useEffect(() => {
+        let active = true;
+        const controller = new AbortController();
+        initDoneRef.current = false;
         const worker = new Worker(new URL('../engine/workers/geometry.worker.ts', import.meta.url), { type: 'module' });
         workerRef.current = worker;
 
         worker.onmessage = (e) => {
+            if (!active) return;
             const msg = e.data;
             if (msg.type === 'ready') {
                 Promise.all([
-                    fetch(socketUrl).then(r => r.arrayBuffer()),
-                    fetch(stemUrl).then(r => r.arrayBuffer()),
-                    fetch(switchUrl).then(r => r.arrayBuffer())
+                    fetch(socketUrl, { signal: controller.signal }).then(r => { if (!r.ok) throw new Error("Geometry asset could not be loaded."); return r.arrayBuffer(); }),
+                    fetch(stemUrl, { signal: controller.signal }).then(r => { if (!r.ok) throw new Error("Geometry asset could not be loaded."); return r.arrayBuffer(); }),
+                    fetch(switchUrl, { signal: controller.signal }).then(r => { if (!r.ok) throw new Error("Geometry asset could not be loaded."); return r.arrayBuffer(); })
                 ]).then(([socketBuf, stemBuf, switchBuf]) => {
+                    if (!active) return;
                     worker.postMessage({
                         type: 'init',
                         socket: socketBuf,
                         stem: stemBuf,
                         switch: switchBuf
                     }, [socketBuf, stemBuf, switchBuf]);
-                });
+                }).catch(error => { if (active) { setWarnings([error.message]); setIsBuilding(false); } });
             } else if (msg.type === 'initDone') {
                 initDoneRef.current = true;
                 if (msg.switchMesh) {
                     setSwitchMesh(msg.switchMesh);
                 }
                 // Trigger a build if we already have params
-                if (params) {
+                if (latestParams.current) {
                     setIsBuilding(true);
                     worker.postMessage({
                         type: 'buildMacropad',
-                        params
+                        params: JSON.parse(JSON.stringify(latestParams.current))
                     });
                 }
             } else if (msg.type === 'parts') {
@@ -53,7 +61,10 @@ export function useMacropadWorker(socketUrl, stemUrl, switchUrl, params) {
             }
         };
 
+        worker.onerror = () => { if (active) { setWarnings(["Geometry worker failed. Reload the editor to retry."]); setIsBuilding(false); } };
         return () => {
+            active = false; controller.abort();
+            workerRef.current = null; initDoneRef.current = false;
             worker.terminate();
         };
     }, [socketUrl, stemUrl, switchUrl]);

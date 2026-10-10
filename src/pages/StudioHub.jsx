@@ -1,546 +1,781 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import FilamentForm from "../components/studio/FilamentForm";
-import FilamentCard from "../components/studio/FilamentCard";
-import ConsumableForm from "../components/studio/ConsumableForm";
-import ConsumableCard from "../components/studio/ConsumableCard";
-import CostCalculator from "../components/studio/CostCalculator";
+import { useAuth } from "../contexts/AuthContext";
+import { useAccess } from "../contexts/AccessContext";
+import {
+    getFilaments,
+    addFilament,
+    updateFilament,
+    deleteFilament,
+    getConsumables,
+    addConsumable,
+    updateConsumable,
+    deleteConsumable,
+    getPrinterProfiles,
+    getCostEstimates,
+    getPrintJobs,
+    createPrintJob,
+    updatePrintJob,
+    deletePrintJob,
+    completePrintJob,
+    revertPrintJobDeduction,
+    getQuotations,
+    createQuotation,
+    updateQuotation,
+    deleteQuotation,
+    getSales,
+    recordSale,
+    updateSale,
+    deleteSale,
+    getInventoryMovements,
+} from "../services/studioService";
 
-// ─── Tab Config ────────────────────────────────────────────────────────────
+// Tab Components
+import OverviewTab from "../components/studio/tabs/OverviewTab";
+import FilamentsTab from "../components/studio/tabs/FilamentsTab";
+import ConsumablesTab from "../components/studio/tabs/ConsumablesTab";
+import CostCalculatorTab from "../components/studio/tabs/CostCalculatorTab";
+import PrintJobsTab from "../components/studio/tabs/PrintJobsTab";
+import QuotationsTab from "../components/studio/tabs/QuotationsTab";
+import SalesTab from "../components/studio/tabs/SalesTab";
+import AnalyticsTab from "../components/studio/tabs/AnalyticsTab";
 
+// Modals
+import FilamentModal from "../components/studio/FilamentModal";
+import ConsumableModal from "../components/studio/ConsumableModal";
+import StockAdjustModal from "../components/studio/StockAdjustModal";
+import PrinterProfileModal from "../components/studio/PrinterProfileModal";
+import PrintJobModal from "../components/studio/PrintJobModal";
+import QuotationModal from "../components/studio/QuotationModal";
+import QuotationPrintView from "../components/studio/QuotationPrintView";
+import SaleModal from "../components/studio/SaleModal";
+import CsvModal from "../components/studio/CsvModal";
+import PricingModal from "../components/UI/PricingModal";
+import ActivateLicenseModal from "../components/UI/ActivateLicenseModal";
+
+// Icons
+import {
+    Layers,
+    Package,
+    Calculator,
+    Printer,
+    FileText,
+    TrendingUp,
+    BarChart2,
+    Activity,
+    ArrowLeft,
+    Sparkles,
+    Lock,
+    AlertCircle,
+    RotateCw,
+    Wrench,
+} from "lucide-react";
+
+// Tab Definitions
 const TABS = [
-    { id: "filaments", label: "🧵 Filaments" },
-    { id: "consumables", label: "📦 Consumables" },
-    { id: "calculator", label: "🧮 Cost Calculator" },
+    { id: "overview", label: "Overview", icon: Activity },
+    { id: "filaments", label: "Filaments", icon: Layers },
+    { id: "consumables", label: "Consumables", icon: Package },
+    { id: "calculator", label: "Cost Calculator", icon: Calculator },
+    { id: "jobs", label: "Print Jobs", icon: Printer },
+    { id: "quotations", label: "Quotations", icon: FileText },
+    { id: "sales", label: "Sales & Profit", icon: TrendingUp },
+    { id: "analytics", label: "Analytics", icon: BarChart2 },
 ];
 
-// ─── Slide-in Form Panel ───────────────────────────────────────────────────
-
-function FormPanel({ title, onClose, children }) {
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-lg w-full mx-auto max-h-[90vh] overflow-y-auto animate-[fadeInUp_0.2s_ease] relative">
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 w-9 h-9 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors">
-                    <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor">
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2.5}
-                            d="M6 18L18 6M6 6l12 12"
-                        />
-                    </svg>
-                </button>
-                <h2 className="text-xl font-black text-gray-900 mb-6">
-                    {title}
-                </h2>
-                {children}
-            </div>
-        </div>
-    );
-}
-
-// ─── Filaments Tab ─────────────────────────────────────────────────────────
-
-function FilamentsTab({ filaments, onRefresh }) {
-    const [showForm, setShowForm] = useState(false);
-    const [editing, setEditing] = useState(null);
-
-    const handleSave = async (data) => {
-        if (!window.electronAPI) return;
-        if (editing) {
-            await window.electronAPI.updateFilament(editing.id, data);
-        } else {
-            await window.electronAPI.addFilament(data);
-        }
-        setShowForm(false);
-        setEditing(null);
-        onRefresh();
-    };
-
-    const handleEdit = (filament) => {
-        setEditing(filament);
-        setShowForm(true);
-    };
-
-    const handleDelete = async (id) => {
-        if (!window.electronAPI) return;
-        if (!confirm("Delete this filament?")) return;
-        await window.electronAPI.deleteFilament(id);
-        onRefresh();
-    };
-
-    return (
-        <>
-            {showForm && (
-                <FormPanel
-                    title={editing ? "Edit Filament" : "Add Filament"}
-                    onClose={() => {
-                        setShowForm(false);
-                        setEditing(null);
-                    }}>
-                    <FilamentForm
-                        initial={editing}
-                        onSave={handleSave}
-                        onCancel={() => {
-                            setShowForm(false);
-                            setEditing(null);
-                        }}
-                    />
-                </FormPanel>
-            )}
-
-            {/* Filament Status Dashboard */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
-                <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-2xl p-4 flex flex-col items-center justify-center">
-                    <span className="text-3xl font-black text-gray-900">
-                        {filaments.filter((f) => f.status === "New").length}
-                    </span>
-                    <span className="text-xs font-bold text-gray-500 uppercase mt-1">
-                        🟢 New
-                    </span>
-                </div>
-                <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-2xl p-4 flex flex-col items-center justify-center">
-                    <span className="text-3xl font-black text-gray-900">
-                        {filaments.filter((f) => f.status === "In Use").length}
-                    </span>
-                    <span className="text-xs font-bold text-gray-500 uppercase mt-1">
-                        🟡 In Use
-                    </span>
-                </div>
-                <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-2xl p-4 flex flex-col items-center justify-center">
-                    <span className="text-3xl font-black text-gray-900">
-                        {filaments.filter((f) => f.status === "Low").length}
-                    </span>
-                    <span className="text-xs font-bold text-gray-500 uppercase mt-1">
-                        🟠 Low
-                    </span>
-                </div>
-                <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm rounded-2xl p-4 flex flex-col items-center justify-center">
-                    <span className="text-3xl font-black text-gray-900">
-                        {filaments.filter((f) => f.status === "Empty").length}
-                    </span>
-                    <span className="text-xs font-bold text-gray-500 uppercase mt-1">
-                        🔴 Empty
-                    </span>
-                </div>
-            </div>
-
-            <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl rounded-3xl p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-900">
-                            Filament Inventory
-                        </h3>
-                        <p className="text-xs text-gray-500 font-medium mt-1">
-                            {filaments.length} spool
-                            {filaments.length !== 1 ? "s" : ""} tracked
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => {
-                            setEditing(null);
-                            setShowForm(true);
-                        }}
-                        className="bg-primary hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-xl shadow-md transition-all text-sm flex items-center gap-2">
-                        <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M12 4v16m8-8H4"
-                            />
-                        </svg>
-                        Add Filament
-                    </button>
-                </div>
-
-                {filaments.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                        <div className="text-5xl mb-4">🧵</div>
-                        <p className="text-sm font-semibold">
-                            No filaments yet
-                        </p>
-                        <p className="text-xs mt-1">
-                            Click "Add Filament" to start tracking your spools.
-                        </p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {filaments.map((f) => (
-                            <FilamentCard
-                                key={f.id}
-                                filament={f}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
-        </>
-    );
-}
-
-// ─── Consumables Tab ───────────────────────────────────────────────────────
-
-function ConsumablesTab({ consumables, onRefresh }) {
-    const [showForm, setShowForm] = useState(false);
-    const [editing, setEditing] = useState(null);
-
-    const handleSave = async (data) => {
-        if (!window.electronAPI) return;
-        if (editing) {
-            await window.electronAPI.updateConsumable(editing.id, data);
-        } else {
-            await window.electronAPI.addConsumable(data);
-        }
-        setShowForm(false);
-        setEditing(null);
-        onRefresh();
-    };
-
-    const handleEdit = (consumable) => {
-        setEditing(consumable);
-        setShowForm(true);
-    };
-
-    const handleDelete = async (id) => {
-        if (!window.electronAPI) return;
-        if (!confirm("Delete this consumable?")) return;
-        await window.electronAPI.deleteConsumable(id);
-        onRefresh();
-    };
-
-    return (
-        <>
-            {showForm && (
-                <FormPanel
-                    title={editing ? "Edit Consumable" : "Add Consumable"}
-                    onClose={() => {
-                        setShowForm(false);
-                        setEditing(null);
-                    }}>
-                    <ConsumableForm
-                        initial={editing}
-                        onSave={handleSave}
-                        onCancel={() => {
-                            setShowForm(false);
-                            setEditing(null);
-                        }}
-                    />
-                </FormPanel>
-            )}
-
-            <div className="bg-white/70 backdrop-blur-xl border border-white/50 shadow-xl rounded-3xl p-6">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h3 className="text-xl font-bold text-gray-900">
-                            Consumables Inventory
-                        </h3>
-                        <p className="text-xs text-gray-500 font-medium mt-1">
-                            {consumables.length} item
-                            {consumables.length !== 1 ? "s" : ""} tracked
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => {
-                            setEditing(null);
-                            setShowForm(true);
-                        }}
-                        className="bg-primary hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-xl shadow-md transition-all text-sm flex items-center gap-2">
-                        <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M12 4v16m8-8H4"
-                            />
-                        </svg>
-                        Add Item
-                    </button>
-                </div>
-
-                {consumables.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                        <div className="text-5xl mb-4">📦</div>
-                        <p className="text-sm font-semibold">
-                            No consumables yet
-                        </p>
-                        <p className="text-xs mt-1">
-                            Click "Add Item" to track packaging, labels, and
-                            more.
-                        </p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {consumables.map((c) => (
-                            <ConsumableCard
-                                key={c.id}
-                                consumable={c}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
-        </>
-    );
-}
-
-// ─── Main Page ─────────────────────────────────────────────────────────────
-
-export default function StudioHub({ isLicensed }) {
+export default function StudioHub() {
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState("filaments");
+    const { currentUser, loginWithGoogle } = useAuth();
+    const access = useAccess();
+
+    const [activeTab, setActiveTab] = useState("overview");
+
+    // Primary State
     const [filaments, setFilaments] = useState([]);
     const [consumables, setConsumables] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const fileInputRef = useRef(null);
+    const [printerProfiles, setPrinterProfiles] = useState([]);
+    const [printJobs, setPrintJobs] = useState([]);
+    const [quotations, setQuotations] = useState([]);
+    const [sales, setSales] = useState([]);
+    const [movements, setMovements] = useState([]);
+    const [dataLoading, setDataLoading] = useState(true);
 
-    useEffect(() => {
-        if (isLicensed === false) {
-            navigate('/', { replace: true });
-        }
-    }, [isLicensed, navigate]);
+    // Modal Control State
+    const [isFilamentModalOpen, setIsFilamentModalOpen] = useState(false);
+    const [editingFilament, setEditingFilament] = useState(null);
 
-    const handleExportCSV = (data) => {
-        if (!data || data.length === 0) return;
-        const keys = Object.keys(data[0]);
-        const csvRows = [];
-        csvRows.push(keys.join(","));
-        for (const row of data) {
-            const values = keys.map((k) => {
-                const val =
-                    row[k] !== undefined && row[k] !== null
-                        ? row[k].toString()
-                        : "";
-                return val.includes(",") ? `"${val}"` : val;
-            });
-            csvRows.push(values.join(","));
-        }
-        const csvString = csvRows.join("\n");
-        const blob = new Blob([csvString], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `kencreations_tracker_export.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
+    const [isConsumableModalOpen, setIsConsumableModalOpen] = useState(false);
+    const [editingConsumable, setEditingConsumable] = useState(null);
 
-    const handleImportCSV = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            const text = e.target.result;
-            const lines = text.split("\n").filter((l) => l.trim() !== "");
-            if (lines.length < 2) return;
-            const headers = lines[0].split(",").map((h) => h.trim());
-            const newItems = [];
-            for (let i = 1; i < lines.length; i++) {
-                const vals = lines[i].split(",");
-                const obj = {};
-                headers.forEach((h, idx) => {
-                    let v = vals[idx] || "";
-                    obj[h] = v.replace(/^"|"$/g, "").trim();
-                });
-                newItems.push(obj);
-            }
+    const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+    const [adjustItem, setAdjustItem] = useState(null);
+    const [adjustType, setAdjustType] = useState("filament");
 
-            if (activeTab === "filaments") {
-                setFilaments((prev) => [...prev, ...newItems]);
-                if (window.electronAPI) {
-                    for (const item of newItems) {
-                        let itemToSave = { ...item };
-                        delete itemToSave.id; // Allow DB to auto-generate ID
-                        await window.electronAPI.addFilament(itemToSave);
-                    }
-                }
-            } else if (activeTab === "consumables") {
-                setConsumables((prev) => [...prev, ...newItems]);
-                if (window.electronAPI) {
-                    for (const item of newItems) {
-                        let itemToSave = { ...item };
-                        delete itemToSave.id;
-                        await window.electronAPI.addConsumable(itemToSave);
-                    }
-                }
-            }
-            loadData(); // Resync from DB to get fresh IDs
-        };
-        reader.readAsText(file);
-        event.target.value = null; // reset input
-    };
+    const [isPrinterModalOpen, setIsPrinterModalOpen] = useState(false);
 
-    const loadData = useCallback(async () => {
-        if (!window.electronAPI) {
-            setLoading(false);
+    const [isPrintJobModalOpen, setIsPrintJobModalOpen] = useState(false);
+    const [editingJob, setEditingJob] = useState(null);
+
+    const [isQuotationModalOpen, setIsQuotationModalOpen] = useState(false);
+    const [editingQuote, setEditingQuote] = useState(null);
+    const [quoteEstimatePayload, setQuoteEstimatePayload] = useState(null);
+
+    const [printingQuote, setPrintingQuote] = useState(null);
+
+    const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
+    const [editingSale, setEditingSale] = useState(null);
+    const [saleLinkedJob, setSaleLinkedJob] = useState(null);
+
+    const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
+    const [csvType, setCsvType] = useState("filaments");
+
+    const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
+    const [isActivateModalOpen, setIsActivateModalOpen] = useState(false);
+
+    // Resolve user ID
+    const effectiveUserId = currentUser?.uid || (window.electronAPI ? "desktop_local_user" : null);
+
+    // Evaluate entitlement for Studio Hub
+    const hubDecision = access?.evaluateStudioHub ? access.evaluateStudioHub() : { allowed: true, state: "authorized" };
+    const isAuthorized = Boolean(
+        hubDecision?.allowed ||
+        access?.hasActiveLicense ||
+        (access?.active && access.active.length > 0)
+    );
+
+    // ── Data Loader ──────────────────────────────────────────────────────────
+    const loadAllStudioData = useCallback(async () => {
+        if (!effectiveUserId) {
+            setDataLoading(false);
             return;
         }
+        setDataLoading(true);
         try {
-            const [fils, cons] = await Promise.all([
-                window.electronAPI.getFilaments(),
-                window.electronAPI.getConsumables(),
+            const [fils, cons, printers, jobs, quotes, salesData, mvts] = await Promise.all([
+                getFilaments(effectiveUserId).catch(() => []),
+                getConsumables(effectiveUserId).catch(() => []),
+                getPrinterProfiles(effectiveUserId).catch(() => []),
+                getPrintJobs(effectiveUserId).catch(() => []),
+                getQuotations(effectiveUserId).catch(() => []),
+                getSales(effectiveUserId).catch(() => []),
+                getInventoryMovements(effectiveUserId, 50).catch(() => []),
             ]);
-            setFilaments(fils ?? []);
-            setConsumables(cons ?? []);
+
+            setFilaments(fils);
+            setConsumables(cons);
+            setPrinterProfiles(printers);
+            setPrintJobs(jobs);
+            setQuotations(quotes);
+            setSales(salesData);
+            setMovements(mvts);
         } catch (err) {
-            console.error("[StudioHub] Failed to load data:", err);
+            console.error("[StudioHub] Failed to load data from Firestore:", err);
         } finally {
-            setLoading(false);
+            setDataLoading(false);
         }
-    }, []);
+    }, [effectiveUserId]);
 
     useEffect(() => {
-        loadData();
-    }, [loadData]);
+        if (isAuthorized) {
+            loadAllStudioData();
+        } else {
+            setDataLoading(false);
+        }
+    }, [isAuthorized, loadAllStudioData]);
 
-    if (loading) {
+    // ── Handlers for CRUD Operations ─────────────────────────────────────────
+
+    // Filaments
+    const handleSaveFilament = async (data) => {
+        if (editingFilament) {
+            await updateFilament(effectiveUserId, editingFilament.id, data);
+        } else {
+            await addFilament(effectiveUserId, data);
+        }
+        await loadAllStudioData();
+    };
+
+    const handleDeleteFilament = async (id) => {
+        if (!confirm("Are you sure you want to delete this filament spool?")) return;
+        await deleteFilament(effectiveUserId, id);
+        await loadAllStudioData();
+    };
+
+    // Consumables
+    const handleSaveConsumable = async (data) => {
+        if (editingConsumable) {
+            await updateConsumable(effectiveUserId, editingConsumable.id, data);
+        } else {
+            await addConsumable(effectiveUserId, data);
+        }
+        await loadAllStudioData();
+    };
+
+    const handleDeleteConsumable = async (id) => {
+        if (!confirm("Are you sure you want to delete this consumable?")) return;
+        await deleteConsumable(effectiveUserId, id);
+        await loadAllStudioData();
+    };
+
+    // Print Jobs
+    const handleSavePrintJob = async (data) => {
+        if (editingJob) {
+            await updatePrintJob(effectiveUserId, editingJob.id, data);
+        } else {
+            await createPrintJob(effectiveUserId, data);
+        }
+        await loadAllStudioData();
+    };
+
+    const handleDeleteJob = async (id) => {
+        if (!confirm("Delete this print job record?")) return;
+        await deletePrintJob(effectiveUserId, id);
+        await loadAllStudioData();
+    };
+
+    const handleCompleteJob = async (id) => {
+        await completePrintJob(effectiveUserId, id);
+        await loadAllStudioData();
+    };
+
+    const handleCancelJob = async (id) => {
+        await revertPrintJobDeduction(effectiveUserId, id, "Cancelled");
+        await loadAllStudioData();
+    };
+
+    // Quotations
+    const handleSaveQuotation = async (data) => {
+        if (editingQuote) {
+            await updateQuotation(effectiveUserId, editingQuote.id, data);
+        } else {
+            await createQuotation(effectiveUserId, data);
+        }
+        await loadAllStudioData();
+    };
+
+    const handleDeleteQuotation = async (id) => {
+        if (!confirm("Delete this customer quotation?")) return;
+        await deleteQuotation(effectiveUserId, id);
+        await loadAllStudioData();
+    };
+
+    const handleConvertQuoteToJob = (quote) => {
+        setEditingJob(null);
+        setIsPrintJobModalOpen(true);
+    };
+
+    // Sales
+    const handleSaveSale = async (data) => {
+        if (editingSale) {
+            await updateSale(effectiveUserId, editingSale.id, data);
+        } else {
+            await recordSale(effectiveUserId, data);
+        }
+        await loadAllStudioData();
+    };
+
+    const handleDeleteSale = async (id) => {
+        if (!confirm("Delete this sales entry?")) return;
+        await deleteSale(effectiveUserId, id);
+        await loadAllStudioData();
+    };
+
+    // Calculator Actions
+    const handleCreateJobFromEstimate = (calc, title) => {
+        setEditingJob({
+            product_name: title || "Custom 3D Print",
+            actual_duration_hrs: calc.printHoursTotal,
+            estimated_duration_hrs: calc.printHoursTotal,
+            estimated_cost: calc.bufferedCost,
+            actual_cost: calc.bufferedCost,
+            selling_price: calc.sellingPrice,
+            filaments_used: calc.materialDetails.map((m) => ({
+                filament_id: m.filamentId,
+                name: m.filamentName,
+                grams: m.totalGrams,
+                color_hex: m.colorHex,
+            })),
+            consumables_used: calc.consumableDetails.map((c) => ({
+                consumable_id: c.consumableId,
+                name: c.consumableName,
+                qty: c.qty,
+                unit: c.unitOfMeasure,
+            })),
+        });
+        setIsPrintJobModalOpen(true);
+    };
+
+    const handleCreateQuoteFromEstimate = (calc, title) => {
+        setEditingQuote(null);
+        setQuoteEstimatePayload({
+            title: title || "Custom 3D Print",
+            selling_price: calc.sellingPrice,
+        });
+        setIsQuotationModalOpen(true);
+    };
+
+    // CSV Bulk Import
+    const handleImportCsv = async (rows) => {
+        if (csvType === "filaments") {
+            for (const r of rows) {
+                await addFilament(effectiveUserId, {
+                    name: r.name,
+                    brand: r.brand || "Generic",
+                    material: r.material || "PLA",
+                    color_name: r.color_name || "",
+                    color_hex: r.color_hex || "#14b8a6",
+                    spool_weight_g: Number(r.spool_weight_g) || 1000,
+                    remaining_weight_g: Number(r.remaining_weight_g || r.spool_weight_g) || 1000,
+                    purchase_price: Number(r.purchase_price) || 0,
+                    supplier: r.supplier || "",
+                    status: r.status || "In Use",
+                    min_threshold_g: Number(r.min_threshold_g) || 100,
+                    notes: r.notes || "",
+                });
+            }
+        } else {
+            for (const r of rows) {
+                await addConsumable(effectiveUserId, {
+                    name: r.name,
+                    category: r.category || "General",
+                    pack_quantity: Number(r.pack_quantity) || 1,
+                    pack_price: Number(r.pack_price) || 0,
+                    quantity: Number(r.quantity) || 1,
+                    unit_of_measure: r.unit_of_measure || "pcs",
+                    supplier: r.supplier || "",
+                    status: r.status || "In Stock",
+                    reorder_threshold: Number(r.reorder_threshold) || 10,
+                    notes: r.notes || "",
+                });
+            }
+        }
+        await loadAllStudioData();
+    };
+
+    // ── Access Guards & Paywalls ─────────────────────────────────────────────
+
+    // Loading State
+    if (access.status === "loading" || (isAuthorized && dataLoading)) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-[#fff0e5] via-teal-100 to-[#00A3A3] flex items-center justify-center">
-                <div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
+            <div className="min-h-screen bg-[#f8f9fc] flex flex-col items-center justify-center p-6">
+                <div className="w-10 h-10 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-sm font-bold text-gray-700">Loading Studio Hub Workspace...</p>
+                <p className="text-xs text-gray-400 mt-1">Verifying subscription and syncing inventory</p>
             </div>
         );
     }
 
-    return (
-        <div className="w-full h-screen bg-gradient-to-br from-[#fff0e5] via-teal-100 to-[#00A3A3] text-gray-900 overflow-y-auto pb-32 px-8 pt-6">
-            <div className="max-w-7xl mx-auto space-y-8">
-                {/* Header */}
-                <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-4">
-                        <Link
-                            to="/"
-                            className="w-10 h-10 bg-white/50 hover:bg-white/80 rounded-2xl flex items-center justify-center shadow-sm transition-colors text-gray-600 hover:text-primary">
-                            <svg
-                                className="w-5 h-5"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor">
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M10 19l-7-7m0 0l7-7m-7 7h18"
-                                />
-                            </svg>
-                        </Link>
-                        <div>
-                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                                Studio Hub
-                            </h1>
-                            <p className="text-sm text-gray-600 font-medium">
-                                Manage your materials, consumables, and print
-                                costs
-                            </p>
+    // Unauthenticated State
+    if (!currentUser && !window.electronAPI) {
+        return (
+            <div className="min-h-screen bg-[#f8f9fc] flex flex-col">
+                <nav className="bg-white border-b border-gray-100 px-8 py-4 flex items-center justify-between">
+                    <Link to="/" className="flex items-center gap-2 text-teal-600 font-bold text-lg">
+                        <Wrench size={20} /> KC KenCreations Studio
+                    </Link>
+                    <button
+                        onClick={loginWithGoogle}
+                        className="bg-[#14b8a6] hover:bg-[#0f766e] text-white text-xs font-bold px-4 py-2 rounded-full transition-colors"
+                    >
+                        Sign In with Google
+                    </button>
+                </nav>
+
+                <div className="flex-1 flex items-center justify-center p-6">
+                    <div className="bg-white rounded-3xl p-8 max-w-lg w-full text-center border border-gray-100 shadow-[0_4px_24px_rgba(0,0,0,0.06)] space-y-5">
+                        <div className="w-16 h-16 rounded-3xl bg-teal-50 text-teal-600 flex items-center justify-center mx-auto text-2xl shadow-sm">
+                            <Sparkles size={32} />
                         </div>
+                        <h2 className="text-2xl font-black text-gray-900 tracking-tight">
+                            Studio Hub — Subscriber Workspace
+                        </h2>
+                        <p className="text-sm text-gray-500 leading-relaxed">
+                            Sign in with your Google account to access your inventory tracking, unified cost calculator, print job queue, customer quotations, and sales analytics.
+                        </p>
+                        <div className="pt-2">
+                            <button
+                                onClick={loginWithGoogle}
+                                className="w-full bg-[#14b8a6] hover:bg-[#0f766e] text-white font-bold py-3 rounded-2xl shadow-sm transition-all text-sm flex items-center justify-center gap-2"
+                            >
+                                Sign In to Open Studio Hub
+                            </button>
+                        </div>
+                        <Link to="/" className="text-xs font-bold text-gray-400 hover:text-gray-600 block mt-4">
+                            ← Return to Generators
+                        </Link>
                     </div>
+                </div>
+            </div>
+        );
+    }
 
-                    {activeTab !== "calculator" && (
-                        <div className="flex items-center gap-3">
-                            <input
-                                type="file"
-                                accept=".csv"
-                                ref={fileInputRef}
-                                hidden
-                                onChange={handleImportCSV}
-                            />
+    // Unauthorized / Expired State
+    if (!isAuthorized) {
+        const isExpired = hubDecision.state === "expired" || access.hasExpired;
+        return (
+            <div className="min-h-screen bg-[#f8f9fc] flex flex-col">
+                <nav className="bg-white border-b border-gray-100 px-8 py-4 flex items-center justify-between">
+                    <Link to="/" className="flex items-center gap-2 text-teal-600 font-bold text-lg">
+                        <Wrench size={20} /> KC KenCreations Studio
+                    </Link>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setIsActivateModalOpen(true)}
+                            className="text-xs font-bold text-teal-600 border border-teal-200 px-3.5 py-1.5 rounded-full hover:bg-teal-50 transition-colors"
+                        >
+                            Activate License
+                        </button>
+                    </div>
+                </nav>
 
+                <div className="flex-1 flex items-center justify-center p-6">
+                    <div className="bg-white rounded-3xl p-8 max-w-lg w-full text-center border border-gray-100 shadow-[0_4px_24px_rgba(0,0,0,0.06)] space-y-5">
+                        <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-2xl shadow-sm">
+                            <Lock size={30} />
+                        </div>
+                        <h2 className="text-2xl font-black text-gray-900 tracking-tight">
+                            {isExpired ? "Subscription Expired" : "Studio Hub Access Required"}
+                        </h2>
+                        <p className="text-sm text-gray-500 leading-relaxed">
+                            {isExpired
+                                ? "Your Studio Pro subscription has expired. Your inventory records, estimates, and print jobs remain completely safe. Renew your plan to continue accessing the workspace."
+                                : "Studio Hub is an exclusive business management workspace for Studio Pro subscribers. Manage spools, calculate multi-color print costs, and print quotes."}
+                        </p>
+                        <div className="flex flex-col gap-2.5 pt-2">
                             <button
-                                onClick={() => fileInputRef.current.click()}
-                                className="bg-secondary text-white hover:bg-primary font-bold py-2 px-4 rounded-xl shadow-sm transition-all text-sm flex items-center gap-2">
-                                <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor">
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                                    />
-                                </svg>
-                                Import CSV
+                                onClick={() => setIsPricingModalOpen(true)}
+                                className="w-full bg-[#14b8a6] hover:bg-[#0f766e] text-white font-bold py-3 rounded-2xl shadow-sm transition-all text-sm flex items-center justify-center gap-2"
+                            >
+                                <Sparkles size={16} /> {isExpired ? "Renew Subscription" : "Upgrade to Studio Pro"}
                             </button>
-
                             <button
-                                onClick={() =>
-                                    handleExportCSV(
-                                        activeTab === "filaments"
-                                            ? filaments
-                                            : consumables,
-                                    )
+                                onClick={() => setIsActivateModalOpen(true)}
+                                className="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold py-3 rounded-2xl border border-gray-200 text-sm transition-colors"
+                            >
+                                Activate License Key
+                            </button>
+                        </div>
+                        <Link to="/" className="text-xs font-bold text-gray-400 hover:text-gray-600 block mt-4">
+                            ← Return to Generators
+                        </Link>
+                    </div>
+                </div>
+
+                <PricingModal isOpen={isPricingModalOpen} onClose={() => setIsPricingModalOpen(false)} />
+                <ActivateLicenseModal isOpen={isActivateModalOpen} onClose={() => setIsActivateModalOpen(false)} />
+            </div>
+        );
+    }
+
+    // ── Main Authenticated Studio Hub UI ─────────────────────────────────────
+    return (
+        <div className="min-h-screen w-full bg-[#f8f9fc] text-gray-900 flex flex-col font-sans">
+            {/* Top Workspace Navbar */}
+            <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 px-6 sm:px-8 py-3.5 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-4">
+                    <Link
+                        to="/"
+                        className="w-9 h-9 rounded-xl bg-gray-50 hover:bg-teal-50 text-gray-500 hover:text-teal-600 flex items-center justify-center transition-colors shadow-xs"
+                        title="Back to Generator Catalog"
+                    >
+                        <ArrowLeft size={18} />
+                    </Link>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-lg font-black text-gray-900 tracking-tight">Studio Hub</h1>
+                            <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 tracking-wide">
+                                Pro Workspace
+                            </span>
+                        </div>
+                        <p className="text-[11px] text-gray-400 font-medium hidden sm:block">
+                            Materials, Consumables, Cost Calculator & Production Tracker
+                        </p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={loadAllStudioData}
+                        className="p-2 text-gray-400 hover:text-teal-600 hover:bg-gray-50 rounded-xl transition-colors"
+                        title="Refresh data from Cloud Firestore"
+                    >
+                        <RotateCw size={16} />
+                    </button>
+                    {currentUser && (
+                        <div className="flex items-center gap-2 pl-3 border-l border-gray-200">
+                            <img
+                                src={
+                                    currentUser.photoURL ||
+                                    `https://ui-avatars.com/api/?name=${currentUser.displayName || "Maker"}&background=14b8a6&color=fff`
                                 }
-                                className="bg-primary text-white hover:bg-gray-800 font-bold py-2 px-4 rounded-xl shadow-sm transition-all text-sm flex items-center gap-2">
-                                <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor">
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                                    />
-                                </svg>
-                                Export CSV
-                            </button>
+                                alt="User"
+                                className="w-8 h-8 rounded-full border border-gray-200 object-cover"
+                            />
+                            <div className="text-left hidden md:block">
+                                <span className="text-xs font-bold text-gray-800 block truncate max-w-[120px]">
+                                    {currentUser.displayName || "Subscriber"}
+                                </span>
+                            </div>
                         </div>
                     )}
                 </div>
+            </header>
 
-                {/* Tab Bar */}
-                <div className="bg-white/40 backdrop-blur-md border border-white/40 rounded-2xl p-1.5 flex gap-1 shadow-sm">
-                    {TABS.map((tab) => (
-                        <button
-                            key={tab.id}
-                            id={`tab-${tab.id}`}
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
-                                activeTab === tab.id
-                                    ? "bg-white shadow-md text-gray-900"
-                                    : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
-                            }`}>
-                            {tab.label}
-                        </button>
-                    ))}
+            {/* Navigation Tabs Bar */}
+            <div className="bg-white border-b border-gray-100 px-6 sm:px-8 sticky top-[61px] z-30">
+                <div className="max-w-7xl mx-auto flex items-center gap-1 overflow-x-auto py-2 no-scrollbar">
+                    {TABS.map((tab) => {
+                        const Icon = tab.icon;
+                        const isActive = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                id={`hub-tab-${tab.id}`}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
+                                    isActive
+                                        ? "bg-teal-50 text-teal-700 shadow-xs border border-teal-200/60"
+                                        : "text-gray-500 hover:text-gray-900 hover:bg-gray-50"
+                                }`}
+                            >
+                                <Icon size={15} className={isActive ? "text-teal-600" : "text-gray-400"} />
+                                <span>{tab.label}</span>
+                            </button>
+                        );
+                    })}
                 </div>
+            </div>
 
-                {/* Tab Content */}
-                {activeTab === "filaments" && (
-                    <FilamentsTab filaments={filaments} onRefresh={loadData} />
+            {/* Main Content Area */}
+            <main className="flex-1 max-w-7xl w-full mx-auto p-6 sm:p-8">
+                {activeTab === "overview" && (
+                    <OverviewTab
+                        filaments={filaments}
+                        consumables={consumables}
+                        printJobs={printJobs}
+                        sales={sales}
+                        movements={movements}
+                        onNavigateTab={setActiveTab}
+                        onOpenAddFilament={() => {
+                            setEditingFilament(null);
+                            setIsFilamentModalOpen(true);
+                        }}
+                        onOpenAddConsumable={() => {
+                            setEditingConsumable(null);
+                            setIsConsumableModalOpen(true);
+                        }}
+                        onOpenCreateJob={() => {
+                            setEditingJob(null);
+                            setIsPrintJobModalOpen(true);
+                        }}
+                    />
                 )}
+
+                {activeTab === "filaments" && (
+                    <FilamentsTab
+                        filaments={filaments}
+                        onOpenAdd={() => {
+                            setEditingFilament(null);
+                            setIsFilamentModalOpen(true);
+                        }}
+                        onOpenEdit={(fil) => {
+                            setEditingFilament(fil);
+                            setIsFilamentModalOpen(true);
+                        }}
+                        onDelete={handleDeleteFilament}
+                        onOpenAdjust={(fil) => {
+                            setAdjustItem(fil);
+                            setAdjustType("filament");
+                            setIsAdjustModalOpen(true);
+                        }}
+                        onOpenCsv={() => {
+                            setCsvType("filaments");
+                            setIsCsvModalOpen(true);
+                        }}
+                    />
+                )}
+
                 {activeTab === "consumables" && (
                     <ConsumablesTab
                         consumables={consumables}
-                        onRefresh={loadData}
+                        onOpenAdd={() => {
+                            setEditingConsumable(null);
+                            setIsConsumableModalOpen(true);
+                        }}
+                        onOpenEdit={(con) => {
+                            setEditingConsumable(con);
+                            setIsConsumableModalOpen(true);
+                        }}
+                        onDelete={handleDeleteConsumable}
+                        onOpenAdjust={(con) => {
+                            setAdjustItem(con);
+                            setAdjustType("consumable");
+                            setIsAdjustModalOpen(true);
+                        }}
+                        onOpenCsv={() => {
+                            setCsvType("consumables");
+                            setIsCsvModalOpen(true);
+                        }}
                     />
                 )}
+
                 {activeTab === "calculator" && (
-                    <CostCalculator
+                    <CostCalculatorTab
                         filaments={filaments}
                         consumables={consumables}
+                        printers={printerProfiles}
+                        userId={effectiveUserId}
+                        onOpenPrinterProfiles={() => setIsPrinterModalOpen(true)}
+                        onSaveEstimateSuccess={loadAllStudioData}
+                        onCreateJobFromEstimate={handleCreateJobFromEstimate}
+                        onCreateQuoteFromEstimate={handleCreateQuoteFromEstimate}
                     />
                 )}
-            </div>
+
+                {activeTab === "jobs" && (
+                    <PrintJobsTab
+                        printJobs={printJobs}
+                        onOpenCreate={() => {
+                            setEditingJob(null);
+                            setIsPrintJobModalOpen(true);
+                        }}
+                        onOpenEdit={(job) => {
+                            setEditingJob(job);
+                            setIsPrintJobModalOpen(true);
+                        }}
+                        onDelete={handleDeleteJob}
+                        onCompleteJob={handleCompleteJob}
+                        onCancelJob={handleCancelJob}
+                        onRecordSaleFromJob={(job) => {
+                            setEditingSale(null);
+                            setSaleLinkedJob(job);
+                            setIsSaleModalOpen(true);
+                        }}
+                    />
+                )}
+
+                {activeTab === "quotations" && (
+                    <QuotationsTab
+                        quotations={quotations}
+                        onOpenCreate={() => {
+                            setEditingQuote(null);
+                            setQuoteEstimatePayload(null);
+                            setIsQuotationModalOpen(true);
+                        }}
+                        onOpenEdit={(quote) => {
+                            setEditingQuote(quote);
+                            setQuoteEstimatePayload(null);
+                            setIsQuotationModalOpen(true);
+                        }}
+                        onDelete={handleDeleteQuotation}
+                        onOpenPrintView={(quote) => setPrintingQuote(quote)}
+                        onConvertQuoteToJob={handleConvertQuoteToJob}
+                    />
+                )}
+
+                {activeTab === "sales" && (
+                    <SalesTab
+                        sales={sales}
+                        onOpenRecordSale={() => {
+                            setEditingSale(null);
+                            setSaleLinkedJob(null);
+                            setIsSaleModalOpen(true);
+                        }}
+                        onOpenEdit={(sale) => {
+                            setEditingSale(sale);
+                            setSaleLinkedJob(null);
+                            setIsSaleModalOpen(true);
+                        }}
+                        onDelete={handleDeleteSale}
+                    />
+                )}
+
+                {activeTab === "analytics" && (
+                    <AnalyticsTab
+                        filaments={filaments}
+                        consumables={consumables}
+                        printJobs={printJobs}
+                        sales={sales}
+                    />
+                )}
+            </main>
+
+            {/* Modals & Dialogs */}
+            <FilamentModal
+                isOpen={isFilamentModalOpen}
+                onClose={() => setIsFilamentModalOpen(false)}
+                filament={editingFilament}
+                onSave={handleSaveFilament}
+            />
+
+            <ConsumableModal
+                isOpen={isConsumableModalOpen}
+                onClose={() => setIsConsumableModalOpen(false)}
+                consumable={editingConsumable}
+                onSave={handleSaveConsumable}
+            />
+
+            <StockAdjustModal
+                isOpen={isAdjustModalOpen}
+                onClose={() => setIsAdjustModalOpen(false)}
+                item={adjustItem}
+                type={adjustType}
+                userId={effectiveUserId}
+                onRefresh={loadAllStudioData}
+            />
+
+            <PrinterProfileModal
+                isOpen={isPrinterModalOpen}
+                onClose={() => setIsPrinterModalOpen(false)}
+                userId={effectiveUserId}
+                profiles={printerProfiles}
+                onRefresh={loadAllStudioData}
+            />
+
+            <PrintJobModal
+                isOpen={isPrintJobModalOpen}
+                onClose={() => setIsPrintJobModalOpen(false)}
+                job={editingJob}
+                filaments={filaments}
+                consumables={consumables}
+                printers={printerProfiles}
+                onSave={handleSavePrintJob}
+            />
+
+            <QuotationModal
+                isOpen={isQuotationModalOpen}
+                onClose={() => {
+                    setIsQuotationModalOpen(false);
+                    setQuoteEstimatePayload(null);
+                }}
+                quote={editingQuote}
+                initialEstimate={quoteEstimatePayload}
+                onSave={handleSaveQuotation}
+            />
+
+            <QuotationPrintView
+                quote={printingQuote}
+                onClose={() => setPrintingQuote(null)}
+            />
+
+            <SaleModal
+                isOpen={isSaleModalOpen}
+                onClose={() => {
+                    setIsSaleModalOpen(false);
+                    setSaleLinkedJob(null);
+                }}
+                sale={editingSale}
+                linkedJob={saleLinkedJob}
+                onSave={handleSaveSale}
+            />
+
+            <CsvModal
+                isOpen={isCsvModalOpen}
+                onClose={() => setIsCsvModalOpen(false)}
+                type={csvType}
+                existingData={csvType === "filaments" ? filaments : consumables}
+                onImport={handleImportCsv}
+            />
         </div>
     );
 }

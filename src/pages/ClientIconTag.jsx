@@ -19,6 +19,8 @@ import { Palette, Smile, Layers } from "lucide-react";
 import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
 import { getShapesFromIconify } from "../utils/iconifyLoader";
+import PrinterSelector from "../components/PrinterSelector";
+import TemplateManager from "../components/TemplateManager";
 
 // ─── Custom Hook: History State ─────────────────────────────────────────────
 import { useHistoryState } from "../hooks/useHistoryState";
@@ -138,8 +140,7 @@ function IconTagModel({
     const baseHeight = baseGeometry ? baseGeometry.boundingBox.max.z : 4;
 
     return (
-        // Counteract the +2.5 global Y-lift from EditorCanvas by shifting Local Z down
-        <group position={[0, 0, -2.5]}>
+        <group position={[0, 0, 0]}>
             {/* Base Mesh */}
             {baseGeometry && (
                 <mesh geometry={baseGeometry}>
@@ -293,6 +294,12 @@ export default function ClientIconTag() {
             topBarActions={topBarActions}
             sidebarContent={
                 <div className="flex h-full flex-col gap-4 text-slate-700">
+                    <PrinterSelector />
+                    <TemplateManager 
+                        editorId="clienticontag" 
+                        currentSettings={state} 
+                        onLoadTemplate={(s) => setState((prev) => ({...prev, ...s}))} 
+                    />
                     <SidebarSection title="Colors" icon={Palette}>
                         <div className="space-y-3">
                             <ControlColorPicker

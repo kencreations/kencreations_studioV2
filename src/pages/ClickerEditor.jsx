@@ -32,6 +32,7 @@ import { getAssetUrl } from "../utils/assetHelper";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { useProfile } from "../contexts/ProfileContext";
+import { useFontStore } from "../hooks/useFontStore";
 import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
 import { colors } from "../data/colors";
@@ -44,7 +45,9 @@ import { getCached3DFont, BUNDLED_FONTS } from "../utils/fontManager";
 import { useGeometryWorker } from "../hooks/useGeometryWorker";
 import { getShapesFromIconify } from "../utils/iconifyLoader";
 import ImageWizardModal from "../components/ImageWizardModal";
-import { ControlInput, ControlSelect } from "../components/UI/EditorControls";;
+import { ControlInput, ControlSelect } from "../components/UI/EditorControls";
+import PrinterSelector from "../components/PrinterSelector";
+import TemplateManager from "../components/TemplateManager";
 
 // ── Flatten filament palette ──────────────────────────────────────────────────
 const ALL_COLORS = [...colors.BambuLab, ...colors.Esun];
@@ -1279,6 +1282,8 @@ function ClickerSidebar(props) {
 
     return (
         <div className="flex flex-col text-neutral space-y-2 pb-4">
+            <PrinterSelector />
+            <TemplateManager editorId="clicker" />
             {/* Top row: Back + Save/Load */}
             <div className="flex-shrink-0 flex items-center justify-between">
                 <button
@@ -1690,6 +1695,7 @@ function ClickerModel({
                 switchPlacements?.map((c, i) => (
                     <group
                         key={`sw-${i}`}
+                        userData={{ excludeFromExport: true }}
                         position={[c.x, c.y, 0]}
                         rotation={[0, 0, c.rotation]}>
                         <MXSwitchMesh meshData={switchMesh} zOffset={0} />
@@ -2267,6 +2273,9 @@ export default function ClickerEditor() {
         },
         [imageDepth, allFonts],
     );
+
+    const textDebounce = useRef(null);
+    useEffect(() => () => clearTimeout(textDebounce.current), []);
 
     const handleTextChange = useCallback(
         (text) => {

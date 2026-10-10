@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence, connectFirestoreEmulator } from "firebase/firestore";
 
 // TODO: Replace with your actual Firebase config object
 const firebaseConfig = {
@@ -13,13 +13,23 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Emulator mode is development-only and always uses a demo project. Never
+// point fixtures or emulator-clearing tests at the production project.
+const useEmulators = import.meta.env.DEV && import.meta.env.VITE_USE_FIREBASE_EMULATORS === 'true';
+export const app = initializeApp(useEmulators ? { ...firebaseConfig, projectId: 'demo-kencreations-audit', apiKey: 'demo-key' } : firebaseConfig);
+
+import { getAuth, connectAuthEmulator } from "firebase/auth";
 
 // Initialize Cloud Firestore and get a reference to the service
 export const db = getFirestore(app);
+export const auth = getAuth(app);
+if (useEmulators) {
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+}
 
 // Enable offline persistence
-enableIndexedDbPersistence(db).catch((err) => {
+if (!useEmulators) enableIndexedDbPersistence(db).catch((err) => {
     if (err.code === "failed-precondition") {
         console.warn("Multiple tabs open, persistence can only be enabled in one tab at a a time.");
     } else if (err.code === "unimplemented") {

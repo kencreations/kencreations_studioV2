@@ -14,6 +14,7 @@ import { SVGLoader } from "three/examples/jsm/loaders/SVGLoader.js";
 import { FontLoader, Font } from "three/examples/jsm/loaders/FontLoader.js";
 import { TTFLoader } from "three/examples/jsm/loaders/TTFLoader.js";
 import { useProfile } from "../contexts/ProfileContext";
+import { useFontStore } from "../hooks/useFontStore";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 
 import { load3DFont } from "../utils/fontManager";
@@ -64,7 +65,7 @@ export function lettersFromLegends(legends: string): string[] {
     return result;
 }
 
-const SCALE = 0.28;
+const SCALE = 1.0;
 const GAP_MM = 1.5; // mm gap between caps
 const MAX_COLS = 6;
 
@@ -318,12 +319,14 @@ const CapInstances = React.memo(
                 mesh.setMatrixAt(i, m4);
             });
             mesh.instanceMatrix.needsUpdate = true;
-        }, [positions]);
+        }, [positions, capGeo, mat]);
 
         return (
             <instancedMesh
                 ref={ref}
-                args={[capGeo, mat, positions.length]}
+                args={[undefined, undefined, positions.length]}
+                geometry={capGeo}
+                material={mat}
                 castShadow
                 receiveShadow
             />
@@ -506,7 +509,7 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
         const [font, setFont] = useState<Font | null>(null);
         // Map of iconId → fetched SVG text for icons currently in the legends
         const [iconSvgMap, setIconSvgMap] = useState<Map<string, string>>(new Map());
-        const { allFonts } = useProfile();
+        const { allFonts } = useFontStore();
 
         // Load geometry: prefer customGeo if provided, else fall back to template.stl
         useEffect(() => {
@@ -516,10 +519,8 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
                 g.center();
                 g.computeBoundingBox();
 
-                // Normalize to template STL native scale (~65 units wide).
-                // Uploaded 3MF/STL files are in real mm (e.g. 18mm), so rescale
-                // them to ~65-unit space so SCALE=0.28 and spacing/export work correctly.
-                const TEMPLATE_RAW_SIZE = 65;
+                // Normalize to EXACTLY 18mm (1U) native scale
+                const TEMPLATE_RAW_SIZE = 18;
                 const sz = new THREE.Vector3();
                 g.boundingBox!.getSize(sz);
                 const longestAxis = Math.max(sz.x, sz.y);
@@ -528,6 +529,10 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
                     g.scale(normScale, normScale, normScale);
                     g.computeBoundingBox();
                 }
+                
+                // Anchor Z=0
+                g.translate(0, 0, -g.boundingBox!.min.z);
+                g.computeBoundingBox();
 
                 setCapGeo(g);
                 const bb = g.boundingBox!.clone();
@@ -545,6 +550,20 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
                     g.computeVertexNormals();
                     g.center();
                     g.computeBoundingBox();
+                    
+                    // Normalize to EXACTLY 18mm (1U) native scale
+                    const sz = new THREE.Vector3();
+                    g.boundingBox!.getSize(sz);
+                    const longestAxis = Math.max(sz.x, sz.y);
+                    if (longestAxis > 0) {
+                        const normScale = 18 / longestAxis;
+                        g.scale(normScale, normScale, normScale);
+                        g.computeBoundingBox();
+                    }
+                    
+                    // Anchor Z=0
+                    g.translate(0, 0, -g.boundingBox!.min.z);
+                    g.computeBoundingBox();
                     setCapGeo(g);
                     const bb = g.boundingBox!.clone();
                     setCapBB(bb);
@@ -557,7 +576,7 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
 
         useEffect(() => {
             const opt =
-                allFonts.find((f: any) => f.label === state.fontLabel) ??
+                allFonts.find((f: any) => f.id === state.fontLabel || f.label === state.fontLabel || f.id === state.font) ??
                 allFonts[0];
             
             (async () => {
@@ -750,7 +769,7 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
         if (!capGeo) return null;
 
         return (
-            <>
+            <group position={[0, 0, -2.5]}>
                 <CapInstances
                     capGeo={capGeo}
                     positions={positions}
@@ -783,7 +802,7 @@ const SceneInner = forwardRef<SceneInnerHandle, SceneInnerProps>(
                     color={state.legendColor}
                     letterZ={letterZ}
                 />
-            </>
+            </group>
         );
     },
 );

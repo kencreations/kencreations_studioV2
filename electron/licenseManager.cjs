@@ -121,7 +121,7 @@ function verifyLicFile(filePath, hwid) {
     // Verify not expired
     if (payload.expiresAt) {
         const expiry = new Date(payload.expiresAt);
-        if (expiry < new Date()) {
+        if (Number.isNaN(expiry.getTime()) || expiry <= new Date()) {
             throw new Error(
                 "This license has expired. Please contact support to renew.",
             );
@@ -277,7 +277,7 @@ async function activateWithKey(licenseKey, hwid) {
         }
 
         // Check status
-        if (data.status === "revoked") {
+        if (!["active", "unclaimed", "pending"].includes(data.status) || data.disabled === true || data.revoked === true) {
             return {
                 success: false,
                 message: "This license has been revoked. Contact support.",
@@ -293,7 +293,7 @@ async function activateWithKey(licenseKey, hwid) {
         // Check expiry date
         if (data.expiresAt) {
             const expiry = new Date(data.expiresAt);
-            if (expiry < new Date()) {
+            if (Number.isNaN(expiry.getTime()) || expiry <= new Date()) {
                 return { success: false, message: "This license has expired." };
             }
         }
@@ -384,10 +384,10 @@ function checkLocalLicense(hwid) {
     // Check expiry
     if (state.expiresAt) {
         const expiry = new Date(state.expiresAt);
-        if (expiry < new Date()) {
+        if (Number.isNaN(expiry.getTime()) || expiry <= new Date()) {
             return {
                 activated: false,
-                entitlements: state.entitlements,
+                entitlements: [],
                 reason: "expired",
             };
         }

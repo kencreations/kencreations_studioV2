@@ -2,9 +2,12 @@ import React, { useState, useMemo, useEffect, useDeferredValue } from "react";
 import { Link } from "react-router-dom";
 import { useFilamentBrands } from "../hooks/useFilamentBrands";
 import { useProfile } from "../contexts/ProfileContext";
+import { useFontStore } from "../hooks/useFontStore";
 import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
 import CharmMesh from "../components/CharmMesh";
+import PrinterSelector from "../components/PrinterSelector";
+import TemplateManager from "../components/TemplateManager";
 import { useHistoryState } from "../hooks/useHistoryState";
 import { LEATHER_SLIDER_DEFAULTS } from "../store/appState";
 import {
@@ -19,7 +22,8 @@ import { HistoryControls } from "../components/HistoryControls";
 
 export default function LeatherSliderEditor() {
     const { brands: cloudColors } = useFilamentBrands();
-    const { customColors, allFonts } = useProfile();
+    const { customColors } = useProfile();
+    const { allFonts } = useFontStore();
 
     const fontOptions = useMemo(
         () =>
@@ -185,6 +189,8 @@ export default function LeatherSliderEditor() {
             topBarActions={topBarActions}
             sidebarContent={
                 <div className="flex h-full flex-col gap-4 text-slate-700">
+                    <PrinterSelector />
+                    <TemplateManager editorId="leatherslider" />
                     <div className="flex items-center justify-between px-1">
                         <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">
                             Your Sliders

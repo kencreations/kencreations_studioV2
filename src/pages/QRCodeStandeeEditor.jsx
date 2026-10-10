@@ -10,6 +10,7 @@ import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
 import { SidebarSection, ControlInput, ControlSlider, ControlSelect, ControlColorPicker } from "../components/UI/EditorControls";
 import { useProfile } from "../contexts/ProfileContext";
+import { useFontStore } from "../hooks/useFontStore";
 import { useHistoryState } from "../hooks/useHistoryState";
 import { useFilamentBrands } from "../hooks/useFilamentBrands";
 import TemplateManager from "../components/TemplateManager";
@@ -94,7 +95,8 @@ const generate3DQRCode = (data, size, thickness) => {
 
 export default function QRCodeStandeeEditor() {
     const { brands: cloudColors } = useFilamentBrands();
-    const { customColors, allFonts } = useProfile();
+    const { customColors } = useProfile();
+    const { allFonts } = useFontStore();
     const { templates, saveTemplate, loadTemplate, deleteTemplate } = useTemplates("qr_standee");
 
     const fontOptions = useMemo(
@@ -206,12 +208,10 @@ export default function QRCodeStandeeEditor() {
     ), [deferredConfig.tileSize, deferredConfig.qrTolerance, pocketDepth]);
 
     const disassembleAction = (
-        <div className="flex bg-white/90 backdrop-blur-md border border-secondary shadow-lg rounded-xl overflow-hidden text-sm font-semibold transition-all">
-            <button onClick={(e) => { e.stopPropagation(); setIsDisassembled(!isDisassembled); }} className="px-5 py-2.5 text-secondary hover:bg-secondary hover:text-white transition-colors flex items-center gap-2">
-                <Layers size={16}/>
-                {isDisassembled ? "Assemble Tiles" : "Disassemble Tiles"}
-            </button>
-        </div>
+        <button onClick={(e) => { e.stopPropagation(); setIsDisassembled(!isDisassembled); }} className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-teal-500 text-teal-600 font-bold text-sm hover:bg-teal-50 transition-colors">
+            <Layers size={16}/>
+            {isDisassembled ? "Assemble Tiles" : "Disassemble Tiles"}
+        </button>
     );
 
     const handleImageUpload = (e, itemId) => {

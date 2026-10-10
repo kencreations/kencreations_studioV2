@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import { Type, Layers, Settings, Save } from "lucide-react";
 import TemplateManager from "../components/TemplateManager";
 import { Geometry as CSG, Base, Subtraction } from "@react-three/csg";
+import { Evaluator, Brush, ADDITION } from "three-bvh-csg";
 import { Text3D, Center } from "@react-three/drei";
 import { TextGeometry } from "three/examples/jsm/geometries/TextGeometry.js";
 import { Box3, ExtrudeGeometry } from "three";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { useFilamentBrands } from "../hooks/useFilamentBrands";
 import { useProfile } from "../contexts/ProfileContext";
+import { useFontStore } from "../hooks/useFontStore";
 import { useHistoryState } from "../hooks/useHistoryState";
 import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
@@ -49,7 +51,7 @@ const buildCustomTextGeometry = (
             size: size,
             height: thickness,
             depth: thickness,
-            curveSegments: 16,
+            curveSegments: 4,
             bevelEnabled: bevelSize > 0,
             bevelThickness: 0.01,
             bevelSize: bevelSize,
@@ -68,11 +70,28 @@ const buildCustomTextGeometry = (
 
     if (geometries.length === 0) return null;
 
-    // Weld into a single mesh for the slicer
-    let mergedGeo =
-        geometries.length === 1
-            ? geometries[0]
-            : BufferGeometryUtils.mergeGeometries(geometries, false);
+    // Weld into a single mesh for bounding box math
+    let mergedGeo;
+    if (geometries.length === 1) {
+        mergedGeo = geometries[0];
+    } else {
+        try {
+            const evaluator = new Evaluator();
+            evaluator.useGroups = true;
+            let currentBrush = new Brush(geometries[0]);
+            currentBrush.updateMatrixWorld();
+            
+            for (let i = 1; i < geometries.length; i++) {
+                const nextBrush = new Brush(geometries[i]);
+                nextBrush.updateMatrixWorld();
+                currentBrush = evaluator.evaluate(currentBrush, nextBrush, ADDITION);
+            }
+            mergedGeo = currentBrush.geometry;
+        } catch (err) {
+            console.warn("CSG union failed, falling back to mergeGeometries:", err);
+            mergedGeo = BufferGeometryUtils.mergeGeometries(geometries, false);
+        }
+    }
 
     // Center the whole word on X/Y
     mergedGeo.computeBoundingBox();
@@ -80,7 +99,11 @@ const buildCustomTextGeometry = (
         -0.5 * (mergedGeo.boundingBox.max.x + mergedGeo.boundingBox.min.x);
     const wordOffsetY =
         -0.5 * (mergedGeo.boundingBox.max.y + mergedGeo.boundingBox.min.y);
+    
     mergedGeo.translate(wordOffsetX, wordOffsetY, 0);
+    geometries.forEach(g => {
+        if (g !== mergedGeo) g.translate(wordOffsetX, wordOffsetY, 0);
+    });
 
     // Apply trigonometric cylindrical bend (arch)
     if (curveAngle && curveAngle !== 0) {
@@ -90,27 +113,31 @@ const buildCustomTextGeometry = (
 
         if (width > 0) {
             const radius = width / angleRad;
-            const positions = mergedGeo.attributes.position;
+            
+            const applyBend = (geo) => {
+                const positions = geo.attributes.position;
+                for (let i = 0; i < positions.count; i++) {
+                    const x = positions.getX(i);
+                    const y = positions.getY(i);
+                    const theta = x / radius;
+                    const currentRadius = radius + y;
+                    const newX = currentRadius * Math.sin(theta);
+                    const newY = currentRadius * Math.cos(theta) - radius;
+                    positions.setXY(i, newX, newY);
+                }
+                positions.needsUpdate = true;
+                geo.computeVertexNormals();
+                geo.computeBoundingBox();
+            };
 
-            for (let i = 0; i < positions.count; i++) {
-                const x = positions.getX(i);
-                const y = positions.getY(i);
-
-                const theta = x / radius;
-                const currentRadius = radius + y;
-
-                const newX = currentRadius * Math.sin(theta);
-                const newY = currentRadius * Math.cos(theta) - radius;
-
-                positions.setXY(i, newX, newY);
-            }
-            positions.needsUpdate = true;
-            mergedGeo.computeVertexNormals();
-            mergedGeo.computeBoundingBox();
+            applyBend(mergedGeo);
+            geometries.forEach(g => {
+                if (g !== mergedGeo) applyBend(g);
+            });
         }
     }
 
-    return mergedGeo;
+    return { merged: mergedGeo, separate: geometries };
 };
 
 const MONOGRAM_INSERT_DEFAULTS = {
@@ -137,7 +164,8 @@ const MONOGRAM_INSERT_DEFAULTS = {
 
 export default function MonogramInsertEditor() {
     const { brands: cloudColors } = useFilamentBrands();
-    const { customColors, allFonts } = useProfile();
+    const { customColors } = useProfile();
+    const { allFonts } = useFontStore();
 
     const fontOptions = useMemo(
         () =>
@@ -364,18 +392,8 @@ export default function MonogramInsertEditor() {
         if (!initialGeo) return null;
         initialGeo.computeBoundingBox();
         return {
-            x:
-                Math.round(
-                    (initialGeo.boundingBox.max.x -
-                        initialGeo.boundingBox.min.x) *
-                        100,
-                ) / 100,
-            y:
-                Math.round(
-                    (initialGeo.boundingBox.max.y -
-                        initialGeo.boundingBox.min.y) *
-                        100,
-                ) / 100,
+            x: Math.round((initialGeo.boundingBox.max.x - initialGeo.boundingBox.min.x) * 100) / 100,
+            y: Math.round((initialGeo.boundingBox.max.y - initialGeo.boundingBox.min.y) * 100) / 100,
             z: deferredConfig.initialThickness,
         };
     }, [initialGeo, deferredConfig.initialThickness]);
@@ -394,24 +412,24 @@ export default function MonogramInsertEditor() {
                     />
                     <SidebarSection title="Base Initial" icon={Type}>
                         <div className="space-y-4">
-                            <ControlInput
-                                label="INITIAL LETTER"
-                                value={typeof config.initial === 'string' ? config.initial : ""}
-                                maxLength={1}
-                                onChange={(e) =>
-                                    updateConfig({ initial: e.target.value.substring(0, 1).toUpperCase() })
-                                }
-                            />
-                            <ControlSelect
-                                label="Font Family"
-                                value={config.initialFont}
-                                onChange={(val) =>
-                                    updateConfig({ initialFont: val })
-                                }
-                                options={fontOptions}
-                                prefixType="font"
-                            />
-                            <ControlSlider
+                                <ControlInput
+                                    label="INITIAL LETTER"
+                                    value={typeof config.initial === 'string' ? config.initial : ""}
+                                    maxLength={1}
+                                    onChange={(e) =>
+                                        updateConfig({ initial: e.target.value.substring(0, 1).toUpperCase() })
+                                    }
+                                />
+                                <ControlSelect
+                                    label="Font Family"
+                                    value={config.initialFont}
+                                    onChange={(val) =>
+                                        updateConfig({ initialFont: val })
+                                    }
+                                    options={fontOptions}
+                                    prefixType="font"
+                                />
+                                <ControlSlider
                                 label="Initial Size"
                                 value={config.initialSize}
                                 min={50}
@@ -584,15 +602,16 @@ export default function MonogramInsertEditor() {
             }>
             <div className="relative w-full h-full">
                 <EditorCanvas title="Monogram Insert" dims={dims}>
-                    {parsedInitialFont && parsedNameFont && (
+                    {console.log("RENDER SCENE: ", {parsedInitialFont: !!parsedInitialFont, parsedNameFont: !!parsedNameFont, initialGeo, cutterGeo, insertGeo})}
+                    {parsedInitialFont && parsedNameFont && initialGeo && (
                         <group position={[0, 0, 0]} key={csgKey}>
                             {/* 1. BASE INITIAL WITH CARVED POCKET */}
                             <mesh name="Base_Initial" castShadow receiveShadow>
                                 <CSG>
                                     <Base geometry={initialGeo} />
-                                    {cutterGeo && (
+                                    {cutterGeo?.merged && (
                                         <Subtraction
-                                            geometry={cutterGeo}
+                                            geometry={cutterGeo.merged}
                                             position={[
                                                 deferredConfig.nameX,
                                                 deferredConfig.nameY,
@@ -607,6 +626,7 @@ export default function MonogramInsertEditor() {
 
                             {/* 2. THE INSERT NAME (PHYSICAL PIECE) */}
                             <group
+                                name="Name_Overlay_Part"
                                 position={[
                                     deferredConfig.nameX,
                                     deferredConfig.nameY,
@@ -614,8 +634,8 @@ export default function MonogramInsertEditor() {
                                 ]}
                                 rotation={[0, 0, (deferredConfig.nameRotation * Math.PI) / 180]}
                             >
-                                {insertGeo && (
-                                    <mesh name="Name_Overlay_Part" castShadow receiveShadow geometry={insertGeo}>
+                                {insertGeo?.merged && (
+                                    <mesh castShadow receiveShadow geometry={insertGeo.merged}>
                                         <meshStandardMaterial color={deferredConfig.nameColor} />
                                     </mesh>
                                 )}
@@ -635,6 +655,19 @@ export default function MonogramInsertEditor() {
                     >
                         {isDisassembled ? "⊟" : "⊞"} {isDisassembled ? "Assembled" : "Exploded"}
                     </button>
+                </div>
+                
+                {/* TEMPORARY DEBUG OVERLAY */}
+                <div className="absolute top-20 left-3 z-50 bg-black/80 text-white p-4 rounded text-xs font-mono whitespace-pre-wrap pointer-events-none">
+                    DEBUG INFO:
+                    {'\n'}config.initial: "{config.initial}"
+                    {'\n'}config.name: "{config.name}"
+                    {'\n'}parsedInitialFont: {parsedInitialFont ? "YES" : "NO"}
+                    {'\n'}parsedNameFont: {parsedNameFont ? "YES" : "NO"}
+                    {'\n'}initialGeo: {initialGeo ? `YES (merged: ${!!initialGeo.merged}, separate: ${initialGeo.separate?.length})` : "NULL"}
+                    {'\n'}cutterGeo: {cutterGeo ? `YES (merged: ${!!cutterGeo.merged}, separate: ${cutterGeo.separate?.length})` : "NULL"}
+                    {'\n'}insertGeo: {insertGeo ? `YES (merged: ${!!insertGeo.merged}, separate: ${insertGeo.separate?.length})` : "NULL"}
+                    {'\n'}dims: {dims ? `${dims.x}x${dims.y}x${dims.z}` : "NULL"}
                 </div>
             </div>
         </EditorLayout>

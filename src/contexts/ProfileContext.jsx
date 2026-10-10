@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import { BUNDLED_FONTS } from "../utils/fontManager";
 import { db } from "../firebase";
-import { doc, onSnapshot, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, setDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { useSecureTrial } from "./TrialContext";
 
 const ProfileContext = createContext();
@@ -179,10 +179,9 @@ export function ProfileProvider({ children }) {
         } catch (err) {
             if (err.code === "not-found") {
                 // Document doesn't exist, try to set it
-                const { setDoc } = require("firebase/firestore");
                 await setDoc(doc(db, "users", machineId), {
-                    customColors: [newColor]
-                });
+                    customColors: arrayUnion(newColor)
+                }, { merge: true });
                 return { success: true, color: newColor };
             }
             console.error("Failed to add custom color:", err);

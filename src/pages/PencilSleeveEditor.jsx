@@ -1,43 +1,37 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { useProfile } from "../contexts/ProfileContext";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useFilamentBrands } from "../hooks/useFilamentBrands";
+import { useProfile } from "../contexts/ProfileContext";
+import { useFontStore } from "../hooks/useFontStore";
 import { useHistoryState } from "../hooks/useHistoryState";
-import { PENCIL_SLEEVE_DEFAULTS } from "../store/appState";
+import { HistoryControls } from "../components/HistoryControls";
 import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
-import CharmMesh from "../components/CharmMesh";
+import TemplateManager from "../components/TemplateManager";
 import {
     SidebarSection,
     ControlInput,
-    ControlSelect,
     ControlSlider,
+    ControlSelect,
     ControlColorPicker,
+    ControlToggle,
+    editorIcons,
 } from "../components/UI/EditorControls";
-import {
-    TextSelect,
-    Type,
-    CopyPlus,
-    Trash2,
-    Ruler,
-    PaintBucket,
-    RotateCcw,
-    GripVertical,
-} from "lucide-react";
-import { HistoryControls } from "../components/HistoryControls";
+import MassProduceModal from "../components/UI/MassProduceModal";
+import PrinterSelector from "../components/PrinterSelector";
+import PackedPencilSleeveInstance from "../components/3D/PackedPencilSleeveInstance";
+import MassProduceSidebar from "../components/MassProduceSidebar";
+import SmartText3D from "../components/3D/Shared/SmartText3D";
+import SmartCSGBase from "../components/3D/Shared/SmartCSGBase";
+import { PENCIL_SLEEVE_DEFAULTS } from "../store/appState";
 
-export default function PencilSleeveEditor() {
+function PencilSleeveSidebar({
+    onBack,
+    config,
+    setConfig,
+    allFonts,
+}) {
     const { brands: cloudColors } = useFilamentBrands();
-    const { customColors, allFonts } = useProfile();
-
-    const fontOptions = useMemo(
-        () =>
-            allFonts.map((font) => ({
-                label: font.label,
-                value: font.id,
-                fontId: font.id,
-            })),
-        [allFonts],
-    );
+    const { customColors } = useProfile();
 
     const colorOptions = useMemo(() => {
         const merged = [];
@@ -62,125 +56,314 @@ export default function PencilSleeveEditor() {
         return merged;
     }, [cloudColors, customColors]);
 
-    const [sleeves, setSleeves, { undo, redo, reset, canUndo, canRedo }] =
-        useHistoryState([
-            { ...PENCIL_SLEEVE_DEFAULTS, id: `sleeve_${Date.now()}` },
-        ]);
+    const fontOptions = useMemo(
+        () =>
+            allFonts.map((font) => ({
+                label: font.label,
+                value: font.id,
+            })),
+        [allFonts],
+    );
 
-    const [selectedId, setSelectedId] = useState(sleeves[0]?.id);
-    const [draggedItemIdx, setDraggedItemIdx] = useState(null);
-    const [dragOverItemIdx, setDragOverItemIdx] = useState(null);
-
-    const activeIndex = sleeves.findIndex((s) => s.id === selectedId);
-    const activeSleeve = sleeves[activeIndex] || sleeves[0];
-
-    const handleDragStart = (e, index) => {
-        setDraggedItemIdx(index);
-        e.dataTransfer.effectAllowed = "move";
+    const handleLoadTemplate = (savedSettings) => {
+        setConfig((prev) => ({
+            ...prev,
+            ...savedSettings,
+            text: prev.text // Preserve the current text when loading template
+        }));
     };
 
-    const handleDragEnter = (e, index) => {
-        e.preventDefault();
-        setDragOverItemIdx(index);
-    };
+    return (
+        <div className="flex h-full flex-col gap-4 text-slate-700">
+            <PrinterSelector />
+            <TemplateManager
+                editorId="pencilsleeve"
+                currentSettings={config}
+                excludeKeys={["text"]}
+                onLoadTemplate={handleLoadTemplate}
+            />
 
-    const handleDragEnd = () => {
-        if (
-            draggedItemIdx !== null &&
-            dragOverItemIdx !== null &&
-            draggedItemIdx !== dragOverItemIdx
-        ) {
-            const newSleeves = [...sleeves];
-            const [draggedItem] = newSleeves.splice(draggedItemIdx, 1);
-            newSleeves.splice(dragOverItemIdx, 0, draggedItem);
-            setSleeves(newSleeves);
-        }
-        setDraggedItemIdx(null);
-        setDragOverItemIdx(null);
-    };
+            <SidebarSection title="Text & Font" icon={editorIcons.text}>
+                <ControlInput
+                    label="Text"
+                    value={config.text ?? ""}
+                    onChange={(e) =>
+                        setConfig(prev => ({ ...prev, text: e.target.value }))
+                    }
+                    placeholder="Enter text"
+                />
+                <ControlSelect
+                    label="Font"
+                    value={config.font}
+                    onChange={(value) =>
+                        setConfig(prev => ({ ...prev, font: value }))
+                    }
+                    options={fontOptions}
+                    prefixType="font"
+                />
+                <ControlColorPicker
+                    label="Text Color"
+                    value={config.textColor}
+                    onChange={(value) =>
+                        setConfig(prev => ({ ...prev, textColor: value }))
+                    }
+                    options={colorOptions}
+                />
+                <div className="grid grid-cols-2 gap-3">
+                    <ControlSlider
+                        label="Size"
+                        value={config.size}
+                        min={10}
+                        max={40}
+                        step={1}
+                        unit="mm"
+                        onChange={(value) =>
+                            setConfig(prev => ({ ...prev, size: value }))
+                        }
+                    />
+                    <ControlSlider
+                        label="Depth"
+                        value={config.depth}
+                        min={1}
+                        max={10}
+                        step={0.1}
+                        unit="mm"
+                        onChange={(value) =>
+                            setConfig(prev => ({ ...prev, depth: value }))
+                        }
+                    />
+                </div>
+            </SidebarSection>
 
-    // Auto-select valid font if current becomes invalid
-    useEffect(() => {
-        setSleeves((prev) =>
-            prev.map((s) => {
-                const currentFontIsValid = allFonts.some(
-                    (f) => f.id === s.font,
-                );
-                if (!currentFontIsValid && allFonts.length > 0) {
-                    return { ...s, font: allFonts[0].id };
-                }
-                return s;
-            }),
-        );
-    }, [allFonts, setSleeves]);
+            <SidebarSection title="Base" icon={editorIcons.layers}>
+                <ControlSlider
+                    label="Base Thickness"
+                    value={config.baseHeight}
+                    min={2}
+                    max={20}
+                    step={0.1}
+                    unit="mm"
+                    onChange={(value) =>
+                        setConfig(prev => ({ ...prev, baseHeight: value }))
+                    }
+                />
+                <ControlSlider
+                    label="Outline Width"
+                    value={config.baseOffset}
+                    min={0.5}
+                    max={10}
+                    step={0.1}
+                    unit="mm"
+                    onChange={(value) =>
+                        setConfig(prev => ({ ...prev, baseOffset: value }))
+                    }
+                />
+                <ControlColorPicker
+                    label="Base Color"
+                    value={config.baseColor}
+                    onChange={(value) =>
+                        setConfig(prev => ({ ...prev, baseColor: value }))
+                    }
+                    options={colorOptions}
+                />
+            </SidebarSection>
 
-    const updateActive = (updates) => {
-        if (activeIndex === -1) return;
-        const newSleeves = [...sleeves];
-        newSleeves[activeIndex] = { ...activeSleeve, ...updates };
-        setSleeves(newSleeves);
-    };
+            <SidebarSection title="Pencil Hole" icon={editorIcons.settings}>
+                <ControlSlider
+                    label="Diameter"
+                    value={config.holeDiameter}
+                    min={5}
+                    max={12}
+                    step={0.1}
+                    unit="mm"
+                    onChange={(value) =>
+                        setConfig(prev => ({ ...prev, holeDiameter: value }))
+                    }
+                />
+                <ControlSlider
+                    label="Y Offset"
+                    value={config.holeYOffset}
+                    min={-10}
+                    max={10}
+                    step={0.1}
+                    unit="mm"
+                    onChange={(value) =>
+                        setConfig(prev => ({ ...prev, holeYOffset: value }))
+                    }
+                />
+            </SidebarSection>
+        </div>
+    );
+}
 
-    const handleAdd = () => {
-        const newId = `sleeve_${Date.now()}`;
-        setSleeves([...sleeves, { ...PENCIL_SLEEVE_DEFAULTS, id: newId }]);
-        setSelectedId(newId);
-    };
+const getDefaultConfig = (defaultFontId) => ({
+    text: PENCIL_SLEEVE_DEFAULTS.text || "Name",
+    font: defaultFontId,
+    size: PENCIL_SLEEVE_DEFAULTS.size ?? 20,
+    depth: PENCIL_SLEEVE_DEFAULTS.depth ?? 2,
+    textColor: PENCIL_SLEEVE_DEFAULTS.textColor || "#FFFFFF",
+    baseHeight: PENCIL_SLEEVE_DEFAULTS.baseHeight ?? 6,
+    baseOffset: PENCIL_SLEEVE_DEFAULTS.baseOffset ?? 4,
+    baseColor: PENCIL_SLEEVE_DEFAULTS.baseColor || "#EC008C",
+    holeDiameter: PENCIL_SLEEVE_DEFAULTS.holeDiameter ?? 8,
+    holeYOffset: PENCIL_SLEEVE_DEFAULTS.holeYOffset ?? 0,
+});
 
-    const handleDelete = (id) => {
-        const newSleeves = sleeves.filter((s) => s.id !== id);
-        if (newSleeves.length === 0) {
-            const newId = `sleeve_${Date.now()}`;
-            newSleeves.push({ ...PENCIL_SLEEVE_DEFAULTS, id: newId });
-        }
-        setSleeves(newSleeves);
-        if (selectedId === id) {
-            setSelectedId(newSleeves[newSleeves.length - 1].id);
-        }
-    };
+export default function PencilSleeveEditor() {
+    const { allFonts } = useFontStore();
+    const defaultFontId =
+        allFonts.find(
+            (f) =>
+                f.label === PENCIL_SLEEVE_DEFAULTS.font ||
+                f.id === PENCIL_SLEEVE_DEFAULTS.font,
+        )?.id ||
+        allFonts[0]?.id ||
+        "Arial";
+
+    const [config, setConfig, { undo, redo, canUndo, canRedo }] =
+        useHistoryState(getDefaultConfig(defaultFontId));
+
+    const canvasRef = useRef();
+
+    // Mass Produce state
+    const [isMassProduceOpen, setIsMassProduceOpen] = useState(false);
+    const [isMassExporting, setIsMassExporting] = useState(false);
+    const [packedInstances, setPackedInstances] = useState([]);
+    const [currentPlateView, setCurrentPlateView] = useState(0);
+    const [activeInstanceId, setActiveInstanceId] = useState(null);
+    const [sidebarMode, setSidebarMode] = useState("editSelected");
+    const [massProducePrinter, setMassProducePrinter] = useState(null);
+    
+    // Preview Shapes
+    const [textShapes, setTextShapes] = useState([]);
+    const [centerOffset, setCenterOffset] = useState({ cx: 0, cy: 0 });
+
+    const handleShapesReady = useCallback((shapes) => {
+        setTextShapes(shapes);
+    }, []);
+
+    const handleBaseReady = useCallback((geo, bb, offset) => {
+        setCenterOffset(offset || { cx: 0, cy: 0 });
+    }, []);
 
     const handleReset = () => {
-        if (
-            window.confirm(
-                "Are you sure you want to reset to default settings?",
-            )
-        ) {
-            const newId = `sleeve_${Date.now()}`;
-            setSleeves([{ ...PENCIL_SLEEVE_DEFAULTS, id: newId }]);
-            setSelectedId(newId);
-        }
-    };
-
-    const applySettingsToAll = (field, value) => {
-        if (
-            window.confirm(
-                `Apply this ${field.replace(/([A-Z])/g, " $1").toLowerCase()} to all sleeves?`,
-            )
-        ) {
-            const newSleeves = sleeves.map((s) => ({ ...s, [field]: value }));
-            setSleeves(newSleeves);
-        }
-    };
-
-    const handleApplyToAll = () => {
-        if (!activeSleeve) return;
-        const newSleeves = sleeves.map((s) => {
-            if (s.id === activeSleeve.id) return s;
-            return {
-                ...s,
-                font: activeSleeve.font,
-                size: activeSleeve.size,
-                depth: activeSleeve.depth,
-                baseOffset: activeSleeve.baseOffset,
-                baseHeight: activeSleeve.baseHeight,
-                holeDiameter: activeSleeve.holeDiameter,
-                holeYOffset: activeSleeve.holeYOffset,
-                baseColor: activeSleeve.baseColor,
-                textColor: activeSleeve.textColor,
-            };
+        setConfig({
+            ...getDefaultConfig(defaultFontId),
         });
-        setSleeves(newSleeves);
     };
+
+    const totalPlates = useMemo(() => {
+        if (!packedInstances || packedInstances.length === 0) return 1;
+        return Math.max(...packedInstances.map((i) => i.plateIndex ?? 0)) + 1;
+    }, [packedInstances]);
+
+    const handleMassProducePack = useCallback(
+        (result) => {
+            const instances = result.packed.map((item) => ({
+                ...item,
+                depthDim: item.depth,
+                font: config.font,
+                size: config.size,
+                depth: config.depth,
+                textColor: config.textColor,
+                baseHeight: config.baseHeight,
+                baseOffset: config.baseOffset,
+                baseColor: config.baseColor,
+                holeDiameter: config.holeDiameter,
+                holeYOffset: config.holeYOffset,
+            }));
+
+            setPackedInstances(instances);
+            setMassProducePrinter(result.printer);
+            setCurrentPlateView(0);
+            setActiveInstanceId(null);
+            setIsMassProduceOpen(false);
+        },
+        [config],
+    );
+
+    const handleUpdateInstance = useCallback((id, updates) => {
+        setPackedInstances((prev) =>
+            prev.map((inst) =>
+                inst.id === id ? { ...inst, ...updates } : inst,
+            ),
+        );
+    }, []);
+
+    const handleApplyToAll = useCallback((updates) => {
+        setPackedInstances((prev) =>
+            prev.map((inst) => ({ ...inst, ...updates })),
+        );
+    }, []);
+
+    const handleClearPackedInstances = useCallback(() => {
+        setPackedInstances([]);
+        setActiveInstanceId(null);
+        setMassProducePrinter(null);
+    }, []);
+
+    const handleMassExportPlate = async (plateNumber) => {
+        if (canvasRef.current && canvasRef.current.export3MF) {
+            await canvasRef.current.export3MF(
+                `Mass_Produce_PencilSleeves_Plate_${plateNumber}.3mf`,
+            );
+        }
+    };
+
+    const handleMassExportAll = async () => {
+        if (!canvasRef.current || !canvasRef.current.export3MF) return;
+        setIsMassExporting(true);
+        try {
+            const originalView = currentPlateView;
+            const originalActiveId = activeInstanceId;
+            setActiveInstanceId(null);
+
+            for (let i = 0; i < totalPlates; i++) {
+                setCurrentPlateView(i);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await canvasRef.current.export3MF(
+                    `Mass_Produce_PencilSleeves_Plate_${i + 1}.3mf`,
+                );
+            }
+
+            setCurrentPlateView(originalView);
+            setActiveInstanceId(originalActiveId);
+            alert("Batch export complete!");
+        } catch (err) {
+            console.error("Batch export failed", err);
+            alert("Batch export failed: " + err.message);
+        } finally {
+            setIsMassExporting(false);
+        }
+    };
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (
+                e.target.tagName.toLowerCase() === "input" &&
+                e.target.type === "text"
+            )
+                return;
+            const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+            const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+            if (cmdOrCtrl && e.key.toLowerCase() === "z") {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    if (canRedo) redo();
+                } else {
+                    if (canUndo) undo();
+                }
+            }
+            if (cmdOrCtrl && e.key.toLowerCase() === "y") {
+                e.preventDefault();
+                if (canRedo) redo();
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [undo, redo, canUndo, canRedo]);
+
+    const isMassProduceMode = packedInstances.length > 0;
 
     const topBarActions = (
         <HistoryControls
@@ -188,334 +371,126 @@ export default function PencilSleeveEditor() {
             canRedo={canRedo}
             onUndo={undo}
             onRedo={redo}
-            onReset={() => {
-                const newId = `sleeve_${Date.now()}`;
-                setSleeves([{ ...PENCIL_SLEEVE_DEFAULTS, id: newId }]);
-                setSelectedSleeveId(newId);
-            }}
+            onReset={handleReset}
         />
     );
 
-    const sleevesWithLayout = useMemo(() => {
-        const columns = 3; // 2 columns for wide pencil sleeves
-        const spacingX = 80;
-        const spacingY = 35;
-
-        // Approximate width of each sleeve
-        const withWidth = sleeves.map((sleeve) => {
-            const textStr = sleeve.text || "Name";
-            // Rough width approximation: character count * size * 0.85 + borders
-            const approxWidth =
-                textStr.length * (sleeve.size * 0.85) + sleeve.baseOffset * 2;
-            return { ...sleeve, approxWidth };
-        });
-
-        const numRows = Math.ceil(sleeves.length / columns);
-        const actualColumns = Math.min(sleeves.length, columns);
-
-        const totalWidth = actualColumns * spacingX - spacingX;
-        const totalHeight = numRows * spacingY - spacingY;
-
-        const startX = -totalWidth / 2;
-        const startY = totalHeight / 2;
-
-        return withWidth.map((sleeve, i) => {
-            const col = i % columns;
-            const row = Math.floor(i / columns);
-
-            const layoutX = startX + col * spacingX;
-            const layoutY = startY - row * spacingY;
-
-            return {
-                ...sleeve,
-                layoutX,
-                layoutY,
-                approxWidth: sleeve.approxWidth,
-            };
-        });
-    }, [sleeves]);
-
-    const dims = useMemo(() => {
-        if (sleevesWithLayout.length === 0) return { x: 0, y: 0, z: 0 };
-        let minX = Infinity,
-            maxX = -Infinity;
-        let minY = Infinity,
-            maxY = -Infinity;
-        let minZ = Infinity,
-            maxZ = -Infinity;
-
-        sleevesWithLayout.forEach((s) => {
-            const w = s.approxWidth;
-            const h = s.size + s.baseOffset * 2;
-            const d = s.baseHeight;
-
-            minX = Math.min(minX, s.layoutX - w / 2);
-            maxX = Math.max(maxX, s.layoutX + w / 2);
-            minY = Math.min(minY, s.layoutY - h / 2);
-            maxY = Math.max(maxY, s.layoutY + h / 2);
-            minZ = Math.min(minZ, 0);
-            maxZ = Math.max(maxZ, d);
-        });
-        return {
-            x: maxX - minX,
-            y: maxY - minY,
-            z: maxZ - minZ,
-        };
-    }, [sleevesWithLayout]);
-
     return (
         <EditorLayout
-            title="Pencil Sleeves"
-            icon={<TextSelect className="w-5 h-5" />}
+            title={
+                isMassProduceMode
+                    ? "Mass Produce Pencil Sleeves"
+                    : "Pencil Sleeve Editor"
+            }
+            icon={
+                <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth="2">
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                    />
+                </svg>
+            }
             topBarActions={topBarActions}
             sidebarContent={
-                <div className="space-y-4">
-                    <SidebarSection title="YOUR SLEEVES" icon={TextSelect}>
-                        <div className="flex flex-col gap-2">
-                            {sleeves.map((sleeve, idx) => (
-                                <div
-                                    key={sleeve.id}
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, idx)}
-                                    onDragEnter={(e) => handleDragEnter(e, idx)}
-                                    onDragEnd={handleDragEnd}
-                                    onDragOver={(e) => e.preventDefault()}
-                                    onClick={() => setSelectedId(sleeve.id)}
-                                    className={`flex items-center justify-between p-2 rounded-lg border-2 cursor-pointer transition-colors ${
-                                        selectedId === sleeve.id
-                                            ? "border-primary bg-primary/5"
-                                            : "border-gray-200 hover:border-primary/50"
-                                    } ${
-                                        draggedItemIdx === idx
-                                            ? "opacity-50"
-                                            : ""
-                                    } ${
-                                        dragOverItemIdx === idx &&
-                                        draggedItemIdx !== idx
-                                            ? "border-primary shadow-md transform scale-[1.02]"
-                                            : ""
-                                    }`}>
-                                    <div className="flex items-center gap-2 overflow-hidden">
-                                        <GripVertical className="w-4 h-4 text-gray-300 cursor-grab hover:text-gray-500 flex-shrink-0" />
-                                        <span className="font-medium truncate max-w-[130px]">
-                                            {sleeve.text || `Sleeve ${idx + 1}`}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                const newId = `sleeve_${Date.now()}`;
-                                                const duplicated = {
-                                                    ...sleeve,
-                                                    id: newId,
-                                                };
-                                                const newArr = [...sleeves];
-                                                newArr.splice(
-                                                    idx + 1,
-                                                    0,
-                                                    duplicated,
-                                                );
-                                                setSleeves(newArr);
-                                                setSelectedId(newId);
-                                            }}
-                                            className="p-1.5 text-gray-400 hover:text-primary hover:bg-white rounded"
-                                            title="Duplicate">
-                                            <CopyPlus className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDelete(sleeve.id);
-                                            }}
-                                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-white rounded"
-                                            title="Delete">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                            <button
-                                onClick={handleAdd}
-                                className="flex items-center justify-center w-full p-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:text-primary hover:border-primary hover:bg-primary/5 font-medium transition-colors">
-                                <CopyPlus className="w-4 h-4 mr-2" /> Add Sleeve
-                            </button>
-                        </div>
-                    </SidebarSection>
-
-                    <div className="flex items-center justify-between text-xs font-bold text-gray-400 mt-6 mb-2 px-1 tracking-wider">
-                        <span>ACTIVE SETTINGS</span>
-                        <button
-                            onClick={handleApplyToAll}
-                            className="px-2 py-1 bg-gray-100 text-secondary border border-secondary/20 hover:bg-secondary hover:text-white text-[10px] uppercase tracking-wider font-bold rounded-lg transition-colors"
-                            title="Apply size, colors, holes, etc. to all charms">
-                            Apply to All
-                        </button>
-                    </div>
-
-                    <SidebarSection title="TEXT & FONT" icon={Type}>
-                        <ControlInput
-                            label="TEXT"
-                            value={activeSleeve.text}
-                            onChange={(e) =>
-                                updateActive({ text: e.target.value })
-                            }
-                            placeholder="Type name here..."
-                            onApplyAll={() =>
-                                applySettingsToAll("text", activeSleeve.text)
-                            }
-                        />
-                        <ControlSelect
-                            label="FONT FAMILY"
-                            value={activeSleeve.font}
-                            onChange={(val) => updateActive({ font: val })}
-                            options={fontOptions}
-                            prefixType="font"
-                        />
-                    </SidebarSection>
-                    <SidebarSection title="COLORS" icon={PaintBucket}>
-                        <ControlColorPicker
-                            label="TOP COLOR (TEXT)"
-                            value={activeSleeve.textColor}
-                            onChange={(val) => updateActive({ textColor: val })}
-                            options={colorOptions}
-                        />
-                        <ControlColorPicker
-                            label="BASE COLOR"
-                            value={activeSleeve.baseColor}
-                            onChange={(val) => updateActive({ baseColor: val })}
-                            options={colorOptions}
-                        />
-                    </SidebarSection>
-
-                    <SidebarSection title="DIMENSIONS" icon={Ruler}>
-                        <div className="grid grid-cols-2 gap-3">
-                            <ControlSlider
-                                label="TEXT SIZE"
-                                value={activeSleeve.size}
-                                min={10}
-                                max={40}
-                                step={1}
-                                onChange={(val) => updateActive({ size: val })}
-                                onApplyAll={() =>
-                                    applySettingsToAll(
-                                        "size",
-                                        activeSleeve.size,
-                                    )
-                                }
-                            />
-                            <ControlSlider
-                                label="TEXT THICKNESS (MM)"
-                                value={activeSleeve.depth}
-                                min={0.5}
-                                max={10.0}
-                                step={0.1}
-                                onChange={(val) => updateActive({ depth: val })}
-                                onApplyAll={() =>
-                                    applySettingsToAll(
-                                        "depth",
-                                        activeSleeve.depth,
-                                    )
-                                }
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <ControlSlider
-                                label="PENCIL HOLE DIAMETER (MM)"
-                                value={activeSleeve.holeDiameter}
-                                min={5.0}
-                                max={12.0}
-                                step={0.1}
-                                onChange={(val) =>
-                                    updateActive({ holeDiameter: val })
-                                }
-                                onApplyAll={() =>
-                                    applySettingsToAll(
-                                        "holeDiameter",
-                                        activeSleeve.holeDiameter,
-                                    )
-                                }
-                            />
-                            <ControlSlider
-                                label="HOLE Y OFFSET (MM)"
-                                value={activeSleeve.holeYOffset}
-                                min={-10.0}
-                                max={10.0}
-                                step={0.1}
-                                onChange={(val) =>
-                                    updateActive({ holeYOffset: val })
-                                }
-                                onApplyAll={() =>
-                                    applySettingsToAll(
-                                        "holeYOffset",
-                                        activeSleeve.holeYOffset,
-                                    )
-                                }
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <ControlSlider
-                                label="BASE THICKNESS (MM)"
-                                value={activeSleeve.baseHeight}
-                                min={2.0}
-                                max={20.0}
-                                step={0.1}
-                                onChange={(val) =>
-                                    updateActive({ baseHeight: val })
-                                }
-                                onApplyAll={() =>
-                                    applySettingsToAll(
-                                        "baseHeight",
-                                        activeSleeve.baseHeight,
-                                    )
-                                }
-                            />
-                            <ControlSlider
-                                label="OUTLINE WIDTH (MM)"
-                                value={activeSleeve.baseOffset}
-                                min={0.5}
-                                max={10.0}
-                                step={0.1}
-                                onChange={(val) =>
-                                    updateActive({ baseOffset: val })
-                                }
-                                onApplyAll={() =>
-                                    applySettingsToAll(
-                                        "baseOffset",
-                                        activeSleeve.baseOffset,
-                                    )
-                                }
-                            />
-                        </div>
-                    </SidebarSection>
-                </div>
+                isMassProduceMode ? (
+                    <MassProduceSidebar
+                        packedInstances={packedInstances}
+                        currentPlateView={currentPlateView}
+                        totalPlates={totalPlates}
+                        activeInstanceId={activeInstanceId}
+                        sidebarMode={sidebarMode}
+                        onSidebarModeChange={setSidebarMode}
+                        onUpdateInstance={handleUpdateInstance}
+                        onApplyToAll={handleApplyToAll}
+                        onChangePlate={setCurrentPlateView}
+                        onClearAll={handleClearPackedInstances}
+                        onExportPlate={handleMassExportPlate}
+                        onExportAll={handleMassExportAll}
+                        isExporting={isMassExporting}
+                    />
+                ) : (
+                    <PencilSleeveSidebar
+                        config={config}
+                        setConfig={setConfig}
+                        allFonts={allFonts}
+                    />
+                )
             }>
-            {/* --- CANVAS --- */}
-            <div className="w-full h-full relative">
-                <EditorCanvas title="Pencil Sleeves" dims={dims}>
-                    {sleevesWithLayout.map((sleeve, i) => {
-                        return (
-                            <group
-                                key={sleeve.id}
-                                position={[
-                                    sleeve.layoutX,
-                                    sleeve.layoutY,
-                                    sleeve.baseHeight / 2 - 2.5,
-                                ]}>
-                                <CharmMesh
-                                    charm={{
-                                        ...sleeve,
-                                        type: "text",
-                                        charmColor: sleeve.textColor,
-                                        holeOrientation: "horizontal",
-                                        holeCount: 1,
+            <div className="relative h-full w-full">
+                <EditorCanvas
+                    title="Pencil Sleeves"
+                    ref={canvasRef}
+                    dims={{ x: 100, y: 100, z: config.baseHeight }}
+                    leftToolbarActions={
+                        !isMassProduceMode ? (
+                            <>
+                                <button
+                                    onClick={() => setIsMassProduceOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-orange-400 text-orange-500 font-bold text-sm hover:bg-orange-50 transition-colors"
+                                    title="Mass Produce — Pack onto build plate">
+                                    🏭 Mass Produce
+                                </button>
+                            </>
+                        ) : null
+                    }
+                >
+                    {isMassProduceMode ? (
+                        packedInstances
+                            .filter((i) => i.plateIndex === currentPlateView)
+                            .map((instance) => (
+                                <PackedPencilSleeveInstance
+                                    key={instance.id}
+                                    instance={instance}
+                                    isActive={activeInstanceId === instance.id}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveInstanceId(instance.id);
                                     }}
+                                    threeX={instance.threeX}
+                                    threeY={instance.threeY}
+                                    visible={true}
                                 />
-                            </group>
-                        );
-                    })}
+                            ))
+                    ) : (
+                        <group position={[0, 0, Number(config.baseHeight) - 3.0]}>
+                            <SmartText3D
+                                text={config.text}
+                                fontId={config.font}
+                                size={Number(config.size)}
+                                depth={Number(config.depth)}
+                                color={config.textColor}
+                                centerOffset={centerOffset}
+                                onShapesReady={handleShapesReady}
+                            />
+                            <SmartCSGBase
+                                textShapes={textShapes}
+                                thickness={Number(config.baseHeight)}
+                                padding={Number(config.baseOffset)}
+                                color={config.baseColor}
+                                holeCount={1}
+                                holeDiameter={Number(config.holeDiameter)}
+                                holeOrientation="horizontal"
+                                holeDistance={0}
+                                holeYOffset={Number(config.holeYOffset)}
+                                onGeometryReady={handleBaseReady}
+                            />
+                        </group>
+                    )}
                 </EditorCanvas>
             </div>
+
+            <MassProduceModal
+                isOpen={isMassProduceOpen}
+                onClose={() => setIsMassProduceOpen(false)}
+                onPack={handleMassProducePack}
+                editorConfig={config}
+            />
         </EditorLayout>
     );
 }

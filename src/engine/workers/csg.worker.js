@@ -30,6 +30,8 @@ self.onmessage = (e) => {
             holeYOffset = 0,
             holeZOffset = 0,
             holeShape,
+            holeXOffset = 0,
+            slotLength = 15,
             strapWidth = 10,
             strapThickness = 2.5,
         } = params;
@@ -58,8 +60,11 @@ self.onmessage = (e) => {
             
             const drillRadius = holeDiameter / 2;
             const zOffset = holeZOffset || 0;
+            const xOffset = holeXOffset || 0;
             const isHorizontal = holeOrientation === "horizontal";
+            const isVertical = holeOrientation === "vertical";
             const isBox = holeShape === "box";
+            const isSlot = holeShape === "slot";
 
             const csgEvaluator = new Evaluator();
             csgEvaluator.useGroups = false;
@@ -101,22 +106,53 @@ self.onmessage = (e) => {
                     box.deleteAttribute('uv');
                     drillMesh = new Brush(box, new THREE.MeshBasicMaterial());
                     const microJitter = 0.001337;
-                    drillMesh.position.set(microJitter, holeYOffset + microJitter, zOffset + microJitter);
+                    drillMesh.position.set(xOffset + microJitter, holeYOffset + microJitter, zOffset + microJitter);
+                } else if (isSlot) {
+                    const drill1 = new Brush(new THREE.CylinderGeometry(drillRadius, drillRadius, drillLength, 32, 1), new THREE.MeshBasicMaterial());
+                    const drill2 = new Brush(new THREE.CylinderGeometry(drillRadius, drillRadius, drillLength, 32, 1), new THREE.MeshBasicMaterial());
+                    const boxGeom = new THREE.BoxGeometry(holeDiameter, slotLength, drillLength);
+                    const drill3 = new Brush(boxGeom, new THREE.MeshBasicMaterial());
+                    
+                    if (isVertical) {
+                        drill1.rotation.x = Math.PI / 2;
+                        drill2.rotation.x = Math.PI / 2;
+                        // box needs no rotation since Z is depth, Y is length, X is width
+                    }
+                    
+                    const microJitter = 0.001337;
+                    drill1.position.set(xOffset + microJitter, holeYOffset + slotLength / 2 + microJitter, zOffset + microJitter);
+                    drill2.position.set(xOffset + microJitter, holeYOffset - slotLength / 2 + microJitter, zOffset + microJitter);
+                    drill3.position.set(xOffset + microJitter, holeYOffset + microJitter, zOffset + microJitter);
+                    
+                    drill1.updateMatrixWorld(true);
+                    drill2.updateMatrixWorld(true);
+                    drill3.updateMatrixWorld(true);
+                    
+                    const after1 = csgEvaluator.evaluate(baseMesh, drill1, SUBTRACTION);
+                    after1.updateMatrixWorld(true);
+                    const after2 = csgEvaluator.evaluate(after1, drill2, SUBTRACTION);
+                    after2.updateMatrixWorld(true);
+                    drillMesh = csgEvaluator.evaluate(after2, drill3, SUBTRACTION);
                 } else {
                     const cyl = new THREE.CylinderGeometry(drillRadius, drillRadius, drillLength, 32, 16);
                     cyl.deleteAttribute('uv');
                     drillMesh = new Brush(cyl, new THREE.MeshBasicMaterial());
                     if (isHorizontal) {
                         drillMesh.rotation.z = Math.PI / 2;
+                    } else if (isVertical) {
+                        drillMesh.rotation.x = Math.PI / 2;
                     }
                     const microJitter = 0.001337;
-                    drillMesh.position.set(microJitter, holeYOffset + microJitter, zOffset + microJitter);
+                    drillMesh.position.set(xOffset + microJitter, holeYOffset + microJitter, zOffset + microJitter);
                 }
                 
-                drillMesh.updateMatrixWorld(true);
-                
-                const finalBase = csgEvaluator.evaluate(baseMesh, drillMesh, SUBTRACTION);
-                finalBaseGeo = finalBase.geometry;
+                if (drillMesh.geometry) {
+                    drillMesh.updateMatrixWorld(true);
+                    const finalBase = csgEvaluator.evaluate(baseMesh, drillMesh, SUBTRACTION);
+                    finalBaseGeo = finalBase.geometry;
+                } else {
+                    finalBaseGeo = drillMesh.geometry;
+                }
             }
 
             if (finalBaseGeo.attributes.uv) {

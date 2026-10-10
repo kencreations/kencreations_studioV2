@@ -2,10 +2,14 @@ import React, { useState, useMemo, useEffect, useDeferredValue } from "react";
 import { Link } from "react-router-dom";
 import { X, Type, WholeWord } from "lucide-react";
 import { useFilamentBrands } from "../hooks/useFilamentBrands";
+import { Canvas } from "@react-three/fiber";
+import PrinterSelector from "../components/PrinterSelector";
+import TemplateManager from "../components/TemplateManager";
 import { useProfile } from "../contexts/ProfileContext";
+import { useFontStore } from "../hooks/useFontStore";
 import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
-import CharmMesh from "../components/CharmMesh";
+import LetterCharmInstance from "../components/3D/LetterCharmInstance";
 import { useHistoryState } from "../hooks/useHistoryState";
 import { LETTER_BEADS_DEFAULTS as CHARMS_DEFAULTS } from "../store/appState";
 import {
@@ -20,7 +24,8 @@ import { Smile, Ruler, CircleDashed, Layers, Palette } from "lucide-react";
 import { HistoryControls } from "../components/HistoryControls";
 export default function LetterBeadsEditor() {
     const { brands: cloudColors } = useFilamentBrands();
-    const { customColors, allFonts } = useProfile();
+    const { customColors } = useProfile();
+    const { allFonts } = useFontStore();
 
     const fontOptions = useMemo(
         () =>
@@ -195,6 +200,8 @@ export default function LetterBeadsEditor() {
             topBarActions={topBarActions}
             sidebarContent={
                 <div className="flex h-full flex-col gap-4 text-slate-700">
+                    <PrinterSelector />
+                    <TemplateManager editorId="letter-charms" />
                     {/* Active Charm Settings */}
                     {activeCharm && (
                         <>
@@ -485,37 +492,7 @@ export default function LetterBeadsEditor() {
             }>
             <EditorCanvas title="KenCreations_Charms" dims={dims}>
                 {deferredCharmsWithLayout.map((charm) => (
-                    <group
-                        key={charm.id}
-                        position={[
-                            charm.layoutX,
-                            charm.layoutY,
-                            charm.layoutZ,
-                        ]}>
-                        <CharmMesh
-                            charm={{
-                                ...charm,
-                                type: "text",
-                                text: charm.text || "A",
-                                font: charm.font || "Titan One",
-                                size: Number(charm.size ?? 10),
-                                legendSize: Number(charm.legendSize ?? 100),
-                                depth: Number(charm.depth ?? 1),
-                                baseOffset: Number(charm.baseOffset ?? 2),
-                                baseHeight: Number(charm.baseHeight ?? 6),
-                                baseColor: charm.baseColor || "#00A3A3",
-                                charmColor: charm.charmColor || "#ffffff",
-                                holeOrientation:
-                                    charm.holeOrientation || "horizontal",
-                                holeCount: Number(charm.holeCount ?? 1),
-                                holeDiameter: Number(charm.holeDiameter ?? 4.8),
-                                bubbleMode: Boolean(charm.bubbleMode),
-                                bubbleSize: Number(charm.bubbleSize ?? 2),
-                                x: 0,
-                                y: 0,
-                            }}
-                        />
-                    </group>
+                        <LetterCharmInstance key={charm.id} charm={charm} />
                 ))}
             </EditorCanvas>
         </EditorLayout>

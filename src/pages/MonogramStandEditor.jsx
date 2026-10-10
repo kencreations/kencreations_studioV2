@@ -1,3 +1,4 @@
+import { Evaluator, Brush, ADDITION } from "three-bvh-csg";
 import React, { useState, useMemo, useEffect, useDeferredValue } from "react";
 import { Link } from "react-router-dom";
 import { Type, Layers, Settings, Save } from "lucide-react";
@@ -9,6 +10,7 @@ import { Box3, ExtrudeGeometry, BoxGeometry } from "three";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { useFilamentBrands } from "../hooks/useFilamentBrands";
 import { useProfile } from "../contexts/ProfileContext";
+import { useFontStore } from "../hooks/useFontStore";
 import { useHistoryState } from "../hooks/useHistoryState";
 import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
@@ -63,7 +65,7 @@ const buildCustomTextGeometry = (
             size: size,
             height: thickness,
             depth: thickness,
-            curveSegments: 16,
+            curveSegments: 4,
             bevelEnabled: bevelSize > 0,
             bevelThickness: 0.01,
             bevelSize: bevelSize,
@@ -81,11 +83,28 @@ const buildCustomTextGeometry = (
 
     if (geometries.length === 0) return null;
 
-    // Weld into a single mesh for the slicer
-    let mergedGeo =
-        geometries.length === 1
-            ? geometries[0]
-            : BufferGeometryUtils.mergeGeometries(geometries, false);
+    // Weld into a single mesh using CSG boolean union for proper slicing
+    let mergedGeo;
+    if (geometries.length === 1) {
+        mergedGeo = geometries[0];
+    } else {
+        try {
+            const evaluator = new Evaluator();
+            evaluator.useGroups = true;
+            let currentBrush = new Brush(geometries[0]);
+            currentBrush.updateMatrixWorld();
+            
+            for (let i = 1; i < geometries.length; i++) {
+                const nextBrush = new Brush(geometries[i]);
+                nextBrush.updateMatrixWorld();
+                currentBrush = evaluator.evaluate(currentBrush, nextBrush, ADDITION);
+            }
+            mergedGeo = currentBrush.geometry;
+        } catch (err) {
+            console.warn("CSG union failed, falling back to mergeGeometries:", err);
+            mergedGeo = BufferGeometryUtils.mergeGeometries(geometries, false);
+        }
+    }
 
     // Center the whole word on X/Y
     mergedGeo.computeBoundingBox();
@@ -93,7 +112,11 @@ const buildCustomTextGeometry = (
         -0.5 * (mergedGeo.boundingBox.max.x + mergedGeo.boundingBox.min.x);
     const wordOffsetY =
         -0.5 * (mergedGeo.boundingBox.max.y + mergedGeo.boundingBox.min.y);
+    
     mergedGeo.translate(wordOffsetX, wordOffsetY, 0);
+    geometries.forEach(g => {
+        if (g !== mergedGeo) g.translate(wordOffsetX, wordOffsetY, 0);
+    });
 
     // Apply trigonometric cylindrical bend (arch)
     if (curveAngle && curveAngle !== 0) {
@@ -103,27 +126,31 @@ const buildCustomTextGeometry = (
 
         if (width > 0) {
             const radius = width / angleRad;
-            const positions = mergedGeo.attributes.position;
+            
+            const applyBend = (geo) => {
+                const positions = geo.attributes.position;
+                for (let i = 0; i < positions.count; i++) {
+                    const x = positions.getX(i);
+                    const y = positions.getY(i);
+                    const theta = x / radius;
+                    const currentRadius = radius + y;
+                    const newX = currentRadius * Math.sin(theta);
+                    const newY = currentRadius * Math.cos(theta) - radius;
+                    positions.setXY(i, newX, newY);
+                }
+                positions.needsUpdate = true;
+                geo.computeVertexNormals();
+                geo.computeBoundingBox();
+            };
 
-            for (let i = 0; i < positions.count; i++) {
-                const x = positions.getX(i);
-                const y = positions.getY(i);
-
-                const theta = x / radius;
-                const currentRadius = radius + y;
-
-                const newX = currentRadius * Math.sin(theta);
-                const newY = currentRadius * Math.cos(theta) - radius;
-
-                positions.setXY(i, newX, newY);
-            }
-            positions.needsUpdate = true;
-            mergedGeo.computeVertexNormals();
-            mergedGeo.computeBoundingBox();
+            applyBend(mergedGeo);
+            geometries.forEach(g => {
+                if (g !== mergedGeo) applyBend(g);
+            });
         }
     }
 
-    return mergedGeo;
+    return { merged: mergedGeo, separate: geometries };
 };
 
 const MONOGRAM_STAND_DEFAULTS = {
@@ -153,7 +180,8 @@ const MONOGRAM_STAND_DEFAULTS = {
 
 export default function MonogramStandEditor() {
     const { brands: cloudColors } = useFilamentBrands();
-    const { customColors, allFonts } = useProfile();
+    const { customColors } = useProfile();
+    const { allFonts } = useFontStore();
 
     const fontOptions = useMemo(
         () =>
@@ -738,9 +766,9 @@ export default function MonogramStandEditor() {
                             <mesh name="Base_Initial" castShadow receiveShadow>
                                 <CSG>
                                     <Base geometry={initialGeo} />
-                                    {cutterGeo && (
+                                    {cutterGeo?.merged && (
                                         <Subtraction
-                                            geometry={cutterGeo}
+                                            geometry={cutterGeo.merged}
                                             position={[
                                                 deferredConfig.nameX,
                                                 deferredConfig.nameY,
@@ -814,16 +842,12 @@ export default function MonogramStandEditor() {
                                     0,
                                     (deferredConfig.nameRotation * Math.PI) /
                                         180,
-                                ]}>
-                                {insertGeo && (
-                                    <mesh
-                                        name="Name_Overlay_Part"
-                                        castShadow
-                                        receiveShadow
-                                        geometry={insertGeo}>
-                                        <meshStandardMaterial
-                                            color={deferredConfig.nameColor}
-                                        />
+                                ]}
+                                name="Name_Overlay_Part"
+                            >
+                                {insertGeo?.merged && (
+                                    <mesh castShadow receiveShadow geometry={insertGeo.merged}>
+                                        <meshStandardMaterial color={deferredConfig.nameColor} />
                                     </mesh>
                                 )}
                             </group>

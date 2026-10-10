@@ -98,7 +98,7 @@ export function packItems({
         const qty = item.qty || 1;
         for (let q = 0; q < qty; q++) {
             expanded.push({
-                id: item.id,
+                id: `${item.id}-${q}`,
                 text: item.text,
                 origWidth: item.width,
                 origDepth: item.depth,
@@ -198,9 +198,9 @@ export function packItems({
  * @returns {{ width: number, depth: number }}
  */
 export function estimateKeychainSize(text, editorConfig) {
-    const fontSize = editorConfig.texts?.[0]?.size || 20;
-    const basePadding = editorConfig.base?.padding || 4;
-    const baseThickness = editorConfig.base?.thickness || 3;
+    const fontSize = editorConfig.texts?.[0]?.size || editorConfig.size || 20;
+    const basePadding = editorConfig.base?.padding || editorConfig.baseOffset || 4;
+    const baseThickness = editorConfig.base?.thickness || editorConfig.baseHeight || 3;
     
     // Add keyring allowance
     const keyringOffset = editorConfig.keyring?.enabled ? (editorConfig.keyring?.diameter || 10) : 0;

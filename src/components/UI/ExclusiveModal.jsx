@@ -36,7 +36,7 @@ export default function ExclusiveModal({
                         <p className="text-gray-700 text-lg leading-relaxed mb-8 max-w-lg">
                             This is a Premium Exclusive Generator designed for
                             high-margin printing. To purchase this add-on, you
-                            must first activate a Base Commercial License.
+                            must first activate your purchased license.
                         </p>
                         <button
                             onClick={() => {
@@ -44,13 +44,13 @@ export default function ExclusiveModal({
                                 onClose();
                             }}
                             className="w-full max-w-sm bg-[#FF6B00] hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg mb-4">
-                            Get Base License First
+                            Activate a License
                         </button>
                     </>
                 ) : (
                     <>
                         <p className="text-gray-700 text-lg leading-relaxed mb-8 max-w-lg">
-                            You have an active Studio Pro license! You can now
+                            You have an active license! You can now
                             permanently unlock this exclusive generator, or get
                             the All-Access Pass.
                         </p>

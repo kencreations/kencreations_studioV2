@@ -5,17 +5,10 @@ import React, {
     useMemo,
     useCallback,
 } from "react";
-import { useNavigate } from "react-router-dom";
-import { Canvas } from "@react-three/fiber";
-import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 
-import * as THREE from "three";
-import { FontLoader } from "three/examples/jsm/loaders/FontLoader.js";
-import { TTFLoader } from "three/addons/loaders/TTFLoader.js";
-import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { load3DFont } from "../utils/fontManager";
 import { useFilamentBrands } from "../hooks/useFilamentBrands";
 import { useProfile } from "../contexts/ProfileContext";
+import { useFontStore } from "../hooks/useFontStore";
 import { useHistoryState } from "../hooks/useHistoryState";
 import { HistoryControls } from "../components/HistoryControls";
 import EditorLayout from "../components/EditorLayout";
@@ -35,134 +28,10 @@ import MassProduceModal from "../components/UI/MassProduceModal";
 import PrinterSelector from "../components/PrinterSelector";
 import PackedKeychainInstance from "../components/3D/PackedKeychainInstance";
 import MassProduceSidebar from "../components/MassProduceSidebar";
-import { exportTo3MF } from "three-3mf-exporter";
-import { saveAs } from "file-saver";
-import {
-    createTextShapesWithSpacing,
-    offsetShapes,
-    unionShapes,
-} from "../utils/textContour";
+import SmartText3D from "../components/3D/Shared/SmartText3D";
+import SmartBase from "../components/3D/Shared/SmartBase";
+import SmartKeyring from "../components/3D/Shared/SmartKeyring";
 import { KEYCHAIN_DEFAULTS } from "../store/appState"; // ─── UI Helper Components ──────────────────────────────────────────────────────
-function Slider({ label, value, min, max, step, onChange }) {
-    return (
-        <label className="grid gap-1">
-            <span className="flex justify-between text-xs font-semibold text-gray-700">
-                <span>{label}</span>
-                <span className="text-xs text-primary">{value}</span>
-            </span>
-            <input
-                type="range"
-                min={min}
-                max={max}
-                step={step}
-                value={value}
-                onChange={(e) => onChange(Number(e.target.value))}
-                className="w-full accent-primary"
-            />
-        </label>
-    );
-}
-
-const getColorName = (hex, allBrands, customColors = []) => {
-    // Check custom colors first
-    const customMatch = customColors.find(
-        (c) => c.hex_code.toLowerCase() === hex.toLowerCase(),
-    );
-    if (customMatch) return customMatch.color_name;
-
-    if (!allBrands) return "Custom Color";
-
-    // Flatten all brand colors to search for the hex
-    const allColors = Object.values(allBrands).flat();
-
-    const match = allColors.find(
-        (c) => c.hex.toLowerCase() === hex.toLowerCase(),
-    );
-    return match ? match.name : "Custom Color";
-};
-
-function ColorSelectionDrawer({ value, onChange, isOpen, onClose, anchorRef }) {
-    const { brands: colors } = useFilamentBrands();
-    const { customColors } = useProfile();
-
-    const mergedColors = useMemo(() => {
-        const merged = JSON.parse(JSON.stringify(colors));
-        customColors.forEach((c) => {
-            const b = c.brand || "Custom";
-            if (!merged[b]) merged[b] = [];
-            merged[b].push({ hex: c.hex_code, name: c.color_name });
-        });
-        return merged;
-    }, [colors, customColors]);
-
-    const [selectedBrand, setSelectedBrand] = useState("BambuLab");
-    const [drawerStyle, setDrawerStyle] = useState({});
-
-    useEffect(() => {
-        let style = {
-            position: "absolute",
-            left: 0,
-            top: "calc(100% + 8px)",
-            zIndex: 50,
-        };
-
-        if (anchorRef?.current) {
-            const rect = anchorRef.current.getBoundingClientRect();
-            style = {
-                position: "fixed",
-                left: rect.left,
-                bottom: window.innerHeight - rect.top + 8,
-                zIndex: 9999,
-            };
-        }
-        setDrawerStyle(style);
-    }, [anchorRef]);
-
-    if (!isOpen) return null;
-
-    return (
-        <div
-            className="w-96 rounded-2xl border border-secondary bg-white p-4 shadow-2xl"
-            style={drawerStyle}>
-            <div className="flex gap-10 mb-4 border-b pb-2 border-secondary overflow-x-auto">
-                {Object.keys(mergedColors).map((brand) => (
-                    <button
-                        key={brand}
-                        onClick={() => setSelectedBrand(brand)}
-                        className={`text-sm font-bold whitespace-nowrap ${selectedBrand === brand ? "text-secondary border-b-2 border-secondary " : "text-gray-400 hover:text-secondary"}`}>
-                        {brand === "BambuLab" ? "Bambu Lab" : brand}
-                    </button>
-                ))}
-            </div>
-            <div className="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto pr-1">
-                {mergedColors[selectedBrand]?.map((color) => (
-                    <div
-                        key={color.hex + color.name}
-                        className="flex flex-col items-center">
-                        <button
-                            onClick={() => {
-                                onChange(color.hex);
-                                onClose();
-                            }}
-                            className={`w-10 h-10 rounded-lg border ${value === color.hex ? "border-black scale-105" : "border-gray-200"}`}
-                            style={{ backgroundColor: color.hex }}
-                        />
-                        <span
-                            className="mt-1 text-[0.6rem] text-neutral text-center w-full truncate font-semibold"
-                            title={color.name}>
-                            {color.name}
-                        </span>
-                    </div>
-                ))}
-            </div>
-            <button
-                onClick={onClose}
-                className="mt-4 w-full text-xs text-gray-400 bg-primary/60 py-2 rounded-lg hover:bg-primary border border-primary transition-colors font-semibold">
-                Close
-            </button>
-        </div>
-    );
-}
 
 function KeychainSidebar({
     onBack,
@@ -519,7 +388,7 @@ const getDefaultConfig = (defaultFontId) => ({
 });
 
 export default function KeychainEditor() {
-    const { allFonts } = useProfile();
+    const { allFonts } = useFontStore();
 
     const defaultFontId =
         allFonts.find(
@@ -549,7 +418,7 @@ export default function KeychainEditor() {
 
     const totalPlates = React.useMemo(() => {
         if (!packedInstances || packedInstances.length === 0) return 1;
-        return Math.max(...packedInstances.map(i => i.plateIndex ?? 0)) + 1;
+        return Math.max(...packedInstances.map((i) => i.plateIndex ?? 0)) + 1;
     }, [packedInstances]);
 
     const handleStartBatch = async (namesArray) => {
@@ -605,43 +474,48 @@ export default function KeychainEditor() {
     };
 
     // ── Mass Produce: Pack callback ──────────────────────────────────────
-    const handleMassProducePack = useCallback((result) => {
-        // Map packed items to instances carrying the global config
-        const instances = result.packed.map((item) => ({
-            ...item,
-            depthDim: item.depth, // Pack depth (Y-axis size on plate)
-            font: config.texts[0]?.font,
-            size: config.texts[0]?.size,
-            depth: config.texts[0]?.depth,
-            textColor: config.texts[0]?.color,
-            baseThickness: config.base.thickness,
-            basePadding: config.base.padding,
-            baseColor: config.base.color,
-            keyringEnabled: config.keyring.enabled,
-            keyringDiameter: config.keyring.diameter,
-            keyringHole: config.keyring.hole,
-            keyringX: config.keyring.x,
-            keyringY: config.keyring.y,
-            textX: config.texts[0]?.x,
-            textY: config.texts[0]?.y,
-        }));
-        
-        setPackedInstances(instances);
-        setMassProducePrinter(result.printer);
-        setCurrentPlateView(0);
-        setActiveInstanceId(null);
-        setIsMassProduceOpen(false);
-    }, [config]);
+    const handleMassProducePack = useCallback(
+        (result) => {
+            // Map packed items to instances carrying the global config
+            const instances = result.packed.map((item) => ({
+                ...item,
+                depthDim: item.depth, // Pack depth (Y-axis size on plate)
+                font: config.texts[0]?.font,
+                size: config.texts[0]?.size,
+                depth: config.texts[0]?.depth,
+                textColor: config.texts[0]?.color,
+                baseThickness: config.base.thickness,
+                basePadding: config.base.padding,
+                baseColor: config.base.color,
+                keyringEnabled: config.keyring.enabled,
+                keyringDiameter: config.keyring.diameter,
+                keyringHole: config.keyring.hole,
+                keyringX: config.keyring.x,
+                keyringY: config.keyring.y,
+                textX: config.texts[0]?.x,
+                textY: config.texts[0]?.y,
+            }));
+
+            setPackedInstances(instances);
+            setMassProducePrinter(result.printer);
+            setCurrentPlateView(0);
+            setActiveInstanceId(null);
+            setIsMassProduceOpen(false);
+        },
+        [config],
+    );
 
     const handleUpdateInstance = useCallback((id, updates) => {
-        setPackedInstances((prev) => 
-            prev.map(inst => inst.id === id ? { ...inst, ...updates } : inst)
+        setPackedInstances((prev) =>
+            prev.map((inst) =>
+                inst.id === id ? { ...inst, ...updates } : inst,
+            ),
         );
     }, []);
 
     const handleApplyToAll = useCallback((updates) => {
-        setPackedInstances((prev) => 
-            prev.map(inst => ({ ...inst, ...updates }))
+        setPackedInstances((prev) =>
+            prev.map((inst) => ({ ...inst, ...updates })),
         );
     }, []);
 
@@ -655,7 +529,9 @@ export default function KeychainEditor() {
     const handleMassExportPlate = async (plateNumber) => {
         // The canvas is already rendering the current plate view because currentPlateView === plateNumber - 1
         if (canvasRef.current && canvasRef.current.export3MF) {
-            await canvasRef.current.export3MF(`Mass_Produce_Plate_${plateNumber}.3mf`);
+            await canvasRef.current.export3MF(
+                `Mass_Produce_Plate_${plateNumber}.3mf`,
+            );
         }
     };
 
@@ -672,8 +548,10 @@ export default function KeychainEditor() {
             for (let i = 0; i < totalPlates; i++) {
                 setCurrentPlateView(i);
                 // Wait for React to render and geometry to generate (1000ms buffer)
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                await canvasRef.current.export3MF(`Mass_Produce_Plate_${i + 1}.3mf`);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                await canvasRef.current.export3MF(
+                    `Mass_Produce_Plate_${i + 1}.3mf`,
+                );
             }
 
             // Restore view
@@ -755,32 +633,57 @@ export default function KeychainEditor() {
         });
     }, []);
 
-    // Geometry States
-    const [textGeo, setTextGeo] = useState(null);
-    const [baseGeo, setBaseGeo] = useState(null);
-    const [ringGeo, setRingGeo] = useState(null);
+    // ── Smart component coordination state ─────────────────────────────────
     const [dims, setDims] = useState(null);
+    const [lineShapes, setLineShapes] = useState({});
+    const [baseBB, setBaseBB] = useState(null);
+    const [centerOffset, setCenterOffset] = useState({ cx: 0, cy: 0 });
 
-    const fontCacheRef = useRef({});
-    const loadedFontRef = useRef(null);
-    const textShapesRef = useRef([]);
-    const baseBBRef = useRef(null);
+    // Aggregate shapes from all SmartText3D instances for SmartBase
+    const allTextShapes = useMemo(
+        () => Object.values(lineShapes).flat(),
+        [lineShapes],
+    );
 
-    const translateShape2D = useCallback((shape, dx, dy) => {
-        const translatedOuter = shape
-            .getPoints(16)
-            .map((p) => new THREE.Vector2(p.x + dx, p.y + dy));
-        const translatedShape = new THREE.Shape(translatedOuter);
-
-        for (const hole of shape.holes) {
-            const translatedHole = hole
-                .getPoints(16)
-                .map((p) => new THREE.Vector2(p.x + dx, p.y + dy));
-            translatedShape.holes.push(new THREE.Path(translatedHole));
-        }
-
-        return translatedShape;
+    // Handler: each SmartText3D reports its shapes keyed by line id
+    const handleLineShapesReady = useCallback((lineId, shapes) => {
+        setLineShapes((prev) => ({ ...prev, [lineId]: shapes }));
     }, []);
+
+    // Handler: SmartBase reports its geometry, bounding box, and center offset
+    const handleBaseReady = useCallback(
+        (geo, bb, offset) => {
+            setBaseBB(bb);
+            setCenterOffset(offset || { cx: 0, cy: 0 });
+
+            // Compute dims from base bounding box + max text depth
+            if (bb) {
+                const maxDepth = config.texts.length
+                    ? Math.max(...config.texts.map((t) => t.depth || 0))
+                    : 0;
+                setDims({
+                    x: Math.round((bb.max.x - bb.min.x) * 10) / 10,
+                    y: Math.round((bb.max.y - bb.min.y) * 10) / 10,
+                    z: Math.round((bb.max.z - bb.min.z + maxDepth) * 10) / 10,
+                });
+            }
+        },
+        [config.texts],
+    );
+
+    // Clean up stale shape entries when text lines are removed
+    useEffect(() => {
+        const activeIds = new Set(config.texts.map((t) => t.id));
+        setLineShapes((prev) => {
+            const cleaned = {};
+            for (const key of Object.keys(prev)) {
+                if (activeIds.has(Number(key)) || activeIds.has(key)) {
+                    cleaned[key] = prev[key];
+                }
+            }
+            return cleaned;
+        });
+    }, [config.texts.length]);
 
     useEffect(() => {
         if (!allFonts?.length) return;
@@ -807,205 +710,6 @@ export default function KeychainEditor() {
             };
         });
     }, [allFonts]);
-
-    const buildBase = (shapes, bHeight, bOffset, textDepths = []) => {
-        const solidShapes = shapes.length > 0 ? unionShapes(shapes) : shapes;
-        const baseShapes = offsetShapes(solidShapes, bOffset);
-        let rawBase =
-            baseShapes.length > 0
-                ? new THREE.ExtrudeGeometry(baseShapes, {
-                      depth: bHeight,
-                      bevelEnabled: false,
-                      curveSegments: 16,
-                  })
-                : new THREE.BoxGeometry(20, 10, bHeight);
-
-        rawBase.computeBoundingBox();
-        const bb = rawBase.boundingBox;
-
-        // Push the base down so its top face rests at Z=0
-        rawBase.translate(0, 0, -bHeight);
-        rawBase.computeBoundingBox();
-
-        baseBBRef.current = rawBase.boundingBox.clone();
-
-        const mergedBase = BufferGeometryUtils.mergeVertices(rawBase);
-        if (mergedBase.attributes.uv) {
-            mergedBase.deleteAttribute("uv");
-        }
-        setBaseGeo(mergedBase);
-
-        mergedBase.computeBoundingBox();
-        const fb = mergedBase.boundingBox;
-        const maxDepth = textDepths.length ? Math.max(...textDepths) : 0;
-        setDims({
-            x: Math.round((fb.max.x - fb.min.x) * 10) / 10,
-            y: Math.round((fb.max.y - fb.min.y) * 10) / 10,
-            z: Math.round((fb.max.z - fb.min.z + maxDepth) * 10) / 10,
-        });
-    };
-    const textGeoDeps = JSON.stringify(
-        config.texts.map((t) => ({
-            text: t.text,
-            font: t.font,
-            size: t.size,
-            depth: t.depth,
-            x: t.x,
-            y: t.y,
-        })),
-    );
-
-    useEffect(() => {
-        const handler = setTimeout(async () => {
-            if (!config.texts.length) {
-                setTextGeo(null);
-                setBaseGeo(null);
-                return;
-            }
-
-            const allShapes = [];
-            const lineGeometries = [];
-            const textDepths = [];
-
-            for (const line of config.texts) {
-                const fontOption = allFonts.find(
-                    (f) => f.id === line.font || f.label === line.font,
-                );
-                if (!fontOption) continue;
-
-                if (!fontCacheRef.current[fontOption.id]) {
-                    try {
-                        fontCacheRef.current[fontOption.id] =
-                            await load3DFont(fontOption);
-                    } catch (err) {
-                        console.error(
-                            "Failed to load font in KeychainEditor:",
-                            err,
-                        );
-                        continue;
-                    }
-                }
-
-                const loadedFont = fontCacheRef.current[fontOption.id];
-                loadedFontRef.current = loadedFont;
-
-                const lineShapes = createTextShapesWithSpacing(
-                    line.text || "",
-                    loadedFont,
-                    line.size,
-                    0,
-                ).map((shape) =>
-                    translateShape2D(shape, line.x || 0, line.y || 0),
-                );
-
-                allShapes.push(...lineShapes);
-
-                if (lineShapes.length > 0) {
-                    const lineGeo = new THREE.ExtrudeGeometry(lineShapes, {
-                        depth: line.depth,
-                        bevelEnabled: false,
-                        curveSegments: 4,
-                    });
-                    lineGeometries.push({
-                        geometry: BufferGeometryUtils.mergeVertices(lineGeo),
-                        id: line.id,
-                    });
-                    textDepths.push(line.depth || 0);
-                }
-            }
-
-            textShapesRef.current = allShapes;
-
-            if (lineGeometries.length > 0) {
-                setTextGeo(lineGeometries);
-            } else {
-                setTextGeo(null);
-            }
-
-            buildBase(
-                allShapes,
-                config.base.thickness,
-                config.base.padding,
-                textDepths,
-            );
-        }, 100);
-
-        return () => clearTimeout(handler);
-    }, [textGeoDeps, allFonts, translateShape2D]);
-
-    // ── Effect B (FAST): runs only when base outline sliders change ───────────
-    // Uses the cached font shapes — NO font loading, NO text geometry rebuild.
-    useEffect(() => {
-        if (!loadedFontRef.current || textShapesRef.current.length === 0)
-            return;
-
-        const handler = setTimeout(() => {
-            buildBase(
-                textShapesRef.current,
-                config.base.thickness,
-                config.base.padding,
-                config.texts.map((line) => line.depth || 0),
-            );
-        }, 50); // shorter debounce since this is purely synchronous math
-
-        return () => clearTimeout(handler);
-    }, [config.base.padding, config.base.thickness]);
-
-    // ── Effect 2 (FAST): Rebuild only the ring when ring params change ──
-    // This does NOT reload the font or rebuild base geometry — instant response.
-    useEffect(() => {
-        if (!config.keyring.enabled) {
-            setRingGeo(null);
-            return;
-        }
-
-        const bb = baseBBRef.current;
-
-        // Build ring shape
-        const ringShape = new THREE.Shape();
-        ringShape.absarc(
-            0,
-            0,
-            config.keyring.diameter / 2,
-            0,
-            Math.PI * 2,
-            false,
-        );
-        const hole = new THREE.Path();
-        hole.absarc(0, 0, config.keyring.hole / 2, 0, Math.PI * 2, true);
-        ringShape.holes.push(hole);
-
-        const ringExtrudeGeo = new THREE.ExtrudeGeometry(ringShape, {
-            depth: config.base.thickness,
-            bevelEnabled: false,
-            curveSegments: 32,
-        });
-
-        // Position relative to base bounding box (or fallback to origin if bb not ready)
-        const anchorY = bb ? bb.max.y : 0;
-        const anchorX = bb ? bb.min.x : 0;
-        ringExtrudeGeo.translate(
-            anchorX + config.keyring.x,
-            anchorY + config.keyring.y,
-            -config.base.thickness,
-        );
-
-        const mergedRing = BufferGeometryUtils.mergeVertices(ringExtrudeGeo);
-        if (mergedRing.attributes.uv) {
-            mergedRing.deleteAttribute("uv");
-        }
-
-        setRingGeo(mergedRing);
-    }, [
-        config.keyring.enabled,
-        config.keyring.diameter,
-        config.keyring.hole,
-        config.keyring.x,
-        config.keyring.y,
-        config.base.thickness,
-        baseGeo,
-    ]);
-    // baseGeo in deps ensures ring re-anchors if base is rebuilt
 
     return (
         <EditorLayout
@@ -1057,108 +761,98 @@ export default function KeychainEditor() {
                     <>
                         <button
                             onClick={() => setIsBatchModalOpen(true)}
-                            className="px-5 py-2.5 text-secondary hover:bg-secondary/10 hover:text-secondary transition-colors border-r border-secondary/20 flex items-center gap-2"
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-teal-600 font-bold text-sm hover:bg-teal-50 transition-colors"
                             title="Mass Creation (Batch Export)">
                             <svg
                                 className="h-4 w-4"
                                 fill="none"
                                 stroke="currentColor"
+                                strokeWidth="2.5"
                                 viewBox="0 0 24 24">
                                 <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    strokeWidth="2"
                                     d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                             </svg>
                             Batch Export
                         </button>
-                        <div className="flex bg-white/90 backdrop-blur-md border border-primary shadow-lg rounded-xl overflow-hidden text-sm font-semibold transition-all">
-                            <button
-                                onClick={() => setIsMassProduceOpen(true)}
-                                className="px-5 py-2.5 text-primary hover:bg-primary hover:text-white transition-colors flex items-center gap-2"
-                                title="Mass Produce — Pack onto build plate">
-                                🏭 Mass Produce
-                            </button>
-                        </div>
+                        <button
+                            onClick={() => setIsMassProduceOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-orange-400 text-orange-500 font-bold text-sm hover:bg-orange-50 transition-colors"
+                            title="Mass Produce — Pack onto build plate">
+                            🏭 Mass Produce
+                        </button>
                     </>
                 }>
                 {packedInstances.length > 0 ? (
                     <group>
-                        {packedInstances
-                            .map((inst) => {
-                                const plateWidth = massProducePrinter?.usableWidth || 256;
-                                const plateDepth = massProducePrinter?.usableDepth || 256;
-                                const threeX = inst.x - (plateWidth / 2) + (inst.width / 2);
-                                const threeY = (plateDepth / 2) - inst.y - (inst.height / 2);
-                                return (
-                                    <PackedKeychainInstance
-                                        key={inst.id}
-                                        instance={inst}
-                                        isActive={inst.id === activeInstanceId}
-                                        onClick={setActiveInstanceId}
-                                        threeX={threeX}
-                                        threeY={threeY}
-                                        visible={inst.plateIndex === currentPlateView}
-                                    />
-                                );
-                            })}
+                        {packedInstances.map((inst) => {
+                            const plateWidth =
+                                massProducePrinter?.usableWidth || 256;
+                            const plateDepth =
+                                massProducePrinter?.usableDepth || 256;
+                            const threeX =
+                                inst.x - plateWidth / 2 + inst.width / 2;
+                            const threeY =
+                                plateDepth / 2 - inst.y - inst.height / 2;
+                            return (
+                                <PackedKeychainInstance
+                                    key={inst.id}
+                                    instance={inst}
+                                    isActive={inst.id === activeInstanceId}
+                                    onClick={setActiveInstanceId}
+                                    threeX={threeX}
+                                    threeY={threeY}
+                                    visible={
+                                        inst.plateIndex === currentPlateView
+                                    }
+                                />
+                            );
+                        })}
                     </group>
                 ) : (
                     <group>
-                        {/* Base mesh — hex sanitized to strip any alpha channel (#RRGGBBAA → #RRGGBB) */}
-                        {baseGeo && (
-                            <mesh geometry={baseGeo} castShadow receiveShadow>
-                                <meshStandardMaterial
-                                    color={
-                                        config.base.color?.length > 7
-                                            ? config.base.color.substring(0, 7)
-                                            : config.base.color
-                                    }
-                                />
-                            </mesh>
-                        )}
-                        {/* Text meshes */}
-                        {textGeo &&
-                            Array.isArray(textGeo) &&
-                            textGeo.map((t) => {
-                                const lineData =
-                                    config.texts.find((line) => line.id === t.id) ||
-                                    config.texts[0];
-                                const col = lineData?.color || "#ffffff";
-                                return (
-                                    <mesh
-                                        key={t.id}
-                                        geometry={t.geometry}
-                                        position={[0, 0, 0.1]}
-                                        castShadow
-                                        receiveShadow>
-                                        <meshStandardMaterial
-                                            color={
-                                                col.length > 7
-                                                    ? col.substring(0, 7)
-                                                    : col
-                                            }
-                                        />
-                                    </mesh>
-                                );
-                            })}
-                        {/* Keyring — separate mesh for instant repositioning */}
-                        {config.keyring.enabled && ringGeo && (
-                            <mesh geometry={ringGeo} castShadow receiveShadow>
-                                <meshStandardMaterial
-                                    color={
-                                        config.base.color?.length > 7
-                                            ? config.base.color.substring(0, 7)
-                                            : config.base.color
-                                    }
-                                />
-                            </mesh>
-                        )}
+                        {/* ── Text meshes (each fires shapes upstream) ── */}
+                        {config.texts.map((line) => (
+                            <SmartText3D
+                                key={line.id}
+                                text={line.text}
+                                fontId={line.font}
+                                size={line.size}
+                                depth={line.depth}
+                                offsetX={line.x || 0}
+                                offsetY={line.y || 0}
+                                color={line.color || "#ffffff"}
+                                centerOffset={centerOffset}
+                                onShapesReady={(shapes) =>
+                                    handleLineShapesReady(line.id, shapes)
+                                }
+                            />
+                        ))}
+
+                        {/* ── Base plate (consumes aggregated shapes) ── */}
+                        <SmartBase
+                            textShapes={allTextShapes}
+                            thickness={config.base.thickness}
+                            padding={config.base.padding}
+                            color={config.base.color}
+                            onGeometryReady={handleBaseReady}
+                        />
+
+                        {/* ── Keyring (anchors to centered base BB) ── */}
+                        <SmartKeyring
+                            enabled={config.keyring.enabled}
+                            diameter={config.keyring.diameter}
+                            holeDiameter={config.keyring.hole}
+                            thickness={config.base.thickness}
+                            baseBoundingBox={baseBB}
+                            offsetX={config.keyring.x}
+                            offsetY={config.keyring.y}
+                            color={config.base.color}
+                        />
                     </group>
                 )}
             </EditorCanvas>
-
-
 
             <BatchExportModal
                 isOpen={isBatchModalOpen}

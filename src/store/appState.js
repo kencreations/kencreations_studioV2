@@ -189,3 +189,120 @@ export const MACROPAD_DEFAULTS = {
     keychainSlideOffset: 0,
     shellColor: "#6B7280",
 };
+
+// --- Lithophane Keychain Editor -----------------------------------------------
+export const LITHOPHANE_DEFAULTS = {
+    // Image source
+    imageUrl: null,
+    cropShape: "rectangle", // rectangle | circle | heart | hexagon | alpha
+
+    // Thickness mapping (mm)
+    minThick: 0.8,
+    maxThick: 3.2,
+
+    // Resolution grid (longest axis pixel count)
+    resolution: "mid", // low (64) | mid (128) | high (256)
+
+    // Layer quantization — snaps Z to nearest multiple for clean slicer layers
+    quantizeLayerHeight: 0.08, // mm — matches Bambu Lab 0.08mm layer height
+    // Physical output size
+    physicalWidth: 50, // mm
+
+    // Frame
+    frameWidth: 2.5, // mm — border thickness
+    frameDepth: 3.2, // mm
+    frameProfile: "flat", // flat | fillet | chamfer
+    frameColor: "#EC008C",
+
+    // Keyring
+    keyringEnabled: true,
+    keyringStyle: "tab", // inset | tab
+    keyringThickness: 3.2, // mm — decoupled from frameDepth
+    keyringDiameter: 10, // mm — outer boss
+    keyringHole: 4, // mm — inner hole
+    keyringPosition: "top", // top | bottom | left | right
+    keyringReinforced: true, // adds ~1.5mm thickened donut around the hole
+    keyringOffset: 50, // 0-100% sliding offset
+
+    // Border text
+    borderText: "",
+    borderTextSide: "bottom", // top | bottom | left | right
+    borderTextFont: "Titan One",
+    borderTextSize: 5, // mm
+    borderTextDepth: 0.6, // mm
+    borderTextColor: "#ffffff",
+    borderTextMode: "emboss", // emboss | deboss
+};
+
+// --- Modular Desk Organizer Editor ------------------------------------------
+export const ORGANIZER_DEFAULTS = {
+    // ── Base Plate ────────────────────────────────────────────────────────────
+    baseWidth: 170, // mm — total base plate width
+    baseDepth: 70, // mm — total base plate depth (front-to-back)
+    baseThickness: 4, // mm — base plate slab height
+    baseRadius: 5, // mm — corner fillet radius (updated from 4 to 5)
+    baseColor: "#00B1B7", // BambuLab Turquoise
+
+    // ── Organizer Cup ─────────────────────────────────────────────────────────
+    cupDiameter: 60, // mm — outer cup cylinder diameter
+    cupHeight: 60, // mm — cup height above the base
+    cupWallThick: 2, // mm — shell wall thickness
+    cupStyle: "Plain", // 'Plain' | 'Hexagon' | 'Octagon' | 'Low-Poly (12-Sided)'
+    cupColor: "#FF9016", // BambuLab Orange
+
+    // ── Text Block ────────────────────────────────────────────────────────────
+    line1Text: "Mrs.",
+    line1Font: "Pacifico",
+    line1Size: 18, // mm
+    line1OffsetX: 0, // mm — horizontal offset of Line 1 relative to Line 2
+    lineSpacing: 0, // mm — extra vertical spacing between Line 1 and Line 2
+    textAlign: "center", // 'left' | 'center' | 'right' — Line 1 alignment relative to Line 2
+    line2Text: "CAMSON",
+    line2Font: "BebasNeue",
+    line2Size: 24, // mm
+    textDepth: 1, // mm — foreground extrusion depth
+    backingDepth: 10, // mm — backing plate depth
+    textPosX: 35, // mm — text module X offset on the base
+    textBackingPad: 1, // mm — bevelSize contour padding around text
+    textColor: "#ffffff", // Jade White
+    backingColor: "#EC008C", // BambuLab Magenta
+
+    // ── Hardware / Tolerances ─────────────────────────────────────────────────
+    // Male peg radius  = 3.8 mm  (hardcoded in CupModule / TextModule)
+    // Female slot radius = 4.0 mm (hardcoded in BasePlate)
+    // pegHeight = baseThickness - 1 (computed)
+    tolerance: 0.2, // mm — delta between male and female radii
+
+    // ── Viewport ──────────────────────────────────────────────────────────────
+    viewMode: "assembled", // 'assembled' | 'exploded'
+};
+
+// --- PopSocket / PopGrip Generator -------------------------------------------
+export const POPSOCKET_DEFAULTS = {
+    // ── Text ──────────────────────────────────────────────────────────────────
+    text: "MY NAME",
+    fontId: "Coiny",
+    fontSize: 8,          // mm — auto-shrinks to fit plate if autoFit is true
+    textDepth: 1.5,        // mm — extrusion height
+    letterSpacing: 0,      // mm — extra gap between letters
+    textMode: "raised",    // "raised" | "engraved"
+    stylePreset: "chunky-rounded", // "chunky-rounded" | "groovy-vertical" | "organic-circular"
+    
+    // ── Advanced Text Shaping ─────────────────────────────────────────────────
+    layoutMode: "auto",    // "auto" | "1-line" | "2-lines"
+    blobIntensity: 2.0,    // 0 to 5 — bounded outline shaping intensity
+    roundness: 1.0,        // 0 to 3 — how much to smooth corners (bevel segments & size)
+    compactness: 1.0,      // 0 to 2 — how tight the circular arrangement is
+    autoFit: true,         // automatically resize to fit within the cap radius
+    edgeMargin: 2.0,       // mm — safety margin from the edge
+    fillIntensity: 90,     // % — radial extent of the usable circle (not ink coverage)
+
+    // ── Colors ────────────────────────────────────────────────────────────────
+    baseColor: "#E63946",  // The red attachment piece
+    textColor: "#F1FAEE",  // Text color
+
+    // ── Geometry ──────────────────────────────────────────────────────────────
+    topRadius: 19.5,       // mm — radius of the circular top plate (~39mm dia)
+    topThickness: 2.0,     // mm — thickness of the top plate
+};
+

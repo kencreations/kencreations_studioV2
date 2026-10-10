@@ -213,4 +213,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     openInSlicer: ({ fileBuffer, fileName }) =>
         ipcRenderer.invoke("open-in-slicer", { fileBuffer, fileName }),
 
+    // ── Native File Export ─────────────────────────────────────────────
+    /**
+     * Opens a native OS "Save As" dialog and writes the provided buffer to
+     * the user-chosen path. Replaces browser-style file-saver downloads for
+     * STL, 3MF, and PNG exports.
+     *
+     * @param {{ defaultName: string, filterName: string, extension: string, fileData: string | Uint8Array }} opts
+     * @returns {Promise<{ success: boolean, filePath?: string, reason?: string, error?: string }>}
+     */
+    saveFileDialog: (opts) => ipcRenderer.invoke('save-file-dialog', opts),
+
 });

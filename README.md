@@ -1,5 +1,7 @@
 # React + Vite
 
+Before publishing this application, read [GitHub security and release preparation](docs/GITHUB-SECURITY.md). Keep the source repository private; client-side bundles and assets remain downloadable.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

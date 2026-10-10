@@ -1,7 +1,7 @@
 {
     "name": "kencreations-studio",
     "private": true,
-    "version": "1.2.0",
+    "version": "1.2.1",
     "type": "module",
     "main": "electron/loader.cjs",
     "scripts": {
@@ -12,7 +12,10 @@
         "init-tailwind": "tailwindcss init -p",
         "electron:dev": "cross-env NODE_ENV=development concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
         "compile:electron": "electron electron/compile-electron.cjs",
-        "electron:build": "npm run build && npm run compile:electron && electron-builder"
+        "electron:build": "npm run build && npm run compile:electron && electron-builder",
+        "test": "node --test tests/*.test.js",
+        "test:rules": "firebase emulators:exec --project demo-kencreations-audit --config firebase.audit.json --only firestore,auth \"node tests/emulator/run.mjs\"",
+        "test:browser": "cross-env AUDIT_BROWSER=true npm run test:rules"
     },
     "build": {
         "appId": "com.kencreations.generator",
@@ -82,6 +85,7 @@
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
+        "@firebase/rules-unit-testing": "^5.0.0",
         "@types/d3-contour": "^3.0.6",
         "@types/react": "^19.2.17",
         "@types/react-dom": "^19.2.3",
@@ -95,6 +99,7 @@
         "eslint": "^10.6.0",
         "eslint-plugin-react-hooks": "^7.1.1",
         "eslint-plugin-react-refresh": "^0.5.3",
+        "firebase-tools": "^13.35.1",
         "globals": "^17.7.0",
         "postcss": "^8.5.16",
         "puppeteer": "^25.3.0",

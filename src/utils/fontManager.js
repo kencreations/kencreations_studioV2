@@ -77,6 +77,11 @@ export const load3DFont = async (fontOption) => {
     const fontLoader = new FontLoader();
     const ttfLoader = new TTFLoader();
 
+    if (normalized?.isCustomWeb && normalized.arrayBuffer) {
+        const fontJson = ttfLoader.parse(normalized.arrayBuffer);
+        return fontLoader.parse(fontJson);
+    }
+
     if (normalized?.isCustom) {
         const filePath = normalized.filePath || normalized.file_path;
         if (!filePath || !window.electronAPI?.readFontBuffer) {
@@ -142,6 +147,10 @@ export const getCached3DFont = async (fontOption) => {
 export const load3DFontJson = async (fontOption) => {
     const normalized = normalizeFontOption(fontOption);
     const ttfLoader = new TTFLoader();
+
+    if (normalized?.isCustomWeb && normalized.arrayBuffer) {
+        return ttfLoader.parse(normalized.arrayBuffer);
+    }
 
     if (normalized?.isCustom) {
         const filePath = normalized.filePath || normalized.file_path;

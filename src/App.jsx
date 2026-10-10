@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import React, { useState, useEffect, useCallback } from "react";
-import Home from "./pages/Home";
+import React from "react";
+import { AccessProvider } from "./contexts/AccessContext";
+import { GeneratorProvider } from "./hooks/useGenerators";
+import GeneratorRoute from "./components/GeneratorRoute";
 import DesktopHome from "./pages/DesktopHome";
 
 import BannerNotification from "./components/BannerNotification";
@@ -19,10 +21,15 @@ import WhistleBagtagEditor from "./pages/WhistleBagtagEditor";
 import MonogramInsertEditor from "./pages/MonogramInsertEditor";
 import MonogramStandEditor from "./pages/MonogramStandEditor";
 import QRCodeStandeeEditor from "./pages/QRCodeStandeeEditor";
+import LithophaneEditor from "./pages/LithophaneEditor";
+import ModularOrganizerEditor from "./pages/ModularOrganizerEditor";
+import PopSocketEditor from "./pages/PopSocketEditor";
+import MakesGallery from "./pages/MakesGallery";
 import UpdateToast from "./components/UpdateToast";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ProfileProvider } from "./contexts/ProfileContext";
 import { TrialProvider } from "./contexts/TrialContext";
+import { AuthProvider } from "./contexts/AuthContext";
 import { NotificationListener } from "./components/NotificationListener";
 import { PrinterProvider } from "./contexts/PrinterContext";
 /**
@@ -41,123 +48,37 @@ import { PrinterProvider } from "./contexts/PrinterContext";
  *  - SyncWorker can update them live without requiring an app restart.
  */
 function App() {
-    const [isActivated, setIsActivated] = useState(false);
-    const [checking, setChecking] = useState(true);
-    const [entitlements, setEntitlements] = useState([]);
-
     const isDesktop = !!window.electronAPI;
-
-    // ── Startup license check ─────────────────────────────────────────────
-    useEffect(() => {
-        const verify = async () => {
-            if (!isDesktop) {
-                // Web build: always allow, no license needed
-                setIsActivated(true);
-                setEntitlements([]);
-                setChecking(false);
-                return;
-            }
-
-            try {
-                const result = await window.electronAPI.checkLicense();
-                if (result.activated) {
-                    setIsActivated(true);
-                    setEntitlements(result.entitlements || []);
-                    // Kick off background sync (non-blocking)
-                    window.electronAPI.startSync().catch(() => {});
-                } else {
-                    setIsActivated(false);
-                }
-            } catch (err) {
-                console.error("License check failed:", err);
-                setIsActivated(false);
-            } finally {
-                setChecking(false);
-            }
-        };
-
-        verify();
-    }, [isDesktop]);
-
-    // ── Live entitlement updates from SyncWorker ─────────────────────────
-    useEffect(() => {
-        if (!isDesktop || !window.electronAPI?.onEntitlementsUpdated) return;
-
-        const unsub = window.electronAPI.onEntitlementsUpdated(
-            ({ entitlements: newEnt }) => {
-                console.log("[App] Entitlements updated:", newEnt);
-                setEntitlements(newEnt);
-            },
-        );
-
-        return unsub;
-    }, [isDesktop]);
-
-    // ── License revocation handler ────────────────────────────────────────
-    useEffect(() => {
-        if (!isDesktop || !window.electronAPI?.onLicenseRevoked) return;
-
-        const unsub = window.electronAPI.onLicenseRevoked(({ reason }) => {
-            console.warn("[App] License revoked by server:", reason);
-            setIsActivated(false);
-            setEntitlements([]);
-        });
-
-        return unsub;
-    }, [isDesktop]);
-
-    // ── After activation callback (from ActivationScreen) ────────────────
-    const handleActivate = useCallback((newEntitlements = []) => {
-        setEntitlements(newEntitlements);
-        setIsActivated(true);
-        // SyncWorker is already started by main.cjs after key validation.
-        // This call is a safety net for the offline path.
-        if (window.electronAPI?.startSync) {
-            window.electronAPI.startSync().catch(() => {});
-        }
-    }, []);
-
-    // ── Loading splash ────────────────────────────────────────────────────
-    if (checking) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-[#fff0e5] via-teal-100 to-[#00A3A3] flex items-center justify-center text-gray-900">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-8 h-8 border-3 border-teal-600 border-t-transparent rounded-full animate-spin" />
-                    <p className="text-sm font-semibold text-gray-700">
-                        Verifying license...
-                    </p>
-                </div>
-            </div>
-        );
-    }
-
-    // ── Activation gate (Desktop only) - REMOVED FOR FREEMIUM MODEL ───
-    // The user can access DesktopHome, but export is gated via PricingModal.
-
-    // ── Main App ──────────────────────────────────────────────────────────
     return (
-        <TrialProvider>
-            <ProfileProvider>
-                <PrinterProvider>
-                    <ErrorBoundary>
-                        {/* Global overlay components — rendered above all routes */}
+        <AuthProvider>
+            <AccessProvider>
+            <GeneratorProvider>
+            <TrialProvider>
+                <ProfileProvider>
+                    <PrinterProvider>
+                        <ErrorBoundary>
+                            {/* Global overlay components — rendered above all routes */}
                         {isDesktop && <BannerNotification />}
                         {isDesktop && <WhatsNewModal />}
                         {isDesktop && <UpdateToast />}
                         {isDesktop && <NotificationListener />}
 
                         <Routes>
+                            <Route path="/editor/clicker" element={<Navigate to="/editor/clicker-v2" replace />} />
+                            <Route path="/editor/lithophanekeychain" element={<Navigate to="/editor/lithophane" replace />} />
+                            <Route path="/editor/whistle-bagtag" element={<Navigate to="/editor/whistlebagtag" replace />} />
+                            <Route path="*" element={<Navigate to="/" replace />} />
                             <Route
                                 path="/"
                                 element={
-                                    isDesktop ? (
-                                        <DesktopHome
-                                            entitlements={entitlements}
-                                        />
-                                    ) : (
-                                        <Home />
-                                    )
+                                    <DesktopHome 
+                                        isWeb={!isDesktop} 
+                                    />
                                 }
+                            />
+                            <Route
+                                path="/app"
+                                element={<Navigate to="/" replace />}
                             />
                             <Route
                                 path="/profile"
@@ -184,28 +105,19 @@ function App() {
                             <Route
                                 path="/studio"
                                 element={
-                                    isDesktop ? (
-                                        <React.Suspense
-                                            fallback={
-                                                <div className="min-h-screen bg-gradient-to-br from-[#fff0e5] via-teal-100 to-[#00A3A3] flex items-center justify-center">
-                                                    <div className="w-8 h-8 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
-                                                </div>
-                                            }>
-                                            {React.createElement(
-                                                React.lazy(
-                                                    () =>
-                                                        import("./pages/StudioHub"),
-                                                ),
-                                                {
-                                                    isLicensed:
-                                                        entitlements &&
-                                                        entitlements.length > 0,
-                                                },
-                                            )}
-                                        </React.Suspense>
-                                    ) : (
-                                        <Navigate to="/" replace />
-                                    )
+                                    <React.Suspense
+                                        fallback={
+                                            <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center">
+                                                <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
+                                            </div>
+                                        }>
+                                        {React.createElement(
+                                            React.lazy(
+                                                () =>
+                                                    import("./pages/StudioHub"),
+                                            )
+                                        )}
+                                    </React.Suspense>
                                 }
                             />
                             <Route
@@ -213,66 +125,89 @@ function App() {
                                 element={<Navigate to="/" replace />}
                             />
                             <Route
+                                path="/gallery"
+                                element={<MakesGallery />}
+                            />
+                            <Route
+                                path="/editor/insta-tag"
+                                element={<Navigate to="/" replace />}
+                            />
+                            <Route
                                 path="/editor/namekeychain"
-                                element={<KeychainEditor />}
+                                element={<GeneratorRoute><KeychainEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/charms"
-                                element={<CharmsEditor />}
+                                element={<GeneratorRoute><CharmsEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/letter-beads"
-                                element={<LetterBeadsEditor />}
+                                element={<GeneratorRoute><LetterBeadsEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/keycap-maker"
-                                element={<KeycapEditor />}
+                                element={<GeneratorRoute><KeycapEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/clicker-v2"
-                                element={<ClickerEditor />}
+                                element={<GeneratorRoute><ClickerEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/macropad"
-                                element={<MacropadEditor />}
+                                element={<GeneratorRoute><MacropadEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/pencil-sleeve"
-                                element={<PencilSleeveEditor />}
+                                element={<GeneratorRoute><PencilSleeveEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/straw-toppers"
-                                element={<StrawTopperEditor />}
+                                element={<GeneratorRoute><StrawTopperEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/leather-sliders"
-                                element={<LeatherSliderEditor />}
+                                element={<GeneratorRoute><LeatherSliderEditor /></GeneratorRoute>}
+                            />
+                            <Route
+                                path="/editor/lithophane"
+                                element={<GeneratorRoute><LithophaneEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/client-icon-tag"
-                                element={<ClientIconTag />}
+                                element={<GeneratorRoute><ClientIconTag /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/whistlebagtag"
-                                element={<WhistleBagtagEditor />}
+                                element={<GeneratorRoute><WhistleBagtagEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/monograminsert"
-                                element={<MonogramInsertEditor />}
+                                element={<GeneratorRoute><MonogramInsertEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/monogram-stand"
-                                element={<MonogramStandEditor />}
+                                element={<GeneratorRoute><MonogramStandEditor /></GeneratorRoute>}
                             />
                             <Route
                                 path="/editor/qr-standee"
-                                element={<QRCodeStandeeEditor />}
+                                element={<GeneratorRoute><QRCodeStandeeEditor /></GeneratorRoute>}
                             />
-                        </Routes>
-                    </ErrorBoundary>
-                </PrinterProvider>
-            </ProfileProvider>
-        </TrialProvider>
+                            <Route
+                                path="/editor/modular-organizer"
+                                element={<GeneratorRoute><ModularOrganizerEditor /></GeneratorRoute>}
+                            />
+                            <Route
+                                path="/editor/popsocket"
+                                element={<GeneratorRoute><PopSocketEditor /></GeneratorRoute>}
+                            />
+                            </Routes>
+                        </ErrorBoundary>
+                    </PrinterProvider>
+                </ProfileProvider>
+            </TrialProvider>
+        </GeneratorProvider>
+            </AccessProvider>
+        </AuthProvider>
     );
 }
 

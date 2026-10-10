@@ -16,12 +16,58 @@ dist-ssr
 # RSA Private Key — lives only in Admin Dashboard .env, never in the desktop repo
 PRIVATE_KEY.pem
 *.pem
+serviceAccountKey.json
+**/serviceAccountKey.json
+audit-lint-*.json
+audit-artifacts/
 # Compiled Electron bytecode (generated at build time)
 electron/*.jsc
 # Local environment files
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
+!.env.*.example
+
+# Credentials, signing material, local authentication and customer data
+*.key
+*.p12
+*.pfx
+*.p8
+*.jks
+*.keystore
+*.lic
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.sqlite-wal
+*.sqlite-shm
+**/service-account*.json
+**/serviceAccount*.json
+**/*firebase-adminsdk*.json
+**/application_default_credentials.json
+.npmrc
+.netrc
+credentials.json
+.firebase/
+firebase-export-*/
+firestore_export/
+auth_export/
+firebase-export-metadata.json
+.runtimeconfig.json
+
+# Local reports, browser traces and automation state
+coverage/
+playwright-report/
+test-results/
+.codex/
+.agents/
+browser_logs.txt
+audit-dependencies.json
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*

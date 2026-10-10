@@ -1,3 +1,4 @@
+import { evaluateGeneratorAccess } from "../utils/licensePolicy.js";
 /**
  * editors.js — Generator registry.
  *
@@ -17,13 +18,15 @@
  */
 
 export const editors = [
+    { id: "monograminsert", title: "Monogram Insert", description: "Custom monogram inserts.", link: "/editor/monograminsert", isFree: true, isExclusive: false },
+    { id: "monogram-stand", title: "Monogram Stand", description: "Custom monogram stands.", link: "/editor/monogram-stand", isFree: true, isExclusive: false },
     {
         id: "whistle-bagtag",
         title: " Whistle Bagtag",
         description: "Customizable 3D printed whistle with a lanyard hole.",
         status: "Beta",
         icon: "哨",
-        link: "/editor/whistle-bagtag",
+        link: "/editor/whistlebagtag",
         isExclusive: false,
         requiredEntitlement: null,
         isFree: true,
@@ -96,7 +99,7 @@ export const editors = [
             "Design multi-layer AMS-ready MX keycap clickies with image-to-3D conversion.",
         status: "Beta",
         icon: "🖱️",
-        link: "/editor/clicker",
+        link: "/editor/clicker-v2",
         // Exclusive — requires entitlement "clicker-v2"
         isExclusive: true,
         requiredEntitlement: "clicker-v2",
@@ -140,6 +143,18 @@ export const editors = [
         isFree: true,
     },
     {
+        id: "lithophane",
+        title: " Lithophane Keychain",
+        description:
+            "Convert image pixels into a beautiful 3D printable lithophane keychain.",
+        status: "Beta",
+        icon: "🖼️",
+        link: "/editor/lithophane",
+        isExclusive: false,
+        requiredEntitlement: null,
+        isFree: true,
+    },
+    {
         id: "leather-sliders",
         title: " Leather Sliders",
         description: "Create custom 3D text sliders for flat leather straps.",
@@ -160,6 +175,28 @@ export const editors = [
         requiredEntitlement: null,
         isFree: true,
     },
+    {
+        id: "modular-organizer",
+        title: " Modular Organizer",
+        description: "Snap-together desk nameplate & organizer with a pen cup and multi-line text block.",
+        status: "Beta",
+        icon: "🗂️",
+        link: "/editor/modular-organizer",
+        isExclusive: false,
+        requiredEntitlement: null,
+        isFree: true,
+    },
+    {
+        id: "popsocket",
+        title: " PopSocket Generator",
+        description: "Design personalized 3D printable phone PopSockets with custom text, colors, and style presets.",
+        status: "Beta",
+        icon: "📱",
+        link: "/editor/popsocket",
+        isExclusive: false,
+        requiredEntitlement: null,
+        isFree: true,
+    },
 ];
 
 /**
@@ -169,9 +206,6 @@ export const editors = [
  * @param {string[]} entitlements — from the active license
  * @returns {typeof editors}
  */
-export function getAccessibleEditors(entitlements = []) {
-    return editors.filter((editor) => {
-        if (!editor.isExclusive) return true;
-        return entitlements.includes(editor.requiredEntitlement);
-    });
+export function getAccessibleEditors(access = {}) {
+    return editors.filter(editor => evaluateGeneratorAccess(editor, access).allowed);
 }

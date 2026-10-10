@@ -1,37 +1,35 @@
-import React, {
-    useMemo,
+import { useModelExport } from "../hooks/useModelExport";
+import { disposeExportScene } from "../engine/export/modelExport";
+import {
     useRef,
-    useState,
-    useEffect,
     useImperativeHandle,
 } from "react";
-import { useLocation } from "react-router-dom";
-import { editors } from "../data/editors";
+
+
 import { Canvas, useThree } from "@react-three/fiber";
+
 import {
     OrbitControls,
     GizmoHelper,
     GizmoViewcube,
-    Line,
-    Environment,
 } from "@react-three/drei";
 import * as THREE from "three";
-import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
-import { exportTo3MF } from "three-3mf-exporter";
-import { saveAs } from "file-saver";
+
+
+
 import PrintEstimatorHUD from "./PrintEstimatorHUD";
 import CsgLoadingOverlay from "./CsgLoadingOverlay";
-import PricingModal from "./UI/PricingModal";
-import { useSecureTrial } from "../contexts/TrialContext";
+
+
+
+
 import { usePrinter } from "../contexts/PrinterContext";
 import TexturedBuildPlate from "./3D/TexturedBuildPlate";
+import FloatingExportBar from "./UI/FloatingExportBar";
 
 // ─── Theme colours (mirrors tailwind.config) ───────────────────────────────────
 const SECONDARY = "#00A3A3"; // teal
 const CELL_COLOR = "#b3e0e0"; // light teal for minor grid lines
-const PLATE_SIZE = 256;
-const PLATE_HALF = PLATE_SIZE / 2;
-const DIVISIONS = 25; // 256 / 25 ≈ 10 mm per cell
 
 // The old generic grid BuildPlate component has been removed in favor of TexturedBuildPlate
 
@@ -111,7 +109,6 @@ const CaptureHelper = ({ captureRef, buildPlateRef, gizmoRef, title }) => {
 export default function EditorCanvas({
     dims,
     title,
-    generatorId,
     children,
     cameraPosition = [0, 80, 120],
     cameraTarget = [0, 0, 0],
@@ -119,194 +116,35 @@ export default function EditorCanvas({
     leftToolbarActions,
     ref,
 }) {
-    const location = useLocation();
-    const currentEditor = editors.find(e => e.link === location.pathname);
-    const resolvedGeneratorId = generatorId || currentEditor?.id || "unknown";
     const exportGroupRef = useRef();
     const captureRef = useRef();
     const buildPlateRef = useRef();
     const gizmoRef = useRef();
-
-    const [isExporting, setIsExporting] = useState(false);
-    const [isLicensed, setIsLicensed] = useState(false);
-    const [entitlements, setEntitlements] = useState([]);
-    const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
-    const { exportsLeft, decrementTrial } = useSecureTrial() || {};
     const { activePrinter } = usePrinter();
-
-    useEffect(() => {
-        if (window.electronAPI?.checkLicense) {
-            window.electronAPI.checkLicense().then(res => {
-                setIsLicensed(res.activated);
-                setEntitlements(res.entitlements || []);
-            }).catch(err => console.error("Failed to check license in EditorCanvas:", err));
-        }
-        
-        if (window.electronAPI?.onEntitlementsUpdated) {
-            const unsub = window.electronAPI.onEntitlementsUpdated(({ entitlements: newEnt }) => {
-                setEntitlements(newEnt);
-                setIsLicensed(true);
-            });
-            return unsub;
-        }
-    }, []);
-
-    const checkExportAccess = () => {
-        if (!currentEditor) return true; // Fallback if editor not found
-        if (!currentEditor.isExclusive) return true;
-        return isLicensed && entitlements.includes(currentEditor.requiredEntitlement);
-    };
-
-    const checkTrialAndDecrement = async () => {
-        // A user is allowed infinite exports ONLY IF they have an active license,
-        // and if the current editor is exclusive, they must have its entitlement.
-        const isFullyLicensed = isLicensed && (!currentEditor?.isExclusive || entitlements.includes(currentEditor?.requiredEntitlement));
-        
-        if (isFullyLicensed) return true;
-
-        if (!navigator.onLine) {
-            if (window.dispatchEvent) {
-                window.dispatchEvent(new CustomEvent('local-notification', { detail: { id: Date.now(), type: 'warning', title: 'Offline', body: 'An internet connection is required to process free trial exports.' } }));
-            }
-            return false;
-        }
-        
-        if (exportsLeft > 0) {
-            if (decrementTrial) await decrementTrial();
-            return true;
-        } else {
-            setIsPricingModalOpen(true);
-            return false;
-        }
-    };
-
-    const getExportScene = () => {
-        if (getCustomExportScene) {
-            return getCustomExportScene();
-        }
+    const { exportModel, isExporting, exportError } = useModelExport();
+    const getExportScene = format => {
+        if (getCustomExportScene) return getCustomExportScene(format);
         if (!exportGroupRef.current) return null;
-        
-        const clone = exportGroupRef.current.clone();
+        const clone = exportGroupRef.current.clone(true);
         clone.rotation.set(0, 0, 0);
         clone.position.set(0, 0, 0);
-
-        // DEEP CLONE MATERIALS FOR 3MF EXPORTER
-        // This stops the exporter from losing R3F shared material colors
-        clone.traverse((child) => {
-            if (child.isMesh && child.material) {
-                // Clone the material so it's a unique instance
-                child.material = child.material.clone();
-                
-                // Hard-bake the color to ensure the XML writer catches it
-                if (child.material.color) {
-                    const hex = child.material.color.getHexString();
-                    child.material.color = new THREE.Color(`#${hex}`);
-                }
-            }
-        });
-
         clone.updateMatrixWorld(true);
         return clone;
     };
-
-    const handleExportSTL = async (customFilename) => {
-        const canExport = await checkTrialAndDecrement();
-        if (!canExport) return;
-        setIsExporting(true);
-        try {
-            const exportScene = getExportScene();
-            if (!exportScene) {
-                setIsExporting(false);
-                return;
-            }
-            const exporter = new STLExporter();
-            const stlData = exporter.parse(exportScene, { binary: true });
-            const blob = new Blob([stlData], {
-                type: "application/octet-stream",
-            });
-            let safeTitle = "kencreations_model";
-            if (typeof title === 'string') safeTitle = title;
-            else if (title && typeof title.text === 'string') safeTitle = title.text;
-            else if (title && typeof title.name === 'string') safeTitle = title.name;
-            const defaultFilename = `${safeTitle.replace(/\s+/g, "_").toLowerCase()}.stl`;
-            const finalFilename = typeof customFilename === 'string' ? customFilename : defaultFilename;
-            saveAs(blob, finalFilename);
-            if (window.electronAPI?.queueTelemetry) {
-                window.electronAPI.queueTelemetry({
-                    generatorId: resolvedGeneratorId,
-                    filename: finalFilename,
-                    eventType: "export",
-                    exportFormat: "stl",
-                });
-            }
-            if (window.electronAPI?.incrementExports) {
-                window.electronAPI.incrementExports();
-            }
-        } catch (error) {
-            console.error("Failed to export STL:", error);
-        } finally {
-            setIsExporting(false);
-        }
+    const runExport = (format, customFilename) => {
+        const safeTitle = typeof title === 'string' ? title : title?.text || title?.name || 'kencreations_model';
+        const filename = typeof customFilename === 'string' ? customFilename : safeTitle.replace(/[^a-z0-9_-]+/gi, '_').toLowerCase() + '.' + format;
+        return exportModel({
+            getScene: getExportScene, format, filename,
+            // Custom scenes own their resources; regular clones share the live mesh.
+            dispose: getCustomExportScene ? disposeExportScene : undefined,
+            printConfig: activePrinter ? { printableWidth: activePrinter.width, printableDepth: activePrinter.depth } : undefined,
+        });
     };
+    const handleExportSTL = name => runExport('stl', name);
+    const handleExport3MF = name => runExport('3mf', name);
+    useImperativeHandle(ref, () => ({ exportSTL: handleExportSTL, export3MF: handleExport3MF }));
 
-    useImperativeHandle(ref, () => ({
-        exportSTL: handleExportSTL,
-        export3MF: handleExport3MF,
-    }));
-
-    const [ready3MF, setReady3MF] = useState(null);
-
-    // Reset 3MF ready state if anything changes
-    useEffect(() => {
-        setReady3MF(null);
-    }, [children, dims, title]);
-
-    const handleExport3MF = async (directFilename = null) => {
-        const canExport = await checkTrialAndDecrement();
-        if (!canExport) return;
-        setIsExporting(true);
-        try {
-            const exportScene = getExportScene();
-            if (!exportScene) {
-                setIsExporting(false);
-                return;
-            }
-            const data = await exportTo3MF(exportScene);
-            const blob =
-                data instanceof Blob
-                    ? data
-                    : new Blob([data], { type: "model/3mf" });
-            
-            if (directFilename) {
-                saveAs(blob, directFilename);
-                if (window.electronAPI?.queueTelemetry) {
-                    window.electronAPI.queueTelemetry({
-                        generatorId: resolvedGeneratorId,
-                        filename: directFilename,
-                        eventType: "export",
-                        exportFormat: "3mf",
-                    });
-                }
-                if (window.electronAPI?.incrementExports) {
-                    window.electronAPI.incrementExports();
-                }
-            } else {
-                const url = URL.createObjectURL(blob);
-                let safeTitle = "kencreations_model";
-                if (typeof title === 'string') safeTitle = title;
-                else if (title && typeof title.text === 'string') safeTitle = title.text;
-                else if (title && typeof title.name === 'string') safeTitle = title.name;
-                setReady3MF({
-                    url,
-                    filename: `${safeTitle.replace(/\s+/g, "_").toLowerCase()}.3mf`,
-                });
-            }
-        } catch (error) {
-            console.error("Failed to export 3MF:", error);
-        } finally {
-            setIsExporting(false);
-        }
-    };
     const handleCapture = () => {
         if (captureRef.current) {
             captureRef.current.capture();
@@ -316,10 +154,17 @@ export default function EditorCanvas({
     return (
         <div className="relative w-full h-full bg-transparent">
             <CsgLoadingOverlay />
+            {exportError && <p role="alert" className="absolute top-4 left-4 z-30 max-w-sm rounded-lg bg-white p-3 text-red-700 shadow">{exportError}</p>}
 
             <Canvas
-                gl={{ preserveDrawingBuffer: true, antialias: true }}
-                dpr={[1, 2]}
+                // Cap at 1.5: on 4K screens dpr=2 doubles GPU load for minimal
+                // visual gain. 1.5 is near-identical to 2 at typical monitor sizes.
+                dpr={[1, 1.5]}
+                // preserveDrawingBuffer removed: the synchronous gl.render() call
+                // in CaptureHelper before toDataURL() is sufficient. Keeping
+                // preserveDrawingBuffer:true prevents the GPU from discarding the
+                // framebuffer between frames, which reduces throughput on some drivers.
+                gl={{ antialias: true }}
                 camera={{ position: cameraPosition, fov: 45 }}
                 onCreated={({ camera }) => {
                     camera.lookAt(...cameraTarget);
@@ -360,6 +205,8 @@ export default function EditorCanvas({
                     dampingFactor={0.05}
                     zoomSpeed={1.5}
                     panSpeed={1.2}
+                    minDistance={20}
+                    maxDistance={(activePrinter ? Math.max(activePrinter.width, activePrinter.depth) : 256) * 2.5}
                 />
 
                 <group ref={gizmoRef}>
@@ -419,117 +266,12 @@ export default function EditorCanvas({
                 </div>
             </div>
 
-            {/* ── Export buttons — bottom-left HTML ── */}
-            <div className="absolute bottom-4 left-4 z-10 flex gap-3">
-                <div className="flex bg-white/90 backdrop-blur-md border border-secondary shadow-lg rounded-xl overflow-hidden text-sm font-semibold transition-all">
-                    <button
-                        onClick={handleExportSTL}
-                        disabled={isExporting}
-                        className="px-5 py-2.5 text-neutral hover:bg-secondary/10 hover:text-secondary transition-colors border-r border-secondary/20 flex items-center gap-2"
-                    >
-                        <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                        STL
-                    </button>
-                    {ready3MF ? (
-                        <a
-                            href={ready3MF.url}
-                            download={ready3MF.filename}
-                            onClick={() => {
-                                if (window.electronAPI?.queueTelemetry) {
-                                    window.electronAPI.queueTelemetry({
-                                        generatorId: resolvedGeneratorId,
-                                        filename: ready3MF.filename,
-                                        eventType: "export",
-                                        exportFormat: "3mf",
-                                    });
-                                }
-                                if (window.electronAPI?.incrementExports) {
-                                    window.electronAPI.incrementExports();
-                                }
-                                // Optional: Reset it after download so they can generate a new one if they want
-                                setTimeout(() => setReady3MF(null), 100);
-                            }}
-                            className="px-5 py-2.5 bg-secondary text-white hover:bg-secondary/90 transition-colors border-r border-secondary/20 flex items-center gap-2"
-                        >
-                            <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            >
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            Generate 3MF
-                        </a>
-                    ) : (
-                        <button
-                            onClick={handleExport3MF}
-                            disabled={isExporting}
-                            className="px-5 py-2.5 text-secondary hover:bg-secondary hover:text-white transition-colors border-r border-secondary/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <svg
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                            >
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            {isExporting ? "Preparing..." : "3MF"}
-                        </button>
-                    )}
-                    <button
-                        onClick={handleCapture}
-                        disabled={isExporting}
-                        className="px-5 py-2.5 text-neutral hover:bg-neutral/10 transition-colors flex items-center gap-2"
-                        title="Capture Screenshot"
-                    >
-                        <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-                            <circle cx="12" cy="13" r="4"></circle>
-                        </svg>
-                    </button>
-                </div>
-                {leftToolbarActions}
-            </div>
-
-            <PricingModal
-                isOpen={isPricingModalOpen}
-                onClose={() => setIsPricingModalOpen(false)}
+            <FloatingExportBar
+                disabled={isExporting}
+                onExportSTL={handleExportSTL}
+                onExport3MF={handleExport3MF}
+                onScreenshot={handleCapture}
+                leftToolbarActions={leftToolbarActions}
             />
         </div>
     );

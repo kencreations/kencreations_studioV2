@@ -4,9 +4,15 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
+/* ─── Box Model ─────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
     box-sizing: border-box;
 }
+
+/* ─── Root Layout ───────────────────────────────────────────────────────────── */
 
 body,
 html,
@@ -17,4 +23,89 @@ html,
     height: 100vh;
     overflow: hidden;
     background-color: #111;
+}
+
+/* ─── Native Desktop: No Text Selection ─────────────────────────────────────── */
+/*
+ * Desktop apps never let users accidentally highlight UI labels, button text,
+ * or card titles by dragging the cursor. This is one of the clearest signals
+ * that distinguishes real desktop software from a browser wrapper.
+ */
+
+* {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* Re-enable only where the user explicitly expects to type or copy. */
+input,
+textarea,
+[contenteditable="true"],
+.selectable-text {
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+/* ─── Native Desktop: Slim Custom Scrollbar ─────────────────────────────────── */
+/*
+ * Replaces the chunky OS scrollbar (a dead giveaway in Electron apps) with a
+ * minimal 4px track using the app's teal secondary colour.
+ */
+
+::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 163, 163, 0.30);
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 163, 163, 0.65);
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* ─── .custom-scrollbar Utility ─────────────────────────────────────────────── */
+/*
+ * This class is referenced in EditorLayout.jsx on the sidebar scroll container
+ * but was never defined anywhere — falling back silently to the OS scrollbar.
+ * Now explicitly defined.
+ */
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(0, 163, 163, 0.30);
+    border-radius: 999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 163, 163, 0.65);
+}
+
+/* ─── Smooth Font Rendering ─────────────────────────────────────────────────── */
+/*
+ * -webkit-font-smoothing: antialiased matches native macOS/Windows rendering
+ * for Inter, preventing subpixel jagginess in an Electron context.
+ */
+
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: "Inter", sans-serif;
 }

@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useFilamentBrands } from "../hooks/useFilamentBrands";
+import * as THREE from "three";
+import PrinterSelector from "../components/PrinterSelector";
+import TemplateManager from "../components/TemplateManager";
 import { useProfile } from "../contexts/ProfileContext";
 import { useHistoryState } from "../hooks/useHistoryState";
 import EditorLayout from "../components/EditorLayout";
@@ -15,7 +18,7 @@ import {
     ControlSlider,
     ControlColorPicker,
 } from "../components/UI/EditorControls";
-import { Smile, Ruler, CircleDashed, Layers, Settings, Palette } from "lucide-react";
+import { Smile, Ruler, CircleDashed, Layers, Settings, Palette, Upload, Trash2 } from "lucide-react";
 import { HistoryControls } from "../components/HistoryControls";
 
 const PRIMARY = "#FF6B00"; // Orange
@@ -121,7 +124,6 @@ export default function CharmsEditor() {
     const [iconLoading, setIconLoading] = useState(false);
     const [presetTab, setPresetTab] = useState("Arrows");
     const iconDebounce = useRef(null);
-
     const activeCharmIndex = charms.findIndex((c) => c.id === selectedCharmId);
     const activeCharm = charms[activeCharmIndex];
 
@@ -232,6 +234,7 @@ export default function CharmsEditor() {
     }, [charms]);
 
     const dims = useMemo(() => {
+
         if (charmsWithLayout.length === 0) return { x: 0, y: 0, z: 0 };
         let minX = Infinity,
             maxX = -Infinity;
@@ -255,9 +258,9 @@ export default function CharmsEditor() {
         });
 
         return {
-            x: Math.round(maxX - minX) || 0,
-            y: Math.round(maxY - minY) || 0,
-            z: Math.round(maxZ) || 0,
+            x: Math.round(maxX - minX),
+            y: Math.round(maxY - minY),
+            z: Math.round(maxZ),
         };
     }, [charmsWithLayout]);
 
@@ -267,6 +270,8 @@ export default function CharmsEditor() {
             topBarActions={topBarActions}
             sidebarContent={
                 <div className="flex h-full flex-col gap-4 text-slate-700">
+                    <PrinterSelector />
+                    <TemplateManager editorId="chunky-charms" />
                     {/* Charms List */}
                     <div className="rounded-2xl border border-secondary/20 bg-white p-3 shadow-sm space-y-3">
                         <div className="flex items-center justify-between">
@@ -324,7 +329,6 @@ export default function CharmsEditor() {
                                 </button>
                             </div>
 
-                            {/* Icon Selector */}
                             <SidebarSection title="Icon Select" icon={Smile}>
                                 <div className="grid gap-1.5 relative">
                                     <span className="text-xs font-semibold text-gray-700">
@@ -476,6 +480,7 @@ export default function CharmsEditor() {
                                     )}
                                 </div>
                             </SidebarSection>
+
                             <SidebarSection title="Colors" icon={Palette}>
                                 <div className="space-y-3">
                                     <ControlColorPicker

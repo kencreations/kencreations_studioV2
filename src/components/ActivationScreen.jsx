@@ -1,23 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-// Hardcoded secret for the client side validation.
-// NOTE: This is only used as a fallback. The primary validation is now done
-// via ipcRenderer → main.cjs → licenseManager.cjs (RSA + Firebase).
-// This HMAC path is kept only for the web dev environment.
-const SECRET_KEY = "kencreations_secret_license_key_2026";
-
-async function hashHMAC(hwid) {
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        'raw',
-        enc.encode(SECRET_KEY),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign']
-    );
-    const signature = await crypto.subtle.sign('HMAC', key, enc.encode(hwid));
-    return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+// License activation must be verified by the desktop bridge or web account flow.
 
 // ── Activation Step Types ────────────────────────────────────────────────────
 // 'idle' | 'activating' | 'success' | 'error'
@@ -78,16 +61,8 @@ export default function ActivationScreen({ onActivate }) {
                     setMessage(result.message || 'Activation failed. Please try again.');
                 }
             } else {
-                // Web dev fallback — HMAC check
-                const expectedKey = await hashHMAC(hwid);
-                if (inputKey.trim() === expectedKey) {
-                    setStatus('success');
-                    setMessage('License activated (dev mode).');
-                    setTimeout(() => onActivate([]), 1000);
-                } else {
-                    setStatus('error');
-                    setMessage('Invalid license key. Please check and try again.');
-                }
+                setStatus('error');
+                setMessage('Use your account profile to activate a web license.');
             }
         } catch (err) {
             console.error(err);

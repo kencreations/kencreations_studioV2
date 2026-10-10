@@ -279,6 +279,10 @@ function updateEntitlements(entitlements) {
     ).run(entJson, entHash);
 }
 
+function updateLicenseExpiry(expiresAt) {
+    getDb().prepare('UPDATE license_state SET expires_at = ? WHERE id = 1').run(expiresAt ?? null);
+}
+
 /**
  * Clears the license state (used for deactivation / reset).
  */
@@ -535,6 +539,7 @@ module.exports = {
     saveLicenseState,
     getLicenseState,
     updateEntitlements,
+    updateLicenseExpiry,
     clearLicenseState,
     // Telemetry
     enqueueTelemetry,

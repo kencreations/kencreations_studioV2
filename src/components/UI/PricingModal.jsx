@@ -1,25 +1,20 @@
+import { useAuth } from "../../contexts/AuthContext";
+import { activateLicense } from "../../services/LicenseService";
 import React, { useState, useEffect, useCallback } from "react";
 import GlassModal from "./GlassModal";
 import LegalModal from "./LegalModal";
 import mockBootstrap from "../../data/mockBootstrap.json";
 
-const SECRET_KEY = "kencreations_secret_license_key_2026";
-
-async function hashHMAC(hwid) {
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        'raw',
-        enc.encode(SECRET_KEY),
-        { name: 'HMAC', hash: 'SHA-256' },
-        false,
-        ['sign']
-    );
-    const signature = await crypto.subtle.sign('HMAC', key, enc.encode(hwid));
-    return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
+const Checkmark = () => (
+    <svg className="w-5 h-5 text-teal-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+    </svg>
+);
 
 export default function PricingModal({ isOpen, onClose, pricingTiers = [] }) {
+    const { currentUser, loginWithGoogle, fetchUserData } = useAuth();
     const [isActivatingView, setIsActivatingView] = useState(false);
+    const [billingCycle, setBillingCycle] = useState('12');
     const [licenseKey, setLicenseKey] = useState("");
     const [legalAgreed, setLegalAgreed] = useState(false);
     const [legalDoc, setLegalDoc] = useState(null);
@@ -57,9 +52,9 @@ export default function PricingModal({ isOpen, onClose, pricingTiers = [] }) {
 
     if (!isOpen) return null;
 
-    const handlePurchaseClick = () => {
+    const handlePurchaseClick = (planName = 'studio_pro') => {
         // Trigger Electron IPC to open Facebook Messenger
-        const url = `https://www.facebook.com/kenjovenie.samonte?ref=plan_${selectedPlan}`;
+        const url = `https://www.facebook.com/kenjovenie.samonte?ref=plan_${planName}`;
         if (window.electronAPI && window.electronAPI.openExternalUrl) {
             window.electronAPI.openExternalUrl(url);
         } else {
@@ -86,31 +81,25 @@ export default function PricingModal({ isOpen, onClose, pricingTiers = [] }) {
                     setMessage(result.message || 'License activated successfully!');
                     setTimeout(() => {
                         onClose();
-                        window.location.reload();
+                        window.dispatchEvent(new Event("license-activated"));
                     }, 1000);
                 } else {
                     setStatus('error');
                     setMessage(result.message || 'Activation failed. Please try again.');
                 }
             } else {
-                // Web dev fallback — HMAC check
-                const expectedKey = await hashHMAC(hwid);
-                if (licenseKey.trim() === expectedKey) {
-                    setStatus('success');
-                    setMessage('License activated (dev mode).');
-                    setTimeout(() => {
-                        onClose();
-                        window.location.reload();
-                    }, 1000);
-                } else {
-                    setStatus('error');
-                    setMessage('Invalid license key. Please check and try again.');
-                }
+                const user = currentUser || await loginWithGoogle();
+                const result = await activateLicense(licenseKey.trim(), user);
+                if (!result.success) throw new Error(result.message);
+                await fetchUserData(user.uid);
+                setStatus('success');
+                setMessage('License activated successfully!');
+                onClose();
             }
         } catch (err) {
             console.error(err);
             setStatus('error');
-            setMessage('An unexpected error occurred during activation.');
+            setMessage(err.message || 'An unexpected error occurred during activation.');
         }
     };
 
@@ -131,7 +120,7 @@ export default function PricingModal({ isOpen, onClose, pricingTiers = [] }) {
                 setMessage(result.message || 'License file verified successfully!');
                 setTimeout(() => {
                     onClose();
-                    window.location.reload();
+                    window.dispatchEvent(new Event("license-activated"));
                 }, 1000);
             } else {
                 setStatus('error');
@@ -164,34 +153,152 @@ export default function PricingModal({ isOpen, onClose, pricingTiers = [] }) {
                             <p className="text-gray-500">Get unlimited access to commercial 3D generators.</p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {displayTiers.map((tier) => (
-                                <div key={tier.tier_id} className="border border-gray-200 rounded-2xl p-6 flex flex-col hover:border-teal-500 transition-colors bg-white">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-2">{tier.name}</h3>
-                                    <div className="flex items-baseline gap-1 mb-6">
-                                        <span className="text-3xl font-black text-secondary">{tier.price_formatted}</span>
-                                        <span className="text-sm font-semibold text-gray-500">{tier.suffix}</span>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto w-full mt-4">
+                            
+                            {/* Card 1: Subscription */}
+                            <div className="relative bg-white border-2 border-teal-500 rounded-2xl p-6 flex flex-col shadow-[0_4px_20px_rgba(20,184,166,0.15)] transform transition-transform hover:-translate-y-1">
+                                {billingCycle === '12' && (
+                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-teal-500 text-white text-[10px] sm:text-xs font-black px-4 py-1 rounded-full shadow-md tracking-wide">
+                                        MOST POPULAR
                                     </div>
-                                    <ul className="space-y-3 mb-8 flex-grow">
-                                        {tier.features?.map((feature, i) => (
-                                            <li key={i} className="flex items-start gap-2 text-sm text-gray-600 font-medium">
-                                                <span className="text-secondary font-bold">✓</span> {feature}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    <button 
-                                        onClick={handlePurchaseClick}
-                                        className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-secondary transition-colors">
-                                        Select Plan
-                                    </button>
+                                )}
+                                <h3 className="text-xl font-black text-gray-900 mb-2 mt-2">Studio Pro</h3>
+                                <p className="text-sm text-gray-500 mb-4 h-10">Essential tools for growing your 3D printing business.</p>
+                                
+                                {/* Billing Toggle inside Card 1 */}
+                                <div className="flex justify-center mb-6">
+                                    <div className="bg-slate-100 p-1 rounded-full inline-flex relative w-[248px]">
+                                        {/* Sliding background */}
+                                        <div 
+                                            className="absolute top-1 bottom-1 w-[80px] bg-teal-600 rounded-full transition-transform duration-300 ease-in-out shadow-sm"
+                                            style={{
+                                                transform: `translateX(${
+                                                    billingCycle === '1' ? '0px' :
+                                                    billingCycle === '6' ? '80px' : '160px'
+                                                })`
+                                            }}
+                                        />
+                                        <button onClick={() => setBillingCycle('1')} className={`relative z-10 w-[80px] py-1.5 text-[13px] font-bold transition-colors ${billingCycle === '1' ? 'text-white' : 'text-gray-600'}`}>1 Mo</button>
+                                        <button onClick={() => setBillingCycle('6')} className={`relative z-10 w-[80px] py-1.5 text-[13px] font-bold transition-colors ${billingCycle === '6' ? 'text-white' : 'text-gray-600'}`}>6 Mo</button>
+                                        <button onClick={() => setBillingCycle('12')} className={`relative z-10 w-[80px] py-1.5 text-[13px] font-bold transition-colors ${billingCycle === '12' ? 'text-white' : 'text-gray-600'}`}>12 Mo</button>
+                                    </div>
                                 </div>
-                            ))}
+                                
+                                <div className="min-h-[100px] flex flex-col justify-center">
+                                    <div className="flex items-baseline gap-1 relative h-10">
+                                        <div className="flex items-baseline gap-1 transition-opacity duration-300 w-full">
+                                            <span className="text-4xl font-black text-gray-900">
+                                                {billingCycle === '1' ? '₱499' : billingCycle === '6' ? '₱2,499' : '₱3,999'}
+                                            </span>
+                                            <span className="text-sm font-semibold text-gray-500">
+                                                {billingCycle === '1' ? '/ mo' : billingCycle === '6' ? '/ 6-mos' : '/ yr'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div className="h-8 mt-2">
+                                        {billingCycle === '6' && (
+                                            <span className="inline-block bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full">
+                                                Save 16% (₱495)
+                                            </span>
+                                        )}
+                                        {billingCycle === '12' && (
+                                            <span className="inline-block bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full">
+                                                Save 33% (₱1,989)
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                <ul className="space-y-3 mb-8 mt-4 flex-grow">
+                                    {[
+                                        "Unlimited STL & 3MF Exports",
+                                        "Commercial Printing License",
+                                        "Access to all standard generators",
+                                        "Priority support access"
+                                    ].map((feature, i) => (
+                                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700 font-medium">
+                                            <Checkmark /> <span>{feature}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <button onClick={() => handlePurchaseClick('studio_pro')} className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold transition-colors shadow-sm">
+                                    Select Plan
+                                </button>
+                            </div>
+
+                            {/* Card 2: Lifetime */}
+                            <div className="relative bg-white border border-gray-200 rounded-2xl p-6 flex flex-col hover:border-teal-300 hover:shadow-xl transition-all hover:-translate-y-1">
+                                <h3 className="text-xl font-black text-gray-900 mb-2 mt-2">Studio Pro (Lifetime)</h3>
+                                <p className="text-sm text-gray-500 mb-4 h-10">Pay once, use forever. Best long-term value.</p>
+                                
+                                <div className="min-h-[100px] flex flex-col justify-center">
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-4xl font-black text-gray-900">₱5,999</span>
+                                        <span className="text-sm font-semibold text-gray-500">/ once</span>
+                                    </div>
+                                    <div className="h-8 mt-2" />
+                                </div>
+                                
+                                <ul className="space-y-3 mb-8 mt-4 flex-grow">
+                                    {[
+                                        "Everything in Studio Pro",
+                                        "No recurring billing",
+                                        "Free future standard updates",
+                                        "Lifetime Commercial License"
+                                    ].map((feature, i) => (
+                                        <li key={i} className="flex items-start gap-2 text-sm text-gray-700 font-medium">
+                                            <Checkmark /> <span>{feature}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <button onClick={() => handlePurchaseClick('lifetime')} className="w-full py-3.5 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-bold transition-colors shadow-sm">
+                                    Upgrade Now
+                                </button>
+                            </div>
+
+                            {/* Card 3: VIP */}
+                            <div className="relative bg-slate-900 rounded-2xl p-6 flex flex-col shadow-2xl border border-slate-700 transform transition-transform hover:-translate-y-1">
+                                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-teal-400 to-teal-500 text-slate-900 text-[10px] sm:text-xs font-black px-4 py-1 rounded-full shadow-md tracking-wide whitespace-nowrap">
+                                    ULTIMATE VALUE
+                                </div>
+                                <h3 className="text-xl font-black text-white mb-2 mt-2">Studio Pro VIP</h3>
+                                <p className="text-sm text-slate-400 mb-4 h-10">All exclusive tools + VIP access.</p>
+                                
+                                <div className="min-h-[100px] flex flex-col justify-center">
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-4xl font-black text-white">₱8,999</span>
+                                        <span className="text-sm font-semibold text-slate-400">/ once</span>
+                                    </div>
+                                    <div className="h-8 mt-2" />
+                                </div>
+                                
+                                <ul className="space-y-3 mb-8 mt-4 flex-grow">
+                                    {[
+                                        "Everything in Lifetime",
+                                        "Access to ALL Exclusive Generators",
+                                        "VIP Discord Role & Channel",
+                                        "Direct designer requests"
+                                    ].map((feature, i) => (
+                                        <li key={i} className="flex items-start gap-2 text-sm text-slate-300 font-medium">
+                                            <Checkmark /> <span>{feature}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <button onClick={() => handlePurchaseClick('vip')} className="w-full py-3.5 bg-teal-500 hover:bg-teal-400 text-slate-900 rounded-xl font-black transition-colors shadow-[0_0_20px_rgba(20,184,166,0.3)]">
+                                    Upgrade Now
+                                </button>
+                            </div>
+
                         </div>
                         
-                        <div className="mt-8 text-center border-t border-gray-200 pt-6">
+                        <div className="mt-8 text-center pt-6 space-y-4">
+                            <button onClick={() => handlePurchaseClick('single_exclusive')} className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors underline decoration-gray-300 underline-offset-4">
+                                Want a single exclusive generator? Buy one for ₱2,999
+                            </button>
+                            <br />
                             <button
                                 onClick={() => setIsActivatingView(true)}
-                                className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors">
+                                className="text-sm font-bold text-teal-600 hover:text-teal-700 transition-colors">
                                 I already have a license key
                             </button>
                         </div>

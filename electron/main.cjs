@@ -90,18 +90,26 @@ function createWindow() {
         },
         autoHideMenuBar: true,
         frame: true,
-        show: true, // Show immediately to avoid silent failures
+        // FIX: Start hidden to prevent white flash before React hydrates.
+        // The 'ready-to-show' event fires once the renderer is painted.
+        show: false,
+        backgroundColor: '#f0f4f8',
+    });
+
+    // Show the window only after the renderer is fully painted — eliminates FOUC.
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show();
+        mainWindow.focus();
     });
 
     // ── Production DevTools lockout ──────────────────────────────────────────
     if (!isDev) {
-        // TEMPORARILY DISABLED FOR UPDATER DEBUGGING
-        /*
+        // Hard-lock DevTools in production — prevents users from inspecting internals.
         mainWindow.webContents.on("devtools-opened", () => {
             mainWindow.webContents.closeDevTools();
         });
-        */
-        // Disable right-click context menu in production
+
+        // Disable native right-click browser context menu in production.
         mainWindow.webContents.on("context-menu", (e) => {
             e.preventDefault();
         });
@@ -133,8 +141,10 @@ function createWindow() {
         });
     }
 
-    // FORCE DEVTOOLS OPEN IN PRODUCTION
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    // Open DevTools in development only — never in production.
+    if (isDev) {
+        mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
 
     mainWindow.on("closed", () => {
         mainWindow = null;
@@ -260,6 +270,10 @@ if (!gotTheLock) {
             if (BrowserWindow.getAllWindows().length === 0) {
                 log.info("App activated with no windows. Recreating window...");
                 createWindow();
+            } else if (mainWindow) {
+                // macOS: Restore minimized window when clicking the dock icon.
+                if (mainWindow.isMinimized()) mainWindow.restore();
+                mainWindow.focus();
             }
         });
 
@@ -309,6 +323,8 @@ ipcMain.handle("check-license", () => {
         activated: result.activated,
         entitlements: result.entitlements,
         reason: result.reason,
+        expiresAt: result.expires_at ?? null,
+        plan_type: result.plan_type,
     };
 });
 
@@ -709,6 +725,46 @@ ipcMain.handle("sync-thumbnails", async (event, editors) => {
 
     store.set('thumbnailHashes', updatedHashes);
     return { success: true, downloadedCount };
+});
+
+// ─── IPC: Native Save Dialog for 3D Exports ──────────────────────────────────
+/**
+ * Shows a native OS "Save As" dialog and writes the file buffer to the chosen path.
+ * Replaces the browser-style `file-saver` approach so users can choose their
+ * destination folder — the behaviour expected in every desktop 3D tool.
+ *
+ * @param {{ defaultName: string, filterName: string, extension: string, fileData?: string | Uint8Array }} payload
+ * @returns {{ success: boolean, filePath?: string }}
+ */
+ipcMain.handle('save-file-dialog', async (event, { defaultName, filterName, extension, fileData }) => {
+    try {
+        const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+            title: 'Export 3D Model',
+            defaultPath: path.join(app.getPath('documents'), defaultName),
+            filters: [
+                { name: filterName, extensions: [extension] },
+                { name: 'All Files', extensions: ['*'] },
+            ],
+        });
+
+        if (canceled || !filePath) {
+            return { success: false, reason: 'canceled' };
+        }
+
+        let buffer;
+        if (typeof fileData === 'string') {
+            buffer = Buffer.from(fileData, 'utf-8');
+        } else if (fileData) {
+            buffer = Buffer.from(fileData);
+        }
+        
+        fs.writeFileSync(filePath, buffer);
+        log.info(`[save-file-dialog] Saved: ${filePath}`);
+        return { success: true, filePath };
+    } catch (err) {
+        log.error('[save-file-dialog] Failed:', err);
+        return { success: false, error: err.message };
+    }
 });
 
 // ─── IPC: Open in Slicer (Mass Produce) ──────────────────────────────────────

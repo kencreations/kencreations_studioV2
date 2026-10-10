@@ -174,7 +174,7 @@ async function syncEntitlements(licenseKey, hwid, mainWindow) {
     if (!data) return;
 
     // Check if revoked
-    if (data.status === 'revoked' || data.status === 'expired') {
+    if (data.status !== 'active' || data.disabled === true || data.revoked === true || (data.hwid && data.hwid !== hwid) || (data.expiresAt && (!Number.isFinite(Date.parse(data.expiresAt)) || Date.parse(data.expiresAt) <= Date.now()))) {
       console.warn('[syncWorker] License revoked/expired on server. Locking app.');
       db.clearLicenseState();
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -186,11 +186,14 @@ async function syncEntitlements(licenseKey, hwid, mainWindow) {
     const localState = db.getLicenseState();
     if (!localState) return;
 
+    const expiryChanged = (data.expiresAt ?? null) !== (localState.expiresAt ?? null);
+    if (expiryChanged) db.updateLicenseExpiry(data.expiresAt);
+
     const remoteEntitlements = data.entitlements || [];
     const remoteEntJson = JSON.stringify(remoteEntitlements.sort());
     const remoteHash = require('crypto').createHash('sha256').update(remoteEntJson).digest('hex');
 
-    if (remoteHash !== localState.entitlementsHash) {
+    if (remoteHash !== localState.entitlementsHash || expiryChanged) {
       console.log('[syncWorker] Entitlement change detected. Updating local DB...');
       db.updateEntitlements(remoteEntitlements);
 

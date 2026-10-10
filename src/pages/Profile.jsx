@@ -373,7 +373,7 @@ export default function Profile() {
                             </div>
                             {!license.activated && (
                                 <Link
-                                    to="/"
+                                    to={!!window.electronAPI ? "/" : "/app"}
                                     className="bg-gray-900 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-colors">
                                     Upgrade Now
                                 </Link>

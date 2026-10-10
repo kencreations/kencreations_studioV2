@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 
-const SECRET_KEY = "kencreations_secret_license_key_2026"; // Must match the secret in the app
+// Legacy administration utility only. Never bundle a signing secret in a client.
+const SECRET_KEY = process.env.KENCREATIONS_LEGACY_SIGNING_SECRET;
+if (!SECRET_KEY) {
+    console.error('Set KENCREATIONS_LEGACY_SIGNING_SECRET in your local environment.');
+    process.exit(1);
+}
 
 const hwid = process.argv[2];
 

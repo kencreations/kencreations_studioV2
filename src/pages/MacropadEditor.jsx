@@ -8,6 +8,11 @@ import { useMacropadWorker } from "../hooks/useMacropadWorker";
 import { MACROPAD_DEFAULTS } from "../store/appState";
 import { HistoryControls } from "../components/HistoryControls";
 import { useHistoryState } from "../hooks/useHistoryState";
+import TemplateManager from "../components/TemplateManager";
+import PrinterSelector from "../components/PrinterSelector";
+import { useFilamentBrands } from "../hooks/useFilamentBrands";
+import { useProfile } from "../contexts/ProfileContext";
+import { ControlColorPicker } from "../components/UI/EditorControls";
 
 // UI Helpers
 function Slider({ label, value, min, max, step, onChange }) {
@@ -154,6 +159,21 @@ function MacropadModel({ parts, onBoundsCalculated }) {
 }
 
 export default function MacropadEditor() {
+    const { brands: cloudColors } = useFilamentBrands();
+    const { customColors } = useProfile();
+    const colorOptions = useMemo(() => {
+        const merged = [];
+        Object.entries(cloudColors || {}).forEach(([brand, brandColors]) => {
+            brandColors.forEach((color) => {
+                merged.push({ label: color.name, value: color.hex, hex: color.hex, group: brand });
+            });
+        });
+        (customColors || []).forEach((color) => {
+            merged.push({ label: color.color_name, value: color.hex_code, hex: color.hex_code, group: color.brand || "Custom" });
+        });
+        return merged;
+    }, [cloudColors, customColors]);
+
     const [state, setState, { undo, redo, reset, canUndo, canRedo }] = useHistoryState({
         rows: MACROPAD_DEFAULTS.rows,
         columns: MACROPAD_DEFAULTS.columns,
@@ -214,8 +234,14 @@ export default function MacropadEditor() {
                 <h2 className="text-sm font-black tracking-widest">MACROPAD EDITOR</h2>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
+                <PrinterSelector />
+                <TemplateManager 
+                    editorId="macropad" 
+                    currentSettings={state} 
+                    onLoadTemplate={(s) => setState(prev => ({...prev, ...s}))} 
+                />
                 <div className="flex items-center justify-between mb-4">
-                    <Link to="/" className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1">
+                    <Link to={!!window.electronAPI ? "/" : "/app"} className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1">
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                         Back
                     </Link>
@@ -279,6 +305,14 @@ export default function MacropadEditor() {
                             <Slider label="Slide Offset" value={keychainSlideOffset} min={-20} max={20} step={1} onChange={setKeychainSlideOffset} />
                         </div>
                     )}
+                </AccordionSection>
+                <AccordionSection number="4" title="Colors">
+                    <ControlColorPicker
+                        label="Shell Color"
+                        value={shellColor}
+                        onChange={setShellColor}
+                        options={colorOptions}
+                    />
                 </AccordionSection>
             </div>
         </div>

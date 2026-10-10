@@ -1,0 +1,50 @@
+// PROPOSAL ONLY. Not referenced by the production firebase.json.
+// Requires trusted provisioning of the admin custom claim, account-owned licenses,
+// and authenticated desktop requests before deployment. See FIREBASE-SECURITY.md.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function admin() { return signedIn() && request.auth.token.get('admin', false) == true; }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    match /licenses/{licenseId} {
+      allow read: if admin() || (signedIn() && resource.data.claimedByUid == request.auth.uid);
+      allow create, delete: if admin();
+      allow update: if admin() || (
+        signedIn() && resource.data.claimedByUid == request.auth.uid &&
+        resource.data.status == 'active' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastSyncAt']) &&
+        request.resource.data.lastSyncAt == request.time
+      );
+    }
+    match /users/{uid} {
+      allow read: if owner(uid) || admin();
+      allow create: if owner(uid) &&
+        request.resource.data.keys().hasOnly(['displayName', 'email', 'photoURL', 'points', 'tier', 'totalExports', 'joinedAt']) &&
+        request.resource.data.points == 0 && request.resource.data.totalExports == 0 &&
+        request.resource.data.tier == 'maker' && request.resource.data.joinedAt == request.time;
+      allow update: if admin() || (owner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'customColors']));
+      allow delete: if admin();
+      match /pointHistory/{entry} { allow read: if owner(uid) || admin(); allow write: if admin(); }
+      match /filaments/{entry} { allow read, write: if owner(uid) || admin(); }
+      match /consumables/{entry} { allow read, write: if owner(uid) || admin(); }
+      match /printer_profiles/{entry} { allow read, write: if owner(uid) || admin(); }
+      match /cost_estimates/{entry} { allow read, write: if owner(uid) || admin(); }
+      match /print_jobs/{entry} { allow read, write: if owner(uid) || admin(); }
+      match /quotations/{entry} { allow read, write: if owner(uid) || admin(); }
+      match /sales/{entry} { allow read, write: if owner(uid) || admin(); }
+      match /inventory_movements/{entry} { allow read, write: if owner(uid) || admin(); }
+      match /studio_settings/{entry} { allow read, write: if owner(uid) || admin(); }
+    }
+    match /generators/{id} { allow read: if true; allow write: if admin(); }
+    match /generators/{id}/export_events/{event} { allow read, write: if admin(); }
+    match /app_config/{document=**} { allow read: if true; allow write: if admin(); }
+    match /app_settings/{document=**} { allow read: if true; allow write: if admin(); }
+    match /updates/{document=**} { allow read: if true; allow write: if admin(); }
+    match /notifications/{document=**} { allow read, write: if admin(); }
+    match /telemetry/{document=**} { allow read, write: if admin(); }
+    match /trial_users/{document=**} { allow read, write: if admin(); }
+    // No authenticated-user catch-all. Unlisted app collections need explicit review.
+    match /{document=**} { allow read, write: if admin(); }
+  }
+}

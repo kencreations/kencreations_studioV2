@@ -1,3 +1,4 @@
+import { useAccess } from "../contexts/AccessContext";
 import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
@@ -43,29 +44,37 @@ export default function EditorLayout({
     children,
     canvasFooter,
     onExportSTL,
-    backLink = "/",
+    backLink = !!window.electronAPI ? "/" : "/app",
     topBarActions,
 }) {
-    const { exportsLeft, loadingTrial, isLicensed } = useSecureTrial() || {};
+    const { exportsLeft, loadingTrial } = useSecureTrial() || {};
+    const { hasActiveLicense: isLicensed } = useAccess();
     const isDesktop = !!window.electronAPI;
 
     return (
-        <div className="flex h-screen w-screen flex-col bg-[#f0f4f8] font-sans">
-            <nav className="z-10 flex items-center justify-between bg-white px-6 py-3.5 shadow-sm drop-shadow-xl">
-                <div className="flex items-center space-x-4">
+        <div className="flex h-screen w-screen flex-col bg-[#f8f9fc] font-sans">
+            <nav
+                className="z-10 flex items-center justify-between bg-white px-6 py-3.5 shadow-sm border-b border-gray-100"
+                style={{ WebkitAppRegion: 'drag' }}
+            >
+                <div className="flex items-center space-x-4" style={{ WebkitAppRegion: 'no-drag' }}>
                     <Link
                         to={backLink}
-                        className="flex items-center text-xl font-black tracking-tighter">
-                        <span className="text-teal-500">K</span>
-                        <span className="text-orange-500">C</span>
-                        <span className="ml-2 text-lg font-bold tracking-normal text-gray-800">
-                            KENCREATIONS
+                        className="flex items-center gap-2 cursor-pointer">
+                        <span className="text-xl text-teal-600 bg-teal-50 px-2 py-1 rounded-lg font-bold">
+                            K
+                        </span>
+                        <span className="text-lg font-bold tracking-tight text-gray-900">
+                            KenCreations
                         </span>
                     </Link>
                 </div>
 
                 {isDesktop && !isLicensed && (
-                    <div className="flex items-center space-x-3 text-sm font-medium text-gray-600">
+                    <div
+                        className="flex items-center space-x-3 text-sm font-medium text-gray-600"
+                        style={{ WebkitAppRegion: 'no-drag' }}
+                    >
                         <span className="mr-1 text-xs font-semibold text-gray-500">
                             {loadingTrial
                                 ? "Trial Active — Checking..."
@@ -93,34 +102,44 @@ export default function EditorLayout({
                 )}
             </nav>
 
-            <main className="flex w-full flex-1 gap-4 overflow-hidden p-4">
-                <aside className="flex min-w-[320px] max-w-[420px] flex-col overflow-hidden rounded-2xl border border-secondary bg-white shadow-md">
-                    <div className="border-b border-secondary/20 bg-secondary px-4 py-3">
+            <main className="flex w-full min-h-0 flex-1 flex-col md:flex-row gap-4 p-2 md:p-4 overflow-auto md:overflow-hidden">
+                {/* Sidebar */}
+                <aside className="flex w-full md:w-[320px] h-[40vh] md:h-auto shrink-0 flex-col overflow-hidden rounded-2xl bg-white border border-gray-200 shadow-[0_2px_12px_rgba(0,0,0,0.04)] z-10">
+                    <div className="border-b border-gray-100 bg-white px-5 py-4">
                         <div className="flex items-center justify-between gap-3">
-                            <span className="text-sm font-black uppercase tracking-[0.2em] text-white">
-                                {title}
-                            </span>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-teal-600 mb-0.5">
+                                    Designer
+                                </span>
+                                <span className="text-base font-black text-gray-900 leading-tight">
+                                    {title}
+                                </span>
+                            </div>
                             <div className="flex gap-2 items-center">
                                 {topBarActions}
                                 <Link
-                                    to="/"
-                                    className="inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-white transition-colors hover:bg-white/20">
-                                    <ArrowLeft className="w-3.5 h-3.5" /> Back to Studio
+                                    to={backLink}
+                                    className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                                    title="Back to Studio">
+                                    <ArrowLeft size={18} strokeWidth={2.5} />
                                 </Link>
                             </div>
                         </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 min-w-0">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-5 min-w-0">
                         {sidebarContent}
                     </div>
                 </aside>
 
-                <section className="relative flex flex-1 flex-col overflow-hidden rounded-2xl border border-secondary bg-[#fff4f8] shadow-md">
+                {/* 3D Viewport Area */}
+                <section className="relative flex min-h-[360px] md:min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 shadow-inner">
                     <div className="relative min-h-0 flex-1">
                         <SceneErrorBoundary>{children}</SceneErrorBoundary>
                     </div>
+                    
+                    {/* Floating Tools */}
                     {canvasFooter && (
-                        <div className="flex-shrink-0 border-t border-secondary/20 bg-white/80 backdrop-blur-sm">
+                        <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 z-20 flex items-center gap-2 p-2 rounded-2xl bg-white/80 backdrop-blur-xl border border-gray-200 shadow-xl">
                             {canvasFooter}
                         </div>
                     )}

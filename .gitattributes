@@ -1,0 +1,2 @@
+# Keep the shell hook runnable when checking out on Windows or Unix.
+.githooks/* text eol=lf

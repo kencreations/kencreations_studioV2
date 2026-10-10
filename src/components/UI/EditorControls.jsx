@@ -1,23 +1,23 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import FontUploader from "./FontUploader";
 
 export function SidebarSection({ title, icon, children }) {
     const Icon = icon;
 
     return (
-        <div className="rounded-2xl bg-white shadow-[0_1px_0_rgba(15,23,42,0.02)]">
-            <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-[#00A3A3]/10 text-[#00A3A3]">
+        <div className="rounded-xl bg-white mb-6">
+            <div className="mb-4 flex items-center gap-2 border-b border-gray-100 pb-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-teal-50 text-teal-600">
                     {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
                 </div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#00A3A3]">
+                <span className="text-[11px] font-bold uppercase tracking-[0.15em] text-gray-900">
                     {title}
                 </span>
             </div>
 
-            <div className="ml-3 border-l-2 border-secondary pl-3">
-                <div className="space-y-3">{children}</div>
+            <div className="ml-1 pl-1">
+                <div className="space-y-4">{children}</div>
             </div>
-            <hr className="my-3 border-secondary opacity-30" />
         </div>
     );
 }
@@ -27,7 +27,7 @@ export function ControlInput({ label, value, onChange, placeholder }) {
 
     return (
         <label className="block space-y-1.5">
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-secondary">
+            <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">
                 {label}
             </span>
             <input
@@ -35,7 +35,7 @@ export function ControlInput({ label, value, onChange, placeholder }) {
                 value={safeValue}
                 onChange={(event) => onChange?.(event)}
                 placeholder={placeholder}
-                className="w-full rounded-xl border border-secondary bg-slate-50 px-3 py-2.5 text-sm text-primary outline-none transition-all placeholder:text-slate-400 focus:border-[#00A3A3] focus:bg-white focus:ring-2 focus:ring-[#00A3A3]/20"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-[#14b8a6] focus:bg-white focus:ring-2 focus:ring-[#14b8a6]/20 shadow-sm"
             />
         </label>
     );
@@ -49,6 +49,7 @@ export function ControlSlider({
     step,
     unit,
     onChange,
+    disabled = false,
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const [tempValue, setTempValue] = useState(value);
@@ -109,7 +110,7 @@ export function ControlSlider({
     return (
         <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-                <span className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-secondary">
+                <span className="truncate text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">
                     {label}
                 </span>
 
@@ -123,9 +124,9 @@ export function ControlSlider({
                             onChange={handleInputChange}
                             onBlur={handleCommit}
                             onKeyDown={handleKeyDown}
-                            className="w-14 rounded-md border border-[#00A3A3] bg-white px-1 py-0.5 text-right text-[10px] font-bold text-[#FF6B00] outline-none shadow-sm"
+                            className="w-14 rounded-md border border-[#14b8a6] bg-white px-1 py-0.5 text-right text-[10px] font-bold text-gray-900 outline-none shadow-sm"
                         />
-                        <span className="text-[10px] font-semibold text-slate-400">
+                        <span className="text-[10px] font-semibold text-gray-400">
                             {unit}
                         </span>
                     </div>
@@ -133,7 +134,7 @@ export function ControlSlider({
                     <span
                         onDoubleClick={() => setIsEditing(true)}
                         title="Double-click to edit exact value"
-                        className="inline-flex cursor-text items-center rounded-full border border-secondary bg-slate-50 px-2 py-1 text-[10px] font-semibold text-[#FF6B00] transition-colors hover:border-[#00A3A3]">
+                        className="inline-flex cursor-text items-center rounded-md bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-700 transition-colors hover:bg-teal-50 hover:text-[#14b8a6]">
                         {value} {unit}
                     </span>
                 )}
@@ -146,7 +147,8 @@ export function ControlSlider({
                 step={step}
                 value={value}
                 onChange={(e) => onChange(Number(e.target.value))}
-                className="h-2 w-full cursor-pointer rounded-full bg-secondary/30 accent-[#FF6B00]"
+                disabled={disabled}
+                className={`h-1.5 w-full cursor-pointer appearance-none rounded-full ${disabled ? 'bg-gray-200 accent-gray-400 opacity-50 cursor-not-allowed' : 'bg-gray-200 accent-[#14b8a6]'}`}
             />
         </div>
     );
@@ -199,27 +201,30 @@ export function ControlSelect({ label, value, onChange, options, prefixType }) {
 
     return (
         <div className="space-y-1.5" ref={dropdownRef}>
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-secondary">
-                {label}
-            </span>
+            <div className="flex justify-between items-center pr-1">
+                <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">
+                    {label}
+                </span>
+                {prefixType === "font" && <FontUploader onFontAdded={(id) => onChange(id)} />}
+            </div>
 
             <div className="relative">
                 <button
                     type="button"
                     onClick={() => setIsOpen((prev) => !prev)}
-                    className={`flex w-full items-center justify-between rounded-xl border border-secondary bg-slate-50 px-3 py-2.5 text-sm transition-all ${
+                    className={`flex w-full items-center justify-between rounded-xl border bg-gray-50 px-3 py-2.5 text-sm transition-all shadow-sm ${
                         isOpen
-                            ? "border-[#00A3A3] bg-white ring-2 ring-[#00A3A3]/20"
-                            : "border-slate-200 hover:border-slate-300"
+                            ? "border-[#14b8a6] bg-white ring-2 ring-[#14b8a6]/20"
+                            : "border-gray-200 hover:border-gray-300"
                     }`}>
                     <div className="flex items-center gap-2 truncate">
                         {prefixType === "font" ? (
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-slate-200/50 text-[10px] font-bold text-slate-600">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gray-200/50 text-[10px] font-bold text-gray-600">
                                 Aa
                             </span>
                         ) : prefixType === "color" ? (
                             <span
-                                className="h-4 w-4 shrink-0 rounded-full border border-slate-200 shadow-inner"
+                                className="h-4 w-4 shrink-0 rounded-full border border-gray-200 shadow-inner"
                                 style={{
                                     backgroundColor:
                                         selected?.hex ||
@@ -229,14 +234,14 @@ export function ControlSelect({ label, value, onChange, options, prefixType }) {
                             />
                         ) : null}
 
-                        <span className="truncate font-medium text-[#FF6B00]">
+                        <span className="truncate font-medium text-gray-900">
                             {selected?.label || "Select"}
                         </span>
                     </div>
 
                     <div
-                        className={`shrink-0 text-slate-400 text-secondary transition-transform ${
-                            isOpen ? "rotate-180" : ""
+                        className={`shrink-0 text-gray-400 transition-transform ${
+                            isOpen ? "rotate-180 text-[#14b8a6]" : ""
                         }`}>
                         <svg
                             viewBox="0 0 20 20"
@@ -248,15 +253,15 @@ export function ControlSelect({ label, value, onChange, options, prefixType }) {
                 </button>
 
                 {isOpen && (
-                    <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-secondary bg-white shadow-xl">
+                    <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
                         {prefixType === "font" && (
-                            <div className="border-b border-slate-100 bg-slate-50/50 p-2">
+                            <div className="border-b border-gray-100 bg-gray-50/50 p-2">
                                 <input
                                     type="text"
                                     placeholder="Search fonts..."
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 outline-none transition-all placeholder:text-slate-400 focus:border-[#00A3A3] focus:ring-1 focus:ring-[#00A3A3]"
+                                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 outline-none transition-all placeholder:text-gray-400 focus:border-[#14b8a6] focus:ring-1 focus:ring-[#14b8a6]"
                                     autoFocus
                                 />
                             </div>
@@ -273,8 +278,8 @@ export function ControlSelect({ label, value, onChange, options, prefixType }) {
                                         }
                                         className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
                                             option.value === value
-                                                ? "bg-[#00A3A3]/10 font-bold text-[#00A3A3]"
-                                                : "font-medium text-slate-600 hover:bg-slate-50"
+                                                ? "bg-teal-50 font-bold text-[#14b8a6]"
+                                                : "font-medium text-gray-600 hover:bg-gray-50"
                                         }`}>
                                         {prefixType === "color" && (
                                             <span
@@ -307,7 +312,7 @@ export function ControlSelect({ label, value, onChange, options, prefixType }) {
 export function ControlToggle({ label, checked, onChange }) {
     return (
         <div className="flex items-center justify-between gap-3">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-secondary">
+            <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">
                 {label}
             </span>
             <button
@@ -316,8 +321,8 @@ export function ControlToggle({ label, checked, onChange }) {
                 onClick={() => onChange(!checked)}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     checked
-                        ? "bg-primary"
-                        : "bg-secondary/30 hover:bg-secondary/70"
+                        ? "bg-[#14b8a6]"
+                        : "bg-gray-200 hover:bg-gray-300"
                 }`}>
                 <span
                     className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
@@ -438,7 +443,7 @@ export function ControlColorPicker({ label, value, onChange, options }) {
 
     return (
         <div className="space-y-1.5" ref={dropdownRef}>
-            <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-secondary">
+            <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-gray-500">
                 {label}
             </span>
 
@@ -446,14 +451,14 @@ export function ControlColorPicker({ label, value, onChange, options }) {
                 <button
                     type="button"
                     onClick={() => setIsOpen((prev) => !prev)}
-                    className={`flex w-full items-center justify-between rounded-xl border border-secondary bg-slate-50 px-3 py-2.5 text-sm transition-all ${
+                    className={`flex w-full items-center justify-between rounded-xl border bg-gray-50 px-3 py-2.5 text-sm transition-all shadow-sm ${
                         isOpen
-                            ? "border-[#00A3A3] bg-white ring-2 ring-[#00A3A3]/20"
-                            : "border-slate-200 hover:border-slate-300"
+                            ? "border-[#14b8a6] bg-white ring-2 ring-[#14b8a6]/20"
+                            : "border-gray-200 hover:border-gray-300"
                     }`}>
                     <div className="flex items-center gap-2 truncate">
                         <span
-                            className="h-4 w-4 shrink-0 rounded-md border border-slate-200 shadow-sm"
+                            className="h-4 w-4 shrink-0 rounded-md border border-gray-200 shadow-sm"
                             style={{
                                 backgroundColor:
                                     selected?.hex ||
@@ -467,14 +472,14 @@ export function ControlColorPicker({ label, value, onChange, options }) {
                                     "#dfe7e7",
                             }}
                         />
-                        <span className="truncate font-medium text-[#FF6B00]">
+                        <span className="truncate font-medium text-gray-900">
                             {selected?.label || value || "Select"}
                         </span>
                     </div>
 
                     <div
-                        className={`shrink-0 text-slate-400 text-secondary transition-transform ${
-                            isOpen ? "rotate-180" : ""
+                        className={`shrink-0 text-gray-400 transition-transform ${
+                            isOpen ? "rotate-180 text-[#14b8a6]" : ""
                         }`}>
                         <svg
                             viewBox="0 0 20 20"
@@ -486,16 +491,16 @@ export function ControlColorPicker({ label, value, onChange, options }) {
                 </button>
 
                 {isOpen && (
-                    <div className="absolute left-0 right-0 z-50 mt-1.5 overflow-y-auto rounded-xl border border-secondary bg-white shadow-xl p-3 max-h-[480px]">
-                        <div className="flex gap-4 mb-4 border-b pb-2 border-secondary/20 overflow-x-auto custom-scrollbar">
+                    <div className="absolute left-0 right-0 z-50 mt-1.5 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl p-3 max-h-[480px]">
+                        <div className="flex gap-4 mb-4 border-b pb-2 border-gray-100 overflow-x-auto custom-scrollbar">
                             {Object.keys(groupedOptions).map((groupName) => (
                                 <button
                                     key={groupName}
                                     onClick={() => setSelectedGroup(groupName)}
                                     className={`pb-1 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors ${
                                         selectedGroup === groupName
-                                            ? "text-[#FF6B00] border-b-2 border-[#FF6B00]"
-                                            : "text-slate-400 hover:text-slate-600"
+                                            ? "text-[#14b8a6] border-b-2 border-[#14b8a6]"
+                                            : "text-gray-400 hover:text-gray-600"
                                     }`}>
                                     {groupName === "BambuLab"
                                         ? "Bambu Lab"
@@ -517,7 +522,7 @@ export function ControlColorPicker({ label, value, onChange, options }) {
                                             }}
                                             className={`aspect-square w-full rounded-md shadow-sm transition-transform hover:scale-110 ${
                                                 isSelected
-                                                    ? "ring-2 ring-[#FF6B00] ring-offset-1"
+                                                    ? "ring-2 ring-[#14b8a6] ring-offset-1"
                                                     : "border border-black/10"
                                             }`}
                                             style={{
@@ -527,7 +532,7 @@ export function ControlColorPicker({ label, value, onChange, options }) {
                                             title={color.label}
                                         />
                                         <span
-                                            className="mt-1.5 w-full truncate text-center text-[0.6rem] font-medium text-slate-500"
+                                            className="mt-1.5 w-full truncate text-center text-[0.6rem] font-medium text-gray-500"
                                             title={color.label}>
                                             {color.label}
                                         </span>
@@ -537,7 +542,7 @@ export function ControlColorPicker({ label, value, onChange, options }) {
                         </div>
                         <button
                             onClick={() => setIsOpen(false)}
-                            className="mt-4 w-full text-xs text-white bg-[#FF6B00] py-2 rounded-lg hover:bg-[#e66000] transition-colors font-bold shadow-sm">
+                            className="mt-4 w-full text-xs text-white bg-gray-900 py-2 rounded-lg hover:bg-black transition-colors font-bold shadow-sm">
                             Close
                         </button>
                     </div>

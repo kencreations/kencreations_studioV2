@@ -9,7 +9,6 @@ import * as THREE from "three";
 import { useLoader } from "@react-three/fiber";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { Palette, CircleDashed, Type } from "lucide-react";
-import { Geometry as CSG, Base, Subtraction } from "@react-three/csg";
 import { Text3D, Center } from "@react-three/drei";
 import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
@@ -27,8 +26,11 @@ import TemplateManager from "../components/TemplateManager";
 import { useHistoryState } from "../hooks/useHistoryState";
 import { HistoryControls } from "../components/HistoryControls";
 import { useProfile } from "../contexts/ProfileContext";
+import { useFontStore } from "../hooks/useFontStore";
 import { useFilamentBrands } from "../hooks/useFilamentBrands";
 import { load3DFontJson } from "../utils/fontManager";
+import SmartCSGBase from "../components/3D/Shared/SmartCSGBase";
+import PrinterSelector from "../components/PrinterSelector";
 
 const getAssetPath = (path) => {
     if (!path) return path;
@@ -97,90 +99,20 @@ function WhistleModel({ state, setDims }) {
 
     return (
         <group position={[0, 0, 0.5]}>
-            {/* The main whistle CSG mesh */}
-            <mesh castShadow receiveShadow>
-                <CSG>
-                    {/* The base whistle geometry */}
-                    <Base geometry={whistleGeo} />
-
-                    {/* Circle Hole */}
-                    {state.holeShape === "circle" && (
-                        <Subtraction
-                            position={[state.holeXOffset, state.holeYOffset, 0]}
-                            rotation={[Math.PI / 2, 0, 0]}>
-                            <cylinderGeometry
-                                args={[
-                                    state.holeSize / 2,
-                                    state.holeSize / 2,
-                                    20,
-                                    32,
-                                ]}
-                            />
-                        </Subtraction>
-                    )}
-
-                    {/* True Slot Hole */}
-                    {state.holeShape === "slot" && (
-                        <>
-                            {/* Top Circle */}
-                            <Subtraction
-                                position={[
-                                    state.holeXOffset,
-                                    state.holeYOffset + state.slotLength / 2,
-                                    0,
-                                ]}
-                                rotation={[Math.PI / 2, 0, 0]}>
-                                <cylinderGeometry
-                                    args={[
-                                        state.holeSize / 2,
-                                        state.holeSize / 2,
-                                        20,
-                                        32,
-                                    ]}
-                                />
-                            </Subtraction>
-
-                            {/* Bottom Circle */}
-                            <Subtraction
-                                position={[
-                                    state.holeXOffset,
-                                    state.holeYOffset - state.slotLength / 2,
-                                    0,
-                                ]}
-                                rotation={[Math.PI / 2, 0, 0]}>
-                                <cylinderGeometry
-                                    args={[
-                                        state.holeSize / 2,
-                                        state.holeSize / 2,
-                                        20,
-                                        32,
-                                    ]}
-                                />
-                            </Subtraction>
-
-                            {/* Middle Box connecting the circles */}
-                            <Subtraction
-                                position={[
-                                    state.holeXOffset,
-                                    state.holeYOffset,
-                                    0,
-                                ]}
-                                // No rotation needed. X = width, Y = span length, Z = punch depth
-                            >
-                                <boxGeometry
-                                    args={[
-                                        state.holeSize,
-                                        state.slotLength,
-                                        20,
-                                    ]}
-                                />
-                            </Subtraction>
-                        </>
-                    )}
-                </CSG>
-                {/* Explicitly add a material so it renders! */}
-                <meshStandardMaterial color={state.baseColor} />
-            </mesh>
+            {whistleGeo && (
+                <SmartCSGBase
+                    customGeometry={whistleGeo}
+                    disableAutoCenter={true}
+                    color={state.baseColor}
+                    holeShape={state.holeShape}
+                    holeOrientation="vertical"
+                    holeDiameter={state.holeSize}
+                    holeXOffset={state.holeXOffset}
+                    holeYOffset={state.holeYOffset}
+                    holeZOffset={0}
+                    slotLength={state.slotLength}
+                />
+            )}
 
             {/* Dynamic Text Lines */}
             {(state.texts || []).map((line) => {
@@ -208,7 +140,8 @@ function WhistleModel({ state, setDims }) {
 }
 
 export default function WhistleBagtagEditor() {
-    const { allFonts, customColors } = useProfile();
+    const { customColors } = useProfile();
+    const { allFonts } = useFontStore();
     const { brands: cloudColors } = useFilamentBrands();
     const defaultFont = allFonts?.[0] || null;
     const [dims, setDims] = useState(null);
@@ -335,6 +268,7 @@ export default function WhistleBagtagEditor() {
     // Sidebar UI
     const sidebar = (
         <div className="space-y-6">
+            <PrinterSelector />
             <TemplateManager
                 editorId="whistle-bagtag"
                 currentSettings={state}
