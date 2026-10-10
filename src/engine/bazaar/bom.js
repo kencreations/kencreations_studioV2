@@ -103,36 +103,56 @@ export function decomposeProductBOM({
             }
         }
 
-        // B. Casing Base (1 casing per clicker)
+        // B. Icon Cap Components (if customer chose icon keycaps)
+        if (Array.isArray(customization.icon_caps) && customization.icon_caps.length > 0) {
+            for (const ic of customization.icon_caps) {
+                const iconId = ic.icon || ic.id || "heart";
+                const iconColor = ic.color || defaultColor;
+                const iconQty = Math.max(1, Number(ic.count || ic.qty || 1));
+                components.push({
+                    component_key: `cap_icon_${iconId}_${iconColor}`,
+                    item_type: "icon_cap",
+                    icon: iconId,
+                    color: iconColor,
+                    name: `Icon Cap [${ic.label || iconId}] (${iconColor})`,
+                    required_qty: iconQty * safeQty,
+                });
+            }
+        }
+
+        // C. Casing Base (1 casing per clicker)
+        const totalKeys = letterCount + (Array.isArray(customization.icon_caps) ? customization.icon_caps.length : 0);
         const casingStyle = customization.casing_style_id || "standard";
         const casingColor = customization.casing_color || "black";
         components.push({
-            component_key: `casing_${letterCount}key_${casingStyle}_${casingColor}`,
+            component_key: `casing_${totalKeys}key_${casingStyle}_${casingColor}`,
             item_type: "casing_base",
-            key_count: letterCount,
+            key_count: totalKeys,
             style: casingStyle,
             color: casingColor,
-            name: `${letterCount}-Key Casing [${casingStyle}] (${casingColor})`,
+            name: `${totalKeys}-Key Casing [${casingStyle}] (${casingColor})`,
             required_qty: 1 * safeQty,
         });
 
-        // C. Mechanical Switches (1 switch per letter)
+        // D. Mechanical Switches (1 switch per letter + icon)
         const switchType = customization.switch_type_id || "standard_blue";
+        const switchConsumableId = customization.switch_consumable_id || null;
         components.push({
             component_key: `switch_${switchType}`,
             item_type: "switch",
             switch_type: switchType,
-            name: `Cherry MX Switch (${switchType})`,
-            required_qty: letterCount * safeQty,
+            consumable_id: switchConsumableId,
+            name: customization.switch_name || `Cherry MX Switch (${switchType})`,
+            required_qty: totalKeys * safeQty,
         });
 
-        // D. Add-ons (e.g. ballchains, straps, boxes)
+        // E. Add-ons (e.g. ballchains, straps, boxes from consumables)
         if (Array.isArray(customization.selected_add_on_ids) && product.customization_schema?.add_ons) {
             for (const addOnId of customization.selected_add_on_ids) {
-                const addOnDef = product.customization_schema.add_ons.find((a) => a.id === addOnId);
+                const addOnDef = product.customization_schema.add_ons.find((a) => (a.id === addOnId || a.consumable_id === addOnId));
                 if (addOnDef) {
                     components.push({
-                        component_key: `addon_${addOnDef.id}`,
+                        component_key: `addon_${addOnDef.id || addOnDef.consumable_id}`,
                         item_type: "consumable",
                         item_id: addOnDef.consumable_id || addOnDef.id,
                         name: addOnDef.name,
@@ -151,8 +171,110 @@ export function decomposeProductBOM({
             component_key: `generic_${product.id}`,
             item_type: "product",
             item_id: product.id,
-            name: product.title,
+            name: product.name || product.title,
             required_qty: safeQty,
         },
     ];
+}
+
+/**
+ * Calculates authoritative unit production cost for a BOM based on linked Studio Hub filaments and consumables.
+ *
+ * @param {Array<Object>} bomComponents - Result from decomposeProductBOM
+ * @param {Object} studioCatalog
+ * @param {Array<Object>} [studioCatalog.filaments=[]] - Studio Hub filaments with cost_per_gram
+ * @param {Array<Object>} [studioCatalog.consumables=[]] - Studio Hub consumables with unit_cost
+ * @param {Object} [studioCatalog.defaults={}] - Fallback unit costs if not explicitly matched
+ * @returns {Object} Costing breakdown and total unit cost
+ */
+export function calculateBOMCost(bomComponents = [], {
+    filaments = [],
+    consumables = [],
+    defaults = { capCostPerGram: 1.0, capGrams: 1.2, casingGramsPerKey: 3.5, switchUnitCost: 8.5, defaultConsumableCost: 3.0 },
+} = {}) {
+    if (!Array.isArray(bomComponents)) return { totalCost: 0, items: [] };
+
+    let totalCost = 0;
+    const items = [];
+
+    // Lookup maps
+    const filamentColorMap = new Map();
+    for (const f of filaments) {
+        if (f.color_name) filamentColorMap.set(f.color_name.toLowerCase(), f);
+        if (f.color) filamentColorMap.set(f.color.toLowerCase(), f);
+        if (f.name) filamentColorMap.set(f.name.toLowerCase(), f);
+    }
+
+    const consumableIdMap = new Map();
+    for (const c of consumables) {
+        if (c.id) consumableIdMap.set(c.id, c);
+        if (c.name) consumableIdMap.set(c.name.toLowerCase(), c);
+    }
+
+    for (const comp of bomComponents) {
+        let unitCost = 0;
+        let matchedSource = "default";
+        const qty = comp.required_qty || comp.qty || 1;
+
+        if (comp.item_type === "letter_cap" || comp.item_type === "icon_cap") {
+            const colorLower = String(comp.color || "").toLowerCase();
+            const fil = filamentColorMap.get(colorLower);
+            const costPerGram = fil ? Number(fil.cost_per_gram) || defaults.capCostPerGram : defaults.capCostPerGram;
+            const grams = Number(comp.filament_grams || comp.grams || defaults.capGrams);
+            unitCost = costPerGram * grams;
+            matchedSource = fil ? `filament:${fil.name}` : (comp.item_type === "icon_cap" ? "estimated_icon_cap" : "estimated_cap");
+        } else if (comp.item_type === "casing_base") {
+            const colorLower = String(comp.color || "").toLowerCase();
+            const fil = filamentColorMap.get(colorLower);
+            const costPerGram = fil ? Number(fil.cost_per_gram) || defaults.capCostPerGram : defaults.capCostPerGram;
+            const keys = Number(comp.key_count || 3);
+            const grams = keys * (Number(comp.gramsPerKey || defaults.casingGramsPerKey));
+            unitCost = costPerGram * grams;
+            matchedSource = fil ? `filament:${fil.name}` : "estimated_casing";
+        } else if (comp.item_type === "switch") {
+            const con = (comp.consumable_id && consumableIdMap.get(comp.consumable_id)) || null;
+            if (con) {
+                unitCost = Number(con.unit_cost) || defaults.switchUnitCost;
+                matchedSource = `consumable:${con.name}`;
+            } else {
+                const swName = String(comp.switch_type || "").toLowerCase();
+                let matchedCon = null;
+                for (const [key, c] of consumableIdMap.entries()) {
+                    if (key.includes(swName) || key.includes("switch")) {
+                        matchedCon = c;
+                        break;
+                    }
+                }
+                unitCost = matchedCon ? Number(matchedCon.unit_cost) || defaults.switchUnitCost : defaults.switchUnitCost;
+                matchedSource = matchedCon ? `consumable:${matchedCon.name}` : "default_switch";
+            }
+        } else if (comp.item_type === "consumable" || comp.item_type === "addon") {
+            const con = (comp.consumable_id && consumableIdMap.get(comp.consumable_id)) ||
+                        consumableIdMap.get(comp.item_id) ||
+                        consumableIdMap.get(String(comp.name || "").toLowerCase());
+            unitCost = con ? Number(con.unit_cost) || defaults.defaultConsumableCost : defaults.defaultConsumableCost;
+            matchedSource = con ? `consumable:${con.name}` : "default_consumable";
+        } else if (comp.item_type === "finished_good") {
+            unitCost = Number(comp.unit_cost) || 0;
+            matchedSource = "product_unit_cost";
+        }
+
+        const lineTotal = Number((unitCost * qty).toFixed(4));
+        totalCost += lineTotal;
+
+        items.push({
+            component_key: comp.component_key,
+            name: comp.name,
+            item_type: comp.item_type,
+            quantity: qty,
+            unitCost: Number(unitCost.toFixed(4)),
+            lineTotal,
+            matchedSource,
+        });
+    }
+
+    return {
+        totalCost: Number(totalCost.toFixed(2)),
+        items,
+    };
 }

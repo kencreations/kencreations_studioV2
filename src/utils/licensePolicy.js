@@ -1,16 +1,20 @@
 // Authorization uses verified license records, never editable profile tiers/badges.
 export function expiryMillis(value) {
-    if (value == null || value === '') return Infinity;
-    if (typeof value?.toMillis === 'function') return value.toMillis();
-    if (typeof value?.seconds === 'number') return value.seconds * 1000;
-    return typeof value === 'number' ? value : Date.parse(value);
+    if (value == null || value === "") return Infinity;
+    if (typeof value?.toMillis === "function") return value.toMillis();
+    if (typeof value?.seconds === "number") return value.seconds * 1000;
+    return typeof value === "number" ? value : Date.parse(value);
 }
 
-export function isActiveLicense(license, { uid, hwid, now = Date.now(), desktop = false } = {}) {
-    if (!license || license.disabled === true || license.revoked === true) return false;
+export function isActiveLicense(
+    license,
+    { uid, hwid, now = Date.now(), desktop = false } = {},
+) {
+    if (!license || license.disabled === true || license.revoked === true)
+        return false;
     const isStatusActive = desktop
-        ? (license.activated === true || license.status === 'active')
-        : (license.status === 'active' || license.activated === true);
+        ? license.activated === true || license.status === "active"
+        : license.status === "active" || license.activated === true;
     if (!isStatusActive) return false;
     if (!desktop && (!uid || license.claimedByUid !== uid)) return false;
     if (desktop && license.hwid && license.hwid !== hwid) return false;
@@ -19,119 +23,293 @@ export function isActiveLicense(license, { uid, hwid, now = Date.now(), desktop 
 }
 
 export function summarizeLicenses(licenses, options) {
-    const active = licenses.filter(license => isActiveLicense(license, options));
-    const entitlements = [...new Set(active.flatMap(l => Array.isArray(l.entitlements) ? l.entitlements.filter(e => typeof e === 'string') : []))];
+    const active = licenses.filter((license) =>
+        isActiveLicense(license, options),
+    );
+    const entitlements = [
+        ...new Set(
+            active.flatMap((l) =>
+                Array.isArray(l.entitlements)
+                    ? l.entitlements.filter((e) => typeof e === "string")
+                    : [],
+            ),
+        ),
+    ];
     // User-confirmed policy: VIP is all-access. Duration alone is not a grant.
-    const isVip = entitlements.includes('vip') || active.some(l => l.plan_type === 'vip' || l.tier === 'vip');
+    const isVip =
+        entitlements.includes("vip") ||
+        active.some((l) => l.plan_type === "vip" || l.tier === "vip");
     const now = options?.now || Date.now();
-    const hasExpired = licenses.some(l => {
+    const hasExpired = licenses.some((l) => {
         if (!l || l.disabled === true || l.revoked === true) return false;
         const exp = expiryMillis(l.expiresAt ?? l.expires_at);
         return Number.isFinite(exp) && exp <= now;
     });
-    return { active, entitlements, isVip, hasActiveLicense: active.length > 0, hasExpired };
+    return {
+        active,
+        entitlements,
+        isVip,
+        hasActiveLicense: active.length > 0,
+        hasExpired,
+    };
 }
 
 export function evaluateGeneratorAccess(generator, access = {}) {
-    const result = (state, reason) => ({ state, reason, allowed: state === 'authorized' });
-    if (!generator) return result('unauthorized', 'UNKNOWN_GENERATOR');
-    if (['maintenance', 'under upgrade', 'coming soon', 'coming_soon', 'disabled', 'archived', 'hidden', 'placeholder'].includes(String(generator.status).toLowerCase())) return result('unauthorized', 'UNAVAILABLE');
-    const protectedGenerator = generator.isExclusive === true || generator.is_exclusive === true || generator.isFree === false;
-    if (!protectedGenerator) return result('authorized', 'FREE_TOOL');
-    if (access.status === 'loading') return result('loading', 'VERIFYING_LICENSE');
-    if (access.status === 'error') return result('error', 'VERIFICATION_ERROR');
-    if (access.isVip) return result('authorized', 'VIP');
-    if (access.promoAllAccess && access.hasActiveLicense) return result('authorized', 'PROMO');
-    if (access.entitlements?.includes(generator.requiredEntitlement || generator.id)) return result('authorized', 'ENTITLEMENT');
-    return result('unauthorized', access.hasActiveLicense ? 'ENTITLEMENT_REQUIRED' : 'LICENSE_REQUIRED');
+    const result = (state, reason) => ({
+        state,
+        reason,
+        allowed: state === "authorized",
+    });
+    if (!generator) return result("unauthorized", "UNKNOWN_GENERATOR");
+    if (
+        [
+            "maintenance",
+            "under upgrade",
+            "coming soon",
+            "coming_soon",
+            "disabled",
+            "archived",
+            "hidden",
+            "placeholder",
+        ].includes(String(generator.status).toLowerCase())
+    )
+        return result("unauthorized", "UNAVAILABLE");
+    const protectedGenerator =
+        generator.isExclusive === true ||
+        generator.is_exclusive === true ||
+        generator.isFree === false;
+    if (!protectedGenerator) return result("authorized", "FREE_TOOL");
+    if (access.status === "loading")
+        return result("loading", "VERIFYING_LICENSE");
+    if (access.status === "error") return result("error", "VERIFICATION_ERROR");
+    if (access.isVip) return result("authorized", "VIP");
+    if (access.promoAllAccess && access.hasActiveLicense)
+        return result("authorized", "PROMO");
+    if (
+        access.entitlements?.includes(
+            generator.requiredEntitlement || generator.id,
+        )
+    )
+        return result("authorized", "ENTITLEMENT");
+    return result(
+        "unauthorized",
+        access.hasActiveLicense ? "ENTITLEMENT_REQUIRED" : "LICENSE_REQUIRED",
+    );
+}
+
+// Viewing and customization follow generator access. Exporting is a separate
+// capability because a free editor is not automatically a free download.
+export function evaluateGeneratorCustomization(generator, access = {}) {
+    return evaluateGeneratorAccess(generator, access);
+}
+
+export function evaluateExportAccess(generator, format, access = {}) {
+    const result = (state, reason) => ({
+        state,
+        reason,
+        allowed: state === "authorized",
+    });
+    if (!["stl", "3mf", "threeMf"].includes(format))
+        return result("unauthorized", "UNSUPPORTED_EXPORT_FORMAT");
+
+    const generatorAccess = evaluateGeneratorAccess(generator, access);
+    if (generatorAccess.state !== "authorized") return generatorAccess;
+    if (access.status === "loading")
+        return result("loading", "VERIFYING_LICENSE");
+    if (access.status === "error") return result("error", "VERIFICATION_ERROR");
+    if (access.desktop && access.trialStatus === "loading")
+        return result("loading", "VERIFYING_TRIAL");
+
+    if (access.isVip || access.hasActiveLicense)
+        return result("authorized", "LICENSE");
+    if (
+        access.desktop &&
+        access.trialStatus === "ready" &&
+        Number.isSafeInteger(access.exportsLeft) &&
+        access.exportsLeft > 0
+    ) {
+        return result("authorized", "TRIAL");
+    }
+    return result("unauthorized", "LICENSE_REQUIRED");
 }
 
 export function evaluateStudioHubAccess(access = {}) {
-    const result = (state, reason) => ({ state, reason, allowed: state === 'authorized' });
-    if (access.status === 'loading') return result('loading', 'VERIFYING_LICENSE');
-    if (access.status === 'error') return result('error', 'VERIFICATION_ERROR');
+    const result = (state, reason) => ({
+        state,
+        reason,
+        allowed: state === "authorized",
+    });
+    if (access.status === "loading")
+        return result("loading", "VERIFYING_LICENSE");
+    if (access.status === "error") return result("error", "VERIFICATION_ERROR");
 
     // In web mode, authentication is required
     if (!access.desktop && !access.currentUser) {
-        return result('unauthenticated', 'AUTH_REQUIRED');
+        return result("unauthenticated", "AUTH_REQUIRED");
     }
 
     // VIP is all-access
-    if (access.isVip) return result('authorized', 'VIP');
+    if (access.isVip) return result("authorized", "VIP");
 
     // Promo all-access with active license
-    if (access.promoAllAccess && access.hasActiveLicense) return result('authorized', 'PROMO');
+    if (access.promoAllAccess && access.hasActiveLicense)
+        return result("authorized", "PROMO");
 
     // Explicit entitlement check
-    if (access.entitlements?.includes('studio-hub') || access.entitlements?.includes('studio_hub')) {
-        return result('authorized', 'ENTITLEMENT');
+    if (
+        access.entitlements?.includes("studio-hub") ||
+        access.entitlements?.includes("studio_hub")
+    ) {
+        return result("authorized", "ENTITLEMENT");
     }
 
     // Active subscription tiers
-    const hasActiveSubscription = (access.active || []).some(l => {
-        const tier = String(l.tier || l.tier_id || l.plan_type || l.plan || '').toLowerCase();
-        return ['1mo', '6mo', '12mo', 'lifetime', 'studio_pro', 'pro', 'subscriber', 'subscription', 'standard', 'commercial', 'maker'].includes(tier);
+    const hasActiveSubscription = (access.active || []).some((l) => {
+        const tier = String(
+            l.tier || l.tier_id || l.plan_type || l.plan || "",
+        ).toLowerCase();
+        return [
+            "1mo",
+            "6mo",
+            "12mo",
+            "lifetime",
+            "studio_pro",
+            "pro",
+            "subscriber",
+            "subscription",
+            "standard",
+            "commercial",
+            "maker",
+        ].includes(tier);
     });
 
-    if (hasActiveSubscription) return result('authorized', 'SUBSCRIBER');
+    if (hasActiveSubscription) return result("authorized", "SUBSCRIBER");
 
     // Any active license means the account is on Pro/commercial tier in KenCreations Studio
-    if (access.hasActiveLicense || (access.active && access.active.length > 0)) {
-        return result('authorized', 'ACTIVE_LICENSE');
+    if (
+        access.hasActiveLicense ||
+        (access.active && access.active.length > 0)
+    ) {
+        return result("authorized", "ACTIVE_LICENSE");
     }
 
     // Expired subscription state
-    if (access.hasExpired) return result('expired', 'SUBSCRIPTION_EXPIRED');
+    if (access.hasExpired) return result("expired", "SUBSCRIPTION_EXPIRED");
 
-    return result('unauthorized', 'SUBSCRIBER_REQUIRED');
+    return result("unauthorized", "SUBSCRIBER_REQUIRED");
 }
 
 export function evaluateBazaarAccess(access = {}) {
-    const result = (state, reason) => ({ state, reason, allowed: state === 'authorized' });
-    if (access.status === 'loading') return result('loading', 'VERIFYING_LICENSE');
-    if (access.status === 'error') return result('error', 'VERIFICATION_ERROR');
+    const result = (state, reason) => ({
+        state,
+        reason,
+        allowed: state === "authorized",
+    });
+    if (access.status === "loading")
+        return result("loading", "VERIFYING_LICENSE");
+    if (access.status === "error") return result("error", "VERIFICATION_ERROR");
 
     // In web mode, authentication is required
     if (!access.desktop && !access.currentUser) {
-        return result('unauthenticated', 'AUTH_REQUIRED');
+        return result("unauthenticated", "AUTH_REQUIRED");
     }
 
-    // VIP is all-access
-    if (access.isVip) return result('authorized', 'VIP');
+    // VIP is all-access (requires active verified license/entitlement)
+    if (access.isVip)
+        return result("authorized", "VIP");
 
-    // Promo all-access with active license
-    if (access.promoAllAccess && access.hasActiveLicense) return result('authorized', 'PROMO');
+    // Promo all-access with active commercial license
+    if (access.promoAllAccess && access.hasActiveLicense)
+        return result("authorized", "PROMO");
 
-    // Explicit Bazaar Hub entitlement check
-    if (access.entitlements?.includes('bazaar') || access.entitlements?.includes('bazaar-hub') || access.entitlements?.includes('bazaar_hub')) {
-        return result('authorized', 'ENTITLEMENT');
+    // Explicit dedicated Bazaar Hub entitlement
+    if (
+        access.entitlements?.some((e) =>
+            ["bazaar-hub", "bazaar_hub", "bazaar", "studio-hub", "studio_hub"].includes(e),
+        )
+    ) {
+        return result("authorized", "ENTITLEMENT");
     }
 
-    // Active subscription tiers
-    const hasActiveSubscription = (access.active || []).some(l => {
-        const tier = String(l.tier || l.tier_id || l.plan_type || l.plan || '').toLowerCase();
-        return ['1mo', '6mo', '12mo', 'lifetime', 'studio_pro', 'pro', 'subscriber', 'subscription', 'standard', 'commercial', 'maker'].includes(tier);
+    // Active Commercial / Studio Pro / Subscription license tiers
+    const hasQualifyingLicense = (access.active || []).some((l) => {
+        if (!l || l.disabled === true || l.revoked === true) return false;
+        const tier = String(
+            l.tier || l.tier_id || l.plan_type || l.plan || "",
+        ).toLowerCase();
+
+        // Free tier without explicit entitlement does not grant commercial Bazaar Hub access
+        if (tier === "maker") return false;
+
+        return (
+            [
+                "commercial",
+                "studio_pro",
+                "pro",
+                "1mo",
+                "6mo",
+                "12mo",
+                "lifetime",
+                "bazaar",
+                "business",
+                "standard",
+                "subscriber",
+                "subscription",
+            ].includes(tier) ||
+            l.commercial_license === true ||
+            l.isPerpetual === true ||
+            (Array.isArray(l.entitlements) &&
+                l.entitlements.some((e) =>
+                    ["commercial", "bazaar-hub", "bazaar", "studio-hub", "studio_hub"].includes(e),
+                ))
+        );
     });
 
-    if (hasActiveSubscription) return result('authorized', 'SUBSCRIBER');
+    if (hasQualifyingLicense) return result("authorized", "COMMERCIAL_LICENSE");
 
-    // Any active license means the account is on Pro/commercial tier in KenCreations Studio
-    if (access.hasActiveLicense || (access.active && access.active.length > 0)) {
-        return result('authorized', 'ACTIVE_LICENSE');
+    // Any verified active license on the account grants Pro access (excluding unentitled free maker)
+    const hasActivePaidLicense = (access.active || []).some((l) => {
+        if (!l || l.disabled === true || l.revoked === true) return false;
+        const tier = String(l.tier || l.tier_id || l.plan_type || l.plan || "").toLowerCase();
+        return tier !== "maker";
+    });
+
+    if (
+        hasActivePaidLicense ||
+        (access.hasActiveLicense &&
+            (access.active || []).length > 0 &&
+            hasActivePaidLicense) ||
+        (access.hasActiveLicense &&
+            (access.active || []).every(
+                (l) => String(l.tier || l.tier_id || l.plan_type || l.plan || "").toLowerCase() !== "maker",
+            ))
+    ) {
+        return result("authorized", "ACTIVE_LICENSE");
     }
 
     // Expired subscription state
-    if (access.hasExpired) return result('expired', 'SUBSCRIPTION_EXPIRED');
+    if (access.hasExpired) return result("expired", "SUBSCRIPTION_EXPIRED");
 
-    return result('unauthorized', 'SUBSCRIBER_REQUIRED');
+    return result("unauthorized", "COMMERCIAL_OR_ENTITLEMENT_REQUIRED");
 }
 
 export function validateClaim(license, uid, hwid, now = Date.now()) {
-    if (!license) throw new Error('Invalid License Code.');
-    if (!['active', 'unclaimed', 'pending'].includes(license.status) || license.disabled === true || license.revoked === true) throw new Error('This license is not available for activation.');
+    if (!license) throw new Error("Invalid License Code.");
+    if (
+        !["active", "unclaimed", "pending"].includes(license.status) ||
+        license.disabled === true ||
+        license.revoked === true
+    )
+        throw new Error("This license is not available for activation.");
     const expiry = expiryMillis(license.expiresAt ?? license.expires_at);
-    if (Number.isNaN(expiry) || expiry <= now) throw new Error('This license has expired or has an invalid expiration date.');
-    if (license.claimedByUid && license.claimedByUid !== uid) throw new Error('This license is already bound to another Google account.');
-    if (hwid && license.hwid && license.hwid !== hwid) throw new Error('This license is bound to a different desktop device.');
+    if (Number.isNaN(expiry) || expiry <= now)
+        throw new Error(
+            "This license has expired or has an invalid expiration date.",
+        );
+    if (license.claimedByUid && license.claimedByUid !== uid)
+        throw new Error(
+            "This license is already bound to another Google account.",
+        );
+    if (hwid && license.hwid && license.hwid !== hwid)
+        throw new Error("This license is bound to a different desktop device.");
 }
-

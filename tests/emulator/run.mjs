@@ -66,7 +66,54 @@ try {
     await assertFails(setDoc(doc(anonymous, 'app_config', 'fixture'), { attack: true }));
     await assertSucceeds(updateDoc(doc(admin, 'licenses', 'fixture-key'), { entitlements: ['vip'] }));
     await assertSucceeds(getDoc(doc(anonymous, 'generators', 'charms')));
-    console.log('PASS: proposed owner queries, admin grants, immutable entitlements, private license records and protected public counters.');
+
+    // Bazaar Hub Authorization & Negative Isolation Tests
+    // 1. Ordinary user without Bazaar Hub entitlement cannot create a shop
+    await assertFails(setDoc(doc(alice, 'shops', 'shop_alice'), { ownerUid: 'alice' }));
+    // 2. User with bazaarHub claim can create their deterministic shop
+    const bazaarSubscriber = env.authenticatedContext('subscriber-joe', { bazaarHub: true }).firestore();
+    await assertSucceeds(setDoc(doc(bazaarSubscriber, 'shops', 'shop_subscriber-joe'), {
+        shopId: 'shop_subscriber-joe',
+        ownerUid: 'subscriber-joe',
+    }));
+    // 3. Cannot forge arbitrary shop ID or another seller's shop ID
+    await assertFails(setDoc(doc(bazaarSubscriber, 'shops', 'shop_someone_else'), { ownerUid: 'subscriber-joe' }));
+    await assertFails(setDoc(doc(bazaarSubscriber, 'shops', 'shop_alice'), { ownerUid: 'alice' }));
+    // 4. Bob cannot read or modify Joe's private shop
+    await assertFails(getDoc(doc(bob, 'shops', 'shop_subscriber-joe')));
+    await assertFails(updateDoc(doc(bob, 'shops', 'shop_subscriber-joe'), { name: 'Hacked' }));
+    // 5. Inventory movements subcollection is immutable (tamper-proof audit ledger)
+    await assertSucceeds(setDoc(doc(bazaarSubscriber, 'shops', 'shop_subscriber-joe', 'inventory_movements', 'mov_1'), {
+        movementId: 'mov_1',
+        shopId: 'shop_subscriber-joe',
+        ownerUid: 'subscriber-joe',
+        type: 'allocation',
+        qty: 10,
+        createdAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(bazaarSubscriber, 'shops', 'shop_subscriber-joe', 'inventory_movements', 'mov_1'), { qty: 999 }));
+    await assertFails(deleteDoc(doc(bazaarSubscriber, 'shops', 'shop_subscriber-joe', 'inventory_movements', 'mov_1')));
+    // 6. Public tracking token listing is strictly denied to anonymous users (anti-enumeration)
+    await assertFails(getDocs(collection(anonymous, 'order_tracking')));
+    // 7. Unpublished storefront cannot be viewed by anonymous users
+    await assertSucceeds(setDoc(doc(bazaarSubscriber, 'public_shops', 'shop_subscriber-joe'), {
+        shopId: 'shop_subscriber-joe',
+        ownerUid: 'subscriber-joe',
+        name: "Joe's 3D Shop",
+        isPublished: false,
+    }));
+    await assertFails(getDoc(doc(anonymous, 'public_shops', 'shop_subscriber-joe')));
+    // 8. Anonymous order submission to order_inbox is blocked in production rules
+    await assertFails(setDoc(doc(anonymous, 'order_inbox', 'order_anon'), { sellerUid: 'subscriber-joe' }));
+    // 9. Slug update is denied (immutable registry)
+    await assertSucceeds(setDoc(doc(bazaarSubscriber, 'shop_slugs', 'joe-prints'), {
+        ownerUid: 'subscriber-joe',
+        shopId: 'shop_subscriber-joe',
+        slug: 'joe-prints',
+    }));
+    await assertFails(updateDoc(doc(bazaarSubscriber, 'shop_slugs', 'joe-prints'), { ownerUid: 'bob' }));
+
+    console.log('PASS: proposed owner queries, admin grants, immutable entitlements, Bazaar Hub isolation, and tamper-proof ledgers.');
     await env.cleanup();
     env = await initializeTestEnvironment({ projectId, firestore: { host: '127.0.0.1', port: 8080, rules: supplied } });
     if (process.env.AUDIT_BROWSER === 'true') {

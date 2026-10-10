@@ -1,6 +1,12 @@
 import { useModelExport } from "../hooks/useModelExport";
 import { disposeExportScene } from "../engine/export/modelExport";
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, {
+    useState,
+    useEffect,
+    useRef,
+    useMemo,
+    useCallback,
+} from "react";
 import * as THREE from "three";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { exportTo3MF } from "three-3mf-exporter";
@@ -11,7 +17,6 @@ import { useProfile } from "../contexts/ProfileContext";
 import { useFontStore } from "../hooks/useFontStore";
 import { useHistoryState } from "../hooks/useHistoryState";
 import { HistoryControls } from "../components/HistoryControls";
-
 
 import EditorLayout from "../components/EditorLayout";
 import EditorCanvas from "../components/EditorCanvas";
@@ -27,15 +32,37 @@ import {
     ControlToggle,
 } from "../components/UI/EditorControls";
 
-import { Image as ImageIcon, Sliders, Type, Lightbulb, Box as BoxIcon, Layers } from 'lucide-react';
-import { DimensionsBadge, EstimatorBadge } from '../components/UI/ViewportBadges';
-import ImagePreprocessingModal from '../components/UI/ImagePreprocessingModal';
+import {
+    Image as ImageIcon,
+    Sliders,
+    Type,
+    Lightbulb,
+    Box as BoxIcon,
+    Layers,
+} from "lucide-react";
+import {
+    DimensionsBadge,
+    EstimatorBadge,
+} from "../components/UI/ViewportBadges";
+import ImagePreprocessingModal from "../components/UI/ImagePreprocessingModal";
 
 import SmartLithophane from "../components/3D/Shared/SmartLithophane";
 import LithophaneFrame from "../components/3D/Shared/LithophaneFrame";
 import { LITHOPHANE_DEFAULTS } from "../store/appState";
 
-function LithophaneSidebar({ onBack, config, setConfig, allFonts, simulateBacklight, setSimulateBacklight, lightTemp, setLightTemp, lightIntensity, setLightIntensity, onImageUpload }) {
+function LithophaneSidebar({
+    onBack,
+    config,
+    setConfig,
+    allFonts,
+    simulateBacklight,
+    setSimulateBacklight,
+    lightTemp,
+    setLightTemp,
+    lightIntensity,
+    setLightIntensity,
+    onImageUpload,
+}) {
     const { brands: cloudColors } = useFilamentBrands();
     const { customColors } = useProfile();
 
@@ -68,7 +95,7 @@ function LithophaneSidebar({ onBack, config, setConfig, allFonts, simulateBackli
                 label: font.label,
                 value: font.id,
             })),
-        [allFonts]
+        [allFonts],
     );
 
     const handleLoadTemplate = (savedSettings) => {
@@ -101,8 +128,8 @@ function LithophaneSidebar({ onBack, config, setConfig, allFonts, simulateBackli
             <SidebarSection title="Image Source" icon={ImageIcon}>
                 <div className="flex flex-col gap-2">
                     <label className="text-sm font-medium">Upload Image</label>
-                    <input 
-                        type="file" 
+                    <input
+                        type="file"
                         accept="image/*"
                         onChange={handleImageUpload}
                         className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
@@ -114,48 +141,71 @@ function LithophaneSidebar({ onBack, config, setConfig, allFonts, simulateBackli
                 <ControlSelect
                     label="Crop Shape"
                     value={config.cropShape}
-                    onChange={(v) => setConfig(prev => ({ ...prev, cropShape: v }))}
+                    onChange={(v) =>
+                        setConfig((prev) => ({ ...prev, cropShape: v }))
+                    }
                     options={[
                         { label: "Rectangle", value: "rectangle" },
                         { label: "Circle", value: "circle" },
                         { label: "Heart", value: "heart" },
                         { label: "Hexagon", value: "hexagon" },
-                        { label: "Alpha Cutout", value: "alpha" }
+                        { label: "Alpha Cutout", value: "alpha" },
                     ]}
                 />
                 <ControlSelect
                     label="Resolution Grid"
                     value={config.resolution}
-                    onChange={(v) => setConfig(prev => ({ ...prev, resolution: v }))}
+                    onChange={(v) =>
+                        setConfig((prev) => ({ ...prev, resolution: v }))
+                    }
                     options={[
                         { label: "Low (64px) - Fast Preview", value: "low" },
                         { label: "Mid (128px) - Good", value: "mid" },
-                        { label: "High (256px) - Export", value: "high" }
+                        { label: "High (256px) - Export", value: "high" },
                     ]}
                 />
                 <ControlSlider
                     label="Physical Width (mm)"
                     value={config.physicalWidth}
-                    onChange={(v) => setConfig(prev => ({ ...prev, physicalWidth: v }))}
-                    min={20} max={150} step={1}
+                    onChange={(v) =>
+                        setConfig((prev) => ({ ...prev, physicalWidth: v }))
+                    }
+                    min={20}
+                    max={150}
+                    step={1}
                 />
                 <ControlSlider
                     label="Min Thickness (Light)"
                     value={config.minThick}
-                    onChange={(v) => setConfig(prev => ({ ...prev, minThick: v }))}
-                    min={0.2} max={2.0} step={0.1}
+                    onChange={(v) =>
+                        setConfig((prev) => ({ ...prev, minThick: v }))
+                    }
+                    min={0.2}
+                    max={2.0}
+                    step={0.1}
                 />
                 <ControlSlider
                     label="Max Thickness (Dark)"
                     value={config.maxThick}
-                    onChange={(v) => setConfig(prev => ({ ...prev, maxThick: v }))}
-                    min={1.0} max={5.0} step={0.1}
+                    onChange={(v) =>
+                        setConfig((prev) => ({ ...prev, maxThick: v }))
+                    }
+                    min={1.0}
+                    max={5.0}
+                    step={0.1}
                 />
                 <ControlSlider
                     label="Layer Quantization"
                     value={config.quantizeLayerHeight}
-                    onChange={(v) => setConfig(prev => ({ ...prev, quantizeLayerHeight: v }))}
-                    min={0.04} max={0.2} step={0.04}
+                    onChange={(v) =>
+                        setConfig((prev) => ({
+                            ...prev,
+                            quantizeLayerHeight: v,
+                        }))
+                    }
+                    min={0.04}
+                    max={0.2}
+                    step={0.04}
                 />
             </SidebarSection>
 
@@ -163,86 +213,139 @@ function LithophaneSidebar({ onBack, config, setConfig, allFonts, simulateBackli
                 <ControlColorPicker
                     label="Frame Color"
                     value={config.frameColor}
-                    onChange={(v) => setConfig(prev => ({ ...prev, frameColor: v }))}
+                    onChange={(v) =>
+                        setConfig((prev) => ({ ...prev, frameColor: v }))
+                    }
                     options={colorOptions}
                 />
                 <ControlSlider
                     label="Frame Width"
                     value={config.frameWidth}
-                    onChange={(v) => setConfig(prev => ({ ...prev, frameWidth: v }))}
-                    min={1.0} max={10.0} step={0.5}
+                    onChange={(v) =>
+                        setConfig((prev) => ({ ...prev, frameWidth: v }))
+                    }
+                    min={1.0}
+                    max={10.0}
+                    step={0.5}
                 />
                 <ControlSlider
                     label="Frame Depth"
                     value={config.frameDepth}
-                    onChange={(v) => setConfig(prev => ({ ...prev, frameDepth: v }))}
-                    min={1.0} max={10.0} step={0.1}
+                    onChange={(v) =>
+                        setConfig((prev) => ({ ...prev, frameDepth: v }))
+                    }
+                    min={1.0}
+                    max={10.0}
+                    step={0.1}
                 />
                 <ControlSelect
                     label="Frame Profile"
                     value={config.frameProfile}
-                    onChange={(v) => setConfig(prev => ({ ...prev, frameProfile: v }))}
+                    onChange={(v) =>
+                        setConfig((prev) => ({ ...prev, frameProfile: v }))
+                    }
                     options={[
                         { label: "Flat", value: "flat" },
                         { label: "Fillet", value: "fillet" },
-                        { label: "Chamfer", value: "chamfer" }
+                        { label: "Chamfer", value: "chamfer" },
                     ]}
                 />
                 <ControlToggle
                     label="Enable Keyring"
                     checked={config.keyringEnabled}
-                    onChange={(v) => setConfig(prev => ({ ...prev, keyringEnabled: v }))}
+                    onChange={(v) =>
+                        setConfig((prev) => ({ ...prev, keyringEnabled: v }))
+                    }
                 />
                 {config.keyringEnabled && (
                     <>
                         <ControlSelect
                             label="Keyring Style"
                             value={config.keyringStyle}
-                            onChange={(v) => setConfig(prev => ({ ...prev, keyringStyle: v }))}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    keyringStyle: v,
+                                }))
+                            }
                             options={[
                                 { label: "Inset Boss", value: "inset" },
-                                { label: "Tab Boss", value: "tab" }
+                                { label: "Tab Boss", value: "tab" },
                             ]}
                         />
                         <ControlSlider
                             label="Keyring Thickness"
                             value={config.keyringThickness}
-                            onChange={(v) => setConfig(prev => ({ ...prev, keyringThickness: v }))}
-                            min={1.0} max={10.0} step={0.1}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    keyringThickness: v,
+                                }))
+                            }
+                            min={1.0}
+                            max={10.0}
+                            step={0.1}
                         />
                         <ControlSelect
                             label="Keyring Position"
                             value={config.keyringPosition}
-                            onChange={(v) => setConfig(prev => ({ ...prev, keyringPosition: v }))}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    keyringPosition: v,
+                                }))
+                            }
                             options={[
                                 { label: "Top", value: "top" },
                                 { label: "Bottom", value: "bottom" },
                                 { label: "Left", value: "left" },
-                                { label: "Right", value: "right" }
+                                { label: "Right", value: "right" },
                             ]}
                         />
                         <ControlSlider
                             label="Keyring Alignment"
                             value={config.keyringOffset}
-                            onChange={(v) => setConfig(prev => ({ ...prev, keyringOffset: v }))}
-                            min={0} max={100} step={1}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    keyringOffset: v,
+                                }))
+                            }
+                            min={0}
+                            max={100}
+                            step={1}
                         />
                         <div className="flex gap-2 px-1">
                             <button
                                 className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs py-1 rounded transition-colors"
-                                onClick={() => setConfig(prev => ({ ...prev, keyringOffset: 15 }))}
+                                onClick={() =>
+                                    setConfig((prev) => ({
+                                        ...prev,
+                                        keyringOffset: 15,
+                                    }))
+                                }
                             >
                                 Left
                             </button>
                             <button
                                 className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs py-1 rounded transition-colors"
-                                onClick={() => setConfig(prev => ({ ...prev, keyringOffset: 50 }))}
+                                onClick={() =>
+                                    setConfig((prev) => ({
+                                        ...prev,
+                                        keyringOffset: 50,
+                                    }))
+                                }
                             >
                                 Center
                             </button>
                             <button
                                 className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs py-1 rounded transition-colors"
-                                onClick={() => setConfig(prev => ({ ...prev, keyringOffset: 85 }))}
+                                onClick={() =>
+                                    setConfig((prev) => ({
+                                        ...prev,
+                                        keyringOffset: 85,
+                                    }))
+                                }
                             >
                                 Right
                             </button>
@@ -250,7 +353,12 @@ function LithophaneSidebar({ onBack, config, setConfig, allFonts, simulateBackli
                         <ControlToggle
                             label="Reinforced Boss"
                             checked={config.keyringReinforced}
-                            onChange={(v) => setConfig(prev => ({ ...prev, keyringReinforced: v }))}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    keyringReinforced: v,
+                                }))
+                            }
                         />
                     </>
                 )}
@@ -260,7 +368,12 @@ function LithophaneSidebar({ onBack, config, setConfig, allFonts, simulateBackli
                 <ControlInput
                     label="Text"
                     value={config.borderText}
-                    onChange={(e) => setConfig(prev => ({ ...prev, borderText: e.target.value }))}
+                    onChange={(e) =>
+                        setConfig((prev) => ({
+                            ...prev,
+                            borderText: e.target.value,
+                        }))
+                    }
                     placeholder="Enter border text"
                 />
                 {config.borderText && (
@@ -268,46 +381,80 @@ function LithophaneSidebar({ onBack, config, setConfig, allFonts, simulateBackli
                         <ControlSelect
                             label="Text Side"
                             value={config.borderTextSide}
-                            onChange={(v) => setConfig(prev => ({ ...prev, borderTextSide: v }))}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    borderTextSide: v,
+                                }))
+                            }
                             options={[
                                 { label: "Top", value: "top" },
                                 { label: "Bottom", value: "bottom" },
                                 { label: "Left", value: "left" },
-                                { label: "Right", value: "right" }
+                                { label: "Right", value: "right" },
                             ]}
                         />
                         <ControlSelect
                             label="Font"
                             value={config.borderTextFont}
-                            onChange={(v) => setConfig(prev => ({ ...prev, borderTextFont: v }))}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    borderTextFont: v,
+                                }))
+                            }
                             options={fontOptions}
                         />
                         <ControlColorPicker
                             label="Text Color"
                             value={config.borderTextColor}
-                            onChange={(v) => setConfig(prev => ({ ...prev, borderTextColor: v }))}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    borderTextColor: v,
+                                }))
+                            }
                             options={colorOptions}
                         />
                         <ControlSelect
                             label="Mode"
                             value={config.borderTextMode}
-                            onChange={(v) => setConfig(prev => ({ ...prev, borderTextMode: v }))}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    borderTextMode: v,
+                                }))
+                            }
                             options={[
                                 { label: "Emboss", value: "emboss" },
-                                { label: "Deboss", value: "deboss" }
+                                { label: "Deboss", value: "deboss" },
                             ]}
                         />
                         <ControlSlider
                             label="Text Size"
                             value={config.borderTextSize}
-                            onChange={(v) => setConfig(prev => ({ ...prev, borderTextSize: v }))}
-                            min={2} max={15} step={0.5}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    borderTextSize: v,
+                                }))
+                            }
+                            min={2}
+                            max={15}
+                            step={0.5}
                         />
                         <ControlSlider
                             label="Text Depth"
                             value={config.borderTextDepth}
-                            onChange={(v) => setConfig(prev => ({ ...prev, borderTextDepth: v }))}
-                            min={0.2} max={2.0} step={0.1}
+                            onChange={(v) =>
+                                setConfig((prev) => ({
+                                    ...prev,
+                                    borderTextDepth: v,
+                                }))
+                            }
+                            min={0.2}
+                            max={2.0}
+                            step={0.1}
                         />
                     </>
                 )}
@@ -325,18 +472,21 @@ function LithophaneSidebar({ onBack, config, setConfig, allFonts, simulateBackli
                             label="Light Temperature"
                             value={lightTemp}
                             onChange={(v) => setLightTemp(v)}
-                            min={3000} max={8000} step={100}
+                            min={3000}
+                            max={8000}
+                            step={100}
                         />
                         <ControlSlider
                             label="Light Intensity"
                             value={lightIntensity}
                             onChange={(v) => setLightIntensity(v)}
-                            min={1} max={50} step={1}
+                            min={1}
+                            max={50}
+                            step={1}
                         />
                     </>
                 )}
             </SidebarSection>
-
         </div>
     );
 }
@@ -344,29 +494,41 @@ function LithophaneSidebar({ onBack, config, setConfig, allFonts, simulateBackli
 export default function LithophaneEditor() {
     const { allFonts } = useFontStore();
 
-    const [config, setConfig, undo, redo, canUndo, canRedo] = useHistoryState(LITHOPHANE_DEFAULTS);
-    
+    const [config, setConfig, undo, redo, canUndo, canRedo] =
+        useHistoryState(LITHOPHANE_DEFAULTS);
+
     const [simulateBacklight, setSimulateBacklight] = useState(false);
     const [lightTemp, setLightTemp] = useState(6500);
     const [lightIntensity, setLightIntensity] = useState(15);
-    const { exportModel, isExporting, exportError } = useModelExport();
-    
+    const { exportModel, exportAccess, isExporting, exportError } =
+        useModelExport();
+
     const [isImageModalOpen, setIsImageModalOpen] = useState(false);
     const [rawImage, setRawImage] = useState(null);
     const [lithoDimensions, setLithoDimensions] = useState(null);
     const [lithoTexture, setLithoTexture] = useState(null);
 
     // Mock estimates for now based on physical width
-    const estimatedWeight = Math.round((config.physicalWidth * config.physicalWidth * config.maxThick) * 0.0012) || 0;
+    const estimatedWeight =
+        Math.round(
+            config.physicalWidth *
+                config.physicalWidth *
+                config.maxThick *
+                0.0012,
+        ) || 0;
     const mockEstimates = {
         time: config.physicalWidth > 80 ? "2h 15m" : "45m",
         weight: estimatedWeight,
-        cost: estimatedWeight * 0.02
+        cost: estimatedWeight * 0.02,
     };
     const dimensions = {
         x: config.physicalWidth + config.frameWidth * 2,
-        y: (lithoDimensions ? (lithoDimensions.max.y - lithoDimensions.min.y) : config.physicalWidth) + config.frameWidth * 2,
-        z: Math.max(config.maxThick, config.frameDepth)
+        y:
+            (lithoDimensions
+                ? lithoDimensions.max.y - lithoDimensions.min.y
+                : config.physicalWidth) +
+            config.frameWidth * 2,
+        z: Math.max(config.maxThick, config.frameDepth),
     };
 
     // Refs for geometries to merge during export
@@ -390,7 +552,7 @@ export default function LithophaneEditor() {
     const tempToColor = (kelvin) => {
         let temp = kelvin / 100;
         let red, green, blue;
-        
+
         if (temp <= 66) {
             red = 255;
             green = temp;
@@ -410,7 +572,11 @@ export default function LithophaneEditor() {
         }
 
         const clamp = (v) => Math.max(0, Math.min(255, v));
-        return new THREE.Color(clamp(red) / 255, clamp(green) / 255, clamp(blue) / 255);
+        return new THREE.Color(
+            clamp(red) / 255,
+            clamp(green) / 255,
+            clamp(blue) / 255,
+        );
     };
 
     const mergedSceneForExport = () => {
@@ -418,49 +584,82 @@ export default function LithophaneEditor() {
         if (lithoGeoRef.current) {
             // Apply white material to lithophane so it exports with a flat color in 3MF
             const lithoClone = lithoGeoRef.current.clone();
-            const mesh = new THREE.Mesh(lithoClone, new THREE.MeshStandardMaterial({ color: 0xffffff }));
+            const mesh = new THREE.Mesh(
+                lithoClone,
+                new THREE.MeshStandardMaterial({ color: 0xffffff }),
+            );
             mesh.updateMatrixWorld(true);
             toMerge.push(mesh);
         }
         if (frameGeoRef.current) {
             const frameClone = frameGeoRef.current.clone();
-            const mesh = new THREE.Mesh(frameClone, new THREE.MeshStandardMaterial({ color: config.frameColor }));
+            const mesh = new THREE.Mesh(
+                frameClone,
+                new THREE.MeshStandardMaterial({ color: config.frameColor }),
+            );
             mesh.updateMatrixWorld(true);
             toMerge.push(mesh);
         }
 
         if (toMerge.length === 0) return null;
-        
+
         const group = new THREE.Group();
-        toMerge.forEach(m => group.add(m));
+        toMerge.forEach((m) => group.add(m));
         return group;
     };
 
-    const handleExportSTL = () => exportModel({ getScene: mergedSceneForExport, format: 'stl', filename: 'lithophane.stl', dispose: disposeExportScene });
-    const handleExport3MF = () => exportModel({ getScene: mergedSceneForExport, format: '3mf', filename: 'lithophane.3mf', dispose: disposeExportScene });
-    const handleExportCMYK = () => exportModel({
-        format: '3mf', filename: 'lithophane_cmyk_modifier.3mf', dispose: disposeExportScene,
-        getScene: () => {
-            if (!cmykGeoRef.current) return null;
-            const group = new THREE.Group();
-            group.add(new THREE.Mesh(cmykGeoRef.current.clone(), new THREE.MeshStandardMaterial({ vertexColors: true })));
-            return group;
-        },
-    });
+    const handleExportSTL = () =>
+        exportModel({
+            getScene: mergedSceneForExport,
+            format: "stl",
+            filename: "lithophane.stl",
+            dispose: disposeExportScene,
+        });
+    const handleExport3MF = () =>
+        exportModel({
+            getScene: mergedSceneForExport,
+            format: "3mf",
+            filename: "lithophane.3mf",
+            dispose: disposeExportScene,
+        });
+    const handleExportCMYK = () =>
+        exportModel({
+            format: "3mf",
+            filename: "lithophane_cmyk_modifier.3mf",
+            dispose: disposeExportScene,
+            getScene: () => {
+                if (!cmykGeoRef.current) return null;
+                const group = new THREE.Group();
+                group.add(
+                    new THREE.Mesh(
+                        cmykGeoRef.current.clone(),
+                        new THREE.MeshStandardMaterial({ vertexColors: true }),
+                    ),
+                );
+                return group;
+            },
+        });
 
-    const actualHeight = lithoDimensions ? (lithoDimensions.max.y - lithoDimensions.min.y) : config.physicalWidth;
-    const totalHeight = actualHeight + (config.frameWidth * 2) + (config.borderText ? config.borderTextSize : 0);
+    const actualHeight = lithoDimensions
+        ? lithoDimensions.max.y - lithoDimensions.min.y
+        : config.physicalWidth;
+    const totalHeight =
+        actualHeight +
+        config.frameWidth * 2 +
+        (config.borderText ? config.borderTextSize : 0);
 
     const groupRotation = simulateBacklight ? [0, 0, 0] : [-Math.PI / 2, 0, 0];
-    const groupPosition = simulateBacklight ? [0, totalHeight / 2, 0] : [0, config.frameDepth / 2, 0];
+    const groupPosition = simulateBacklight
+        ? [0, totalHeight / 2, 0]
+        : [0, config.frameDepth / 2, 0];
     const ambientIntensity = simulateBacklight ? 0.08 : 0.6;
-    
+
     // Custom lights to inject into EditorCanvas
     const customLights = simulateBacklight ? (
-        <pointLight 
-            position={[0, totalHeight / 2, -15]} 
-            intensity={lightIntensity * 2} 
-            color={tempToColor(lightTemp)} 
+        <pointLight
+            position={[0, totalHeight / 2, -15]}
+            intensity={lightIntensity * 2}
+            color={tempToColor(lightTemp)}
             distance={100}
             decay={2}
         />
@@ -468,140 +667,170 @@ export default function LithophaneEditor() {
 
     return (
         <>
-        <EditorLayout
-            title="Lithophane Generator"
-            sidebarContent={
-                <LithophaneSidebar
-                    config={config}
-                    setConfig={setConfig}
-                    allFonts={allFonts}
-                    simulateBacklight={simulateBacklight}
-                    setSimulateBacklight={setSimulateBacklight}
-                    lightTemp={lightTemp}
-                    setLightTemp={setLightTemp}
-                    lightIntensity={lightIntensity}
-                    setLightIntensity={setLightIntensity}
-                    onImageUpload={(url) => {
-                        setRawImage(url);
-                        setIsImageModalOpen(true);
-                    }}
-                />
-            }
-            headerRight={
-                <div className="flex flex-col sm:flex-row items-center gap-2">
-                    <HistoryControls
-                        undo={undo}
-                        redo={redo}
-                        canUndo={canUndo}
-                        canRedo={canRedo}
+            <EditorLayout
+                title="Lithophane Generator"
+                sidebarContent={
+                    <LithophaneSidebar
+                        config={config}
+                        setConfig={setConfig}
+                        allFonts={allFonts}
+                        simulateBacklight={simulateBacklight}
+                        setSimulateBacklight={setSimulateBacklight}
+                        lightTemp={lightTemp}
+                        setLightTemp={setLightTemp}
+                        lightIntensity={lightIntensity}
+                        setLightIntensity={setLightIntensity}
+                        onImageUpload={(url) => {
+                            setRawImage(url);
+                            setIsImageModalOpen(true);
+                        }}
                     />
-                    <div className="flex gap-2">
-                        <button
-                            title={exportError || "Export CMYK"}
-                            onClick={handleExportCMYK}
-                            disabled={isExporting || !config.imageUrl}
-                            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md font-medium text-sm transition-colors shadow-sm"
-                        >
-                            {isExporting ? "Exporting..." : "Export CMYK Modifier"}
-                        </button>
-                        <button
-                            title={exportError || "Export STL"}
-                            onClick={handleExportSTL}
-                            disabled={isExporting || !config.imageUrl}
-                            className="bg-slate-800 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md font-medium text-sm transition-colors shadow-sm"
-                        >
-                            {isExporting ? "Exporting..." : "Export STL"}
-                        </button>
-                        <button
-                            title={exportError || "Export 3MF"}
-                            onClick={handleExport3MF}
-                            disabled={isExporting || !config.imageUrl}
-                            className="bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md font-medium text-sm transition-colors shadow-sm"
-                        >
-                            {isExporting ? "Exporting..." : "Export 3MF"}
-                        </button>
-                    </div>
-                </div>
-            }
-        >
-            <div className="relative w-full h-full bg-slate-50">
-                {exportError && <p role="alert" className="absolute top-20 left-4 z-30 bg-white p-3 text-red-700">{exportError}</p>}
-            <EditorCanvas
-                    getCustomExportScene={mergedSceneForExport}
-                    isExporting={isExporting}
-                    customAmbientLightIntensity={ambientIntensity}
-                    customLights={customLights}
-                    dims={dimensions}
-                >
-                    {simulateBacklight && (
-                        <mesh scale={1000}>
-                            <sphereGeometry args={[1, 32, 32]} />
-                            <meshBasicMaterial color="#020203" side={THREE.BackSide} />
-                        </mesh>
-                    )}
-                    <group rotation={groupRotation} position={groupPosition}>
-                        <SmartLithophane
-                            imageUrl={config.imageUrl}
-                            cropShape={config.cropShape}
-                            minThick={config.minThick}
-                            maxThick={config.maxThick}
-                            resolution={config.resolution}
-                            quantizeLayerHeight={config.quantizeLayerHeight}
-                            simulateBacklight={simulateBacklight}
-                            emissiveTexture={lithoTexture}
-                            emissiveColor={tempToColor(lightTemp)}
-                            emissiveIntensity={lightIntensity / 10}
-                            autoSharpen={false}
-                            autoLevel={false}
-                            invert={false}
-                            physicalWidth={config.physicalWidth}
-                            color="#ffffff"
-                            onGeometryReady={handleLithoReady}
+                }
+                headerRight={
+                    <div className="flex flex-col sm:flex-row items-center gap-2">
+                        <HistoryControls
+                            undo={undo}
+                            redo={redo}
+                            canUndo={canUndo}
+                            canRedo={canRedo}
                         />
-                        <LithophaneFrame
-                            lithoBoundingBox={lithoBBRef.current}
-                            frameWidth={config.frameWidth}
-                            frameDepth={config.frameDepth}
-                            frameProfile={config.frameProfile}
-                            color={config.frameColor}
-                            keyringEnabled={config.keyringEnabled}
-                            keyringStyle={config.keyringStyle}
-                            keyringThickness={config.keyringThickness}
-                            keyringDiameter={config.keyringDiameter}
-                            keyringHole={config.keyringHole}
-                            keyringPosition={config.keyringPosition}
-                            keyringReinforced={config.keyringReinforced}
-                            borderText={config.borderText}
-                            borderTextSide={config.borderTextSide}
-                            borderTextFont={config.borderTextFont}
-                            borderTextSize={config.borderTextSize}
-                            borderTextDepth={config.borderTextDepth}
-                            borderTextColor={config.borderTextColor}
-                            borderTextMode={config.borderTextMode}
-                            onFrameReady={handleFrameReady}
-                        />
-                    </group>
-                </EditorCanvas>
-
-                {!config.imageUrl && (
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="bg-white/80 backdrop-blur-sm px-6 py-4 rounded-xl border border-slate-200 shadow-sm text-center">
-                            <p className="text-slate-600 font-medium">Upload an image in the sidebar to begin</p>
+                        <div className="flex gap-2">
+                            <button
+                                title={exportError || "Export CMYK"}
+                                onClick={handleExportCMYK}
+                                disabled={isExporting || !config.imageUrl}
+                                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md font-medium text-sm transition-colors shadow-sm"
+                            >
+                                {isExporting
+                                    ? "Exporting..."
+                                    : "Export CMYK Modifier"}
+                            </button>
+                            <button
+                                title={
+                                    exportError ||
+                                    (exportAccess("stl").allowed
+                                        ? "Export STL"
+                                        : "License activation required for STL export")
+                                }
+                                onClick={handleExportSTL}
+                                disabled={isExporting || !config.imageUrl}
+                                className="bg-slate-800 hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md font-medium text-sm transition-colors shadow-sm"
+                            >
+                                {isExporting ? "Exporting..." : "Export STL"}
+                            </button>
+                            <button
+                                title={
+                                    exportError ||
+                                    (exportAccess("3mf").allowed
+                                        ? "Export 3MF"
+                                        : "License activation required for 3MF export")
+                                }
+                                onClick={handleExport3MF}
+                                disabled={isExporting || !config.imageUrl}
+                                className="bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md font-medium text-sm transition-colors shadow-sm"
+                            >
+                                {isExporting ? "Exporting..." : "Export 3MF"}
+                            </button>
                         </div>
                     </div>
-                )}
-            </div>
-        </EditorLayout>
-        
-        <ImagePreprocessingModal
-            isOpen={isImageModalOpen}
-            initialImage={rawImage}
-            onClose={() => setIsImageModalOpen(false)}
-            onConfirm={(processedBase64) => {
-                setConfig(prev => ({ ...prev, imageUrl: processedBase64 }));
-                setIsImageModalOpen(false);
-            }}
-        />
+                }
+            >
+                <div className="relative w-full h-full bg-slate-50">
+                    {exportError && (
+                        <p
+                            role="alert"
+                            className="absolute top-20 left-4 z-30 bg-white p-3 text-red-700"
+                        >
+                            {exportError}
+                        </p>
+                    )}
+                    <EditorCanvas
+                        getCustomExportScene={mergedSceneForExport}
+                        isExporting={isExporting}
+                        customAmbientLightIntensity={ambientIntensity}
+                        customLights={customLights}
+                        dims={dimensions}
+                    >
+                        {simulateBacklight && (
+                            <mesh scale={1000}>
+                                <sphereGeometry args={[1, 32, 32]} />
+                                <meshBasicMaterial
+                                    color="#020203"
+                                    side={THREE.BackSide}
+                                />
+                            </mesh>
+                        )}
+                        <group
+                            rotation={groupRotation}
+                            position={groupPosition}
+                        >
+                            <SmartLithophane
+                                imageUrl={config.imageUrl}
+                                cropShape={config.cropShape}
+                                minThick={config.minThick}
+                                maxThick={config.maxThick}
+                                resolution={config.resolution}
+                                quantizeLayerHeight={config.quantizeLayerHeight}
+                                simulateBacklight={simulateBacklight}
+                                emissiveTexture={lithoTexture}
+                                emissiveColor={tempToColor(lightTemp)}
+                                emissiveIntensity={lightIntensity / 10}
+                                autoSharpen={false}
+                                autoLevel={false}
+                                invert={false}
+                                physicalWidth={config.physicalWidth}
+                                color="#ffffff"
+                                onGeometryReady={handleLithoReady}
+                            />
+                            <LithophaneFrame
+                                lithoBoundingBox={lithoBBRef.current}
+                                frameWidth={config.frameWidth}
+                                frameDepth={config.frameDepth}
+                                frameProfile={config.frameProfile}
+                                color={config.frameColor}
+                                keyringEnabled={config.keyringEnabled}
+                                keyringStyle={config.keyringStyle}
+                                keyringThickness={config.keyringThickness}
+                                keyringDiameter={config.keyringDiameter}
+                                keyringHole={config.keyringHole}
+                                keyringPosition={config.keyringPosition}
+                                keyringReinforced={config.keyringReinforced}
+                                borderText={config.borderText}
+                                borderTextSide={config.borderTextSide}
+                                borderTextFont={config.borderTextFont}
+                                borderTextSize={config.borderTextSize}
+                                borderTextDepth={config.borderTextDepth}
+                                borderTextColor={config.borderTextColor}
+                                borderTextMode={config.borderTextMode}
+                                onFrameReady={handleFrameReady}
+                            />
+                        </group>
+                    </EditorCanvas>
+
+                    {!config.imageUrl && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="bg-white/80 backdrop-blur-sm px-6 py-4 rounded-xl border border-slate-200 shadow-sm text-center">
+                                <p className="text-slate-600 font-medium">
+                                    Upload an image in the sidebar to begin
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </EditorLayout>
+
+            <ImagePreprocessingModal
+                isOpen={isImageModalOpen}
+                initialImage={rawImage}
+                onClose={() => setIsImageModalOpen(false)}
+                onConfirm={(processedBase64) => {
+                    setConfig((prev) => ({
+                        ...prev,
+                        imageUrl: processedBase64,
+                    }));
+                    setIsImageModalOpen(false);
+                }}
+            />
         </>
     );
 }

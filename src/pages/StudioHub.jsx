@@ -69,6 +69,7 @@ import {
     AlertCircle,
     RotateCw,
     Wrench,
+    Store,
 } from "lucide-react";
 
 // Tab Definitions
@@ -494,9 +495,17 @@ export default function StudioHub() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    <Link
+                        to="/studio/bazaar"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/80 transition-all shadow-2xs"
+                        title="Open Bazaar Hub POS & Event Management"
+                    >
+                        <Store size={15} className="text-teal-600" />
+                        <span className="hidden sm:inline">Bazaar Hub</span>
+                    </Link>
                     <button
                         onClick={loadAllStudioData}
-                        className="p-2 text-gray-400 hover:text-teal-600 hover:bg-gray-50 rounded-xl transition-colors"
+                        className="p-2 text-gray-400 hover:text-teal-600 hover:bg-gray-50 rounded-xl transition-colors cursor-pointer"
                         title="Refresh data from Cloud Firestore"
                     >
                         <RotateCw size={16} />

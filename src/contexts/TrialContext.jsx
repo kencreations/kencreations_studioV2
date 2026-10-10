@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { db } from "../firebase";
-import { doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore";
+import {
+    doc,
+    getDoc,
+    setDoc,
+    updateDoc,
+    increment,
+    serverTimestamp,
+} from "firebase/firestore";
 
 const TrialContext = createContext();
 
@@ -9,10 +16,12 @@ export function TrialProvider({ children }) {
     const [loadingTrial, setLoadingTrial] = useState(true);
     const [machineId, setMachineId] = useState(null);
     const [isLicensed, setIsLicensed] = useState(false);
+    const [trialStatus, setTrialStatus] = useState("loading");
 
     useEffect(() => {
         const initTrial = async () => {
             if (!window.electronAPI || !window.electronAPI.getMachineId) {
+                setTrialStatus("ready");
                 setLoadingTrial(false);
                 return;
             }
@@ -22,6 +31,7 @@ export function TrialProvider({ children }) {
                     const lic = await window.electronAPI.checkLicense();
                     if (lic && lic.activated) {
                         setIsLicensed(true);
+                        setTrialStatus("ready");
                         setLoadingTrial(false);
                         return;
                     }
@@ -40,13 +50,15 @@ export function TrialProvider({ children }) {
                         // Create new trial document
                         await setDoc(docRef, {
                             exportsLeft: 5,
-                            firstSeen: serverTimestamp()
+                            firstSeen: serverTimestamp(),
                         });
                         setExportsLeft(5);
                     }
                 }
+                setTrialStatus("ready");
             } catch (err) {
                 console.error("Failed to initialize trial system:", err);
+                setTrialStatus("error");
             } finally {
                 setLoadingTrial(false);
             }
@@ -56,21 +68,33 @@ export function TrialProvider({ children }) {
     }, []);
 
     const decrementTrial = async () => {
-        if (!machineId || !navigator.onLine) return;
-        
+        if (!machineId || !navigator.onLine || isLicensed || exportsLeft <= 0)
+            return false;
+
         try {
             const docRef = doc(db, "trial_users", machineId);
             await updateDoc(docRef, {
-                exportsLeft: increment(-1)
+                exportsLeft: increment(-1),
             });
-            setExportsLeft(prev => Math.max(0, prev - 1));
+            setExportsLeft((prev) => Math.max(0, prev - 1));
+            return true;
         } catch (err) {
             console.error("Failed to decrement trial exports:", err);
+            return false;
         }
     };
 
     return (
-        <TrialContext.Provider value={{ exportsLeft, loadingTrial, decrementTrial, machineId, isLicensed }}>
+        <TrialContext.Provider
+            value={{
+                exportsLeft,
+                loadingTrial,
+                trialStatus,
+                decrementTrial,
+                machineId,
+                isLicensed,
+            }}
+        >
             {children}
         </TrialContext.Provider>
     );

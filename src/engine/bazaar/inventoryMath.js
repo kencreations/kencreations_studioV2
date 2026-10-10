@@ -1,132 +1,488 @@
 /**
  * src/engine/bazaar/inventoryMath.js
- * Pure inventory math, state transitions, queue limits, and financial analytics for Bazaar Hub.
+ * Authoritative inventory mathematics, state transitions, invariant validation,
+ * queue limits, and financial analytics for KenCreations Bazaar Hub.
  *
  * Deterministic and free of side effects.
  */
 
+// ─── Core Accounting Formulas ────────────────────────────────────────────────
+
 /**
- * Calculates global available inventory.
- * Invariant: Available cannot exceed (on_hand - global_reserved - allocated_to_events).
+ * Calculates unallocated inventory at the shop level.
+ * Unallocated stock is inventory not yet committed to any active event or shop reservation.
+ *
+ * Invariant: physicalOnHand >= totalAllocatedToEvents + shopReservations
  */
-export function calculateGlobalAvailable({
-    onHand = 0,
-    globalReserved = 0,
-    allocatedToEvents = 0,
+export function calculateUnallocatedStock({
+    physicalOnHand,
+    physical_on_hand,
+    totalAllocatedToEvents,
+    total_allocated_to_events,
+    shopReservations,
+    shop_reservations,
+    onHand,
+    on_hand,
+    globalReserved,
+    global_reserved,
 } = {}) {
-    const raw = Number(onHand || 0) - Number(globalReserved || 0) - Number(allocatedToEvents || 0);
+    const onHandVal = Number(physicalOnHand ?? physical_on_hand ?? onHand ?? on_hand ?? 0);
+    const allocVal = Number(totalAllocatedToEvents ?? total_allocated_to_events ?? 0);
+    const resVal = Number(shopReservations ?? shop_reservations ?? globalReserved ?? global_reserved ?? 0);
+    const raw = onHandVal - allocVal - resVal;
     return Math.max(0, Math.floor(raw));
 }
 
 /**
- * Calculates event-specific available inventory bounded by both event quota and global inventory.
- * Invariant: Prevents overselling across multiple events.
+ * Global available stock is identical to unallocated stock (for non-event/shop orders).
+ */
+export function calculateGlobalAvailable(params = {}) {
+    return calculateUnallocatedStock(params);
+}
+
+/**
+ * Calculates available stock dedicated to a specific event.
+ *
+ * CRITICAL ACCOUNTING CORRECTION:
+ * Event available stock does NOT depend on unallocated shop inventory.
+ * Once inventory is allocated to an event, that stock is physically present
+ * at the event booth and available for sale at that event, even if shop
+ * unallocated stock is 0.
+ *
+ * Invariant: eventAllocated >= eventReserved + eventConsumed
  */
 export function calculateEventAvailable({
-    eventAllocated = 0,
-    eventReserved = 0,
-    eventConsumed = 0,
-    globalAvailable = Infinity,
+    eventAllocated,
+    event_allocated,
+    eventReserved,
+    event_reserved,
+    eventConsumed,
+    event_consumed,
 } = {}) {
-    const eventRemaining = Math.max(0, Number(eventAllocated || 0) - Number(eventReserved || 0) - Number(eventConsumed || 0));
-    return Math.min(eventRemaining, Math.max(0, Number(globalAvailable || 0)));
+    const allocVal = Number(eventAllocated ?? event_allocated ?? 0);
+    const resVal = Number(eventReserved ?? event_reserved ?? 0);
+    const consVal = Number(eventConsumed ?? event_consumed ?? 0);
+    const raw = allocVal - resVal - consVal;
+    return Math.max(0, Math.floor(raw));
 }
 
 /**
- * Reserves inventory on order acceptance.
- *
- * @param {Object} current - Current stock record { on_hand, global_reserved }
- * @param {number} qty - Quantity to reserve
- * @returns {Object} Updated counters
+ * Calculates remaining physical stock physically present at the event booth.
+ * Cumulative event allocation minus cumulative event consumption.
+ */
+export function calculateEventPhysicalRemaining({
+    eventAllocated,
+    event_allocated,
+    eventConsumed,
+    event_consumed,
+} = {}) {
+    const allocVal = Number(eventAllocated ?? event_allocated ?? 0);
+    const consVal = Number(eventConsumed ?? event_consumed ?? 0);
+    return Math.max(0, allocVal - consVal);
+}
+
+/**
+ * Calculates available shop inventory for direct shop/online orders.
+ */
+export function calculateShopAvailable(params = {}) {
+    return calculateUnallocatedStock(params);
+}
+
+// ─── Invariant Validation ────────────────────────────────────────────────────
+
+/**
+ * Validates inventory conservation laws and invariants across global and event records.
+ * Throws an explicit invariant violation error if any constraint is breached.
+ */
+export function validateInventoryInvariants({
+    globalStock = {},
+    eventStocks = [],
+} = {}) {
+    const physicalOnHand = Number(globalStock.physical_on_hand ?? globalStock.on_hand ?? 0);
+    const totalAllocated = Number(globalStock.total_allocated_to_events ?? globalStock.allocated_to_events ?? 0);
+    const shopReservations = Number(globalStock.shop_reservations ?? globalStock.global_reserved ?? 0);
+
+    if (physicalOnHand < 0) throw new Error(`Invariant violation: Negative physical on-hand stock (${physicalOnHand}).`);
+    if (totalAllocated < 0) throw new Error(`Invariant violation: Negative allocated stock (${totalAllocated}).`);
+    if (shopReservations < 0) throw new Error(`Invariant violation: Negative shop reservations (${shopReservations}).`);
+
+    let sumActiveAllocated = 0;
+    for (const ev of eventStocks) {
+        const allocated = Number(ev.event_allocated || 0);
+        const reserved = Number(ev.event_reserved || 0);
+        const consumed = Number(ev.event_consumed || 0);
+
+        if (allocated < 0 || reserved < 0 || consumed < 0) {
+            throw new Error(`Invariant violation: Negative counters in event stock record for event "${ev.event_id || 'unknown'}".`);
+        }
+        if (reserved + consumed > allocated) {
+            throw new Error(`Invariant violation: Event "${ev.event_id || 'unknown'}" commitments (${reserved} reserved + ${consumed} consumed) exceed allocation (${allocated}).`);
+        }
+        sumActiveAllocated += (allocated - consumed);
+    }
+
+    if (sumActiveAllocated > totalAllocated) {
+        throw new Error(`Invariant violation: Sum of active event allocations (${sumActiveAllocated}) exceeds global total_allocated (${totalAllocated}).`);
+    }
+
+    if (totalAllocated + shopReservations > physicalOnHand) {
+        throw new Error(`Invariant violation: Global allocations (${totalAllocated}) + shop reservations (${shopReservations}) exceed physical on-hand (${physicalOnHand}).`);
+    }
+
+    return true;
+}
+
+// ─── State Transitions ───────────────────────────────────────────────────────
+
+/**
+ * Allocates physical shop inventory to a specific event.
+ */
+export function transitionAllocateStockToEvent(globalStock, eventStock, qty) {
+    const allocQty = Math.floor(Number(qty || 0));
+    if (allocQty <= 0) throw new Error("Allocation quantity must be greater than zero.");
+
+    const physicalOnHand = Number(globalStock?.physical_on_hand ?? globalStock?.on_hand ?? 0);
+    const totalAllocated = Number(globalStock?.total_allocated_to_events ?? globalStock?.allocated_to_events ?? 0);
+    const shopReservations = Number(globalStock?.shop_reservations ?? globalStock?.global_reserved ?? 0);
+    const unallocated = calculateUnallocatedStock({ physicalOnHand, totalAllocatedToEvents: totalAllocated, shopReservations });
+
+    if (allocQty > unallocated) {
+        throw new Error(`Insufficient unallocated stock. Requested: ${allocQty}, Available to allocate: ${unallocated}`);
+    }
+
+    const currentEventAllocated = Number(eventStock?.event_allocated || 0);
+    const currentEventReserved = Number(eventStock?.event_reserved || 0);
+    const currentEventConsumed = Number(eventStock?.event_consumed || 0);
+
+    const updatedGlobal = {
+        physical_on_hand: physicalOnHand,
+        total_allocated_to_events: totalAllocated + allocQty,
+        shop_reservations: shopReservations,
+        unallocated_stock: unallocated - allocQty,
+    };
+
+    const updatedEvent = {
+        event_allocated: currentEventAllocated + allocQty,
+        event_reserved: currentEventReserved,
+        event_consumed: currentEventConsumed,
+        event_available: calculateEventAvailable({
+            eventAllocated: currentEventAllocated + allocQty,
+            eventReserved: currentEventReserved,
+            eventConsumed: currentEventConsumed,
+        }),
+    };
+
+    validateInventoryInvariants({ globalStock: updatedGlobal, eventStocks: [updatedEvent] });
+
+    return { globalStock: updatedGlobal, eventStock: updatedEvent };
+}
+
+/**
+ * Deallocates unreserved event inventory back to global shop inventory.
+ */
+export function transitionDeallocateStockFromEvent(globalStock, eventStock, qty) {
+    const deallocQty = Math.floor(Number(qty || 0));
+    if (deallocQty <= 0) throw new Error("Deallocation quantity must be greater than zero.");
+
+    const currentEventAllocated = Number(eventStock?.event_allocated || 0);
+    const currentEventReserved = Number(eventStock?.event_reserved || 0);
+    const currentEventConsumed = Number(eventStock?.event_consumed || 0);
+    const eventAvailable = calculateEventAvailable({
+        eventAllocated: currentEventAllocated,
+        eventReserved: currentEventReserved,
+        eventConsumed: currentEventConsumed,
+    });
+
+    if (deallocQty > eventAvailable) {
+        throw new Error(`Cannot deallocate ${deallocQty} units. Only ${eventAvailable} units available at event (unreserved and unconsumed).`);
+    }
+
+    const physicalOnHand = Number(globalStock?.physical_on_hand ?? globalStock?.on_hand ?? 0);
+    const totalAllocated = Number(globalStock?.total_allocated_to_events ?? globalStock?.allocated_to_events ?? 0);
+    const shopReservations = Number(globalStock?.shop_reservations ?? globalStock?.global_reserved ?? 0);
+
+    const updatedGlobal = {
+        physical_on_hand: physicalOnHand,
+        total_allocated_to_events: Math.max(0, totalAllocated - deallocQty),
+        shop_reservations: shopReservations,
+        unallocated_stock: calculateUnallocatedStock({
+            physicalOnHand,
+            totalAllocatedToEvents: Math.max(0, totalAllocated - deallocQty),
+            shopReservations,
+        }),
+    };
+
+    const updatedEvent = {
+        event_allocated: currentEventAllocated - deallocQty,
+        event_reserved: currentEventReserved,
+        event_consumed: currentEventConsumed,
+        event_available: eventAvailable - deallocQty,
+    };
+
+    validateInventoryInvariants({ globalStock: updatedGlobal, eventStocks: [updatedEvent] });
+
+    return { globalStock: updatedGlobal, eventStock: updatedEvent };
+}
+
+/**
+ * Reserves event stock upon seller acceptance of a customer order.
  */
 export function transitionReserveStock(current, qty) {
-    const onHand = Number(current?.on_hand || 0);
-    const reserved = Number(current?.global_reserved || 0);
+    const reserveQty = Math.floor(Number(qty || 0));
+    if (reserveQty <= 0) throw new Error("Reservation quantity must be greater than zero.");
+
+    // Supports both event-level stock record or shop-level stock record
+    if ("event_allocated" in current) {
+        const allocated = Number(current.event_allocated || 0);
+        const reserved = Number(current.event_reserved || 0);
+        const consumed = Number(current.event_consumed || 0);
+        const available = calculateEventAvailable({ eventAllocated: allocated, eventReserved: reserved, eventConsumed: consumed });
+
+        if (reserveQty > available) {
+            throw new Error(`Insufficient event stock to reserve. Requested: ${reserveQty}, Available: ${available}`);
+        }
+
+        return {
+            ...current,
+            event_allocated: allocated,
+            event_reserved: reserved + reserveQty,
+            event_consumed: consumed,
+            available: available - reserveQty,
+            event_available: available - reserveQty,
+        };
+    }
+
+    // Fallback for simple single-pool global stock records
+    const onHand = Number(current.on_hand ?? current.physical_on_hand ?? 0);
+    const reserved = Number(current.global_reserved ?? current.shop_reservations ?? 0);
     const available = onHand - reserved;
 
-    if (qty > available) {
-        throw new Error(`Insufficient stock to reserve. Requested: ${qty}, Available: ${available}`);
+    if (reserveQty > available) {
+        throw new Error(`Insufficient stock to reserve. Requested: ${reserveQty}, Available: ${available}`);
     }
 
     return {
+        ...current,
         on_hand: onHand,
-        global_reserved: reserved + qty,
-        available: available - qty,
+        physical_on_hand: onHand,
+        global_reserved: reserved + reserveQty,
+        shop_reservations: reserved + reserveQty,
+        available: available - reserveQty,
     };
 }
 
 /**
- * Consumes inventory when physical production starts.
- *
- * @param {Object} current - Current stock record { on_hand, global_reserved }
- * @param {number} qty - Quantity consumed
- * @returns {Object} Updated counters
+ * Consumes stock when physical production begins.
+ * Decrements reservation and increments physical consumption.
  */
 export function transitionConsumeStock(current, qty) {
-    const onHand = Number(current?.on_hand || 0);
-    const reserved = Number(current?.global_reserved || 0);
+    const consumeQty = Math.floor(Number(qty || 0));
+    if (consumeQty <= 0) throw new Error("Consume quantity must be greater than zero.");
 
-    if (qty > onHand) {
-        throw new Error(`Cannot consume ${qty} units. Only ${onHand} units on-hand.`);
+    if ("event_allocated" in current) {
+        const allocated = Number(current.event_allocated || 0);
+        const reserved = Number(current.event_reserved || 0);
+        const consumed = Number(current.event_consumed || 0);
+
+        if (consumeQty > reserved) {
+            throw new Error(`Cannot consume ${consumeQty} units. Only ${reserved} units are currently reserved for production.`);
+        }
+
+        return {
+            ...current,
+            event_allocated: allocated,
+            event_reserved: reserved - consumeQty,
+            event_consumed: consumed + consumeQty,
+            available: calculateEventAvailable({
+                eventAllocated: allocated,
+                eventReserved: reserved - consumeQty,
+                eventConsumed: consumed + consumeQty,
+            }),
+            event_available: calculateEventAvailable({
+                eventAllocated: allocated,
+                eventReserved: reserved - consumeQty,
+                eventConsumed: consumed + consumeQty,
+            }),
+            event_physical_remaining: calculateEventPhysicalRemaining({
+                eventAllocated: allocated,
+                eventConsumed: consumed + consumeQty,
+            }),
+        };
+    }
+
+    const onHand = Number(current.on_hand ?? current.physical_on_hand ?? 0);
+    const reserved = Number(current.global_reserved ?? current.shop_reservations ?? 0);
+
+    if (consumeQty > onHand) {
+        throw new Error(`Cannot consume ${consumeQty} units. Only ${onHand} units on-hand.`);
     }
 
     return {
-        on_hand: onHand - qty,
-        global_reserved: Math.max(0, reserved - qty),
-        available: Math.max(0, onHand - qty - Math.max(0, reserved - qty)),
+        ...current,
+        on_hand: onHand - consumeQty,
+        physical_on_hand: onHand - consumeQty,
+        global_reserved: Math.max(0, reserved - consumeQty),
+        shop_reservations: Math.max(0, reserved - consumeQty),
+        available: Math.max(0, onHand - consumeQty - Math.max(0, reserved - consumeQty)),
     };
 }
 
 /**
- * Releases reserved inventory upon order rejection or pre-production cancellation.
+ * Atomically consumes physical event stock when production begins on an accepted order.
  *
- * @param {Object} current - Current stock record { on_hand, global_reserved }
- * @param {number} qty - Quantity to release
- * @returns {Object} Updated counters
+ * UNIFIED ACCOUNTING INVARIANT & DOUBLE-DEDUCTION PREVENTION:
+ * - `event_allocated` is the cumulative allocation sent to the booth. It is NOT decremented upon consumption.
+ * - `event_consumed` is the cumulative components consumed at the booth. It increments by `qty`.
+ * - `event_reserved` decrements by `qty` (reservation is fulfilled by physical consumption).
+ * - Event available stock = `event_allocated - event_reserved - event_consumed`.
+ * - Event physical remaining at booth = `event_allocated - event_consumed`.
+ * - Global `physical_on_hand` decrements by `qty` (physical components are now fabricated into a customized item).
+ * - Global `total_allocated_to_events` decrements by `qty` (reflects net active unconsumed stock remaining at events).
+ *
+ * This ensures:
+ * 1. Event stock is not deducted twice.
+ * 2. `event_available` and `event_physical_remaining` are consistent.
+ * 3. Idempotency guards prevent duplicate execution from consuming stock again.
+ */
+export function transitionConsumeEventStock({ globalStock, eventStock, qty, orderId, processedOrderIds = [] }) {
+    if (orderId && Array.isArray(processedOrderIds) && processedOrderIds.includes(orderId)) {
+        throw new Error(`Idempotency guard: Order "${orderId}" has already consumed inventory.`);
+    }
+
+    const consumeQty = Math.floor(Number(qty || 0));
+    if (consumeQty <= 0) throw new Error("Consume quantity must be greater than zero.");
+
+    const allocated = Number(eventStock?.event_allocated || 0);
+    const reserved = Number(eventStock?.event_reserved || 0);
+    const consumed = Number(eventStock?.event_consumed || 0);
+
+    if (consumeQty > reserved) {
+        throw new Error(`Cannot consume ${consumeQty} units. Only ${reserved} units are currently reserved for production.`);
+    }
+
+    const physicalOnHand = Number(globalStock?.physical_on_hand ?? globalStock?.on_hand ?? 0);
+    const totalAllocated = Number(globalStock?.total_allocated_to_events ?? globalStock?.allocated_to_events ?? 0);
+    const shopReservations = Number(globalStock?.shop_reservations ?? globalStock?.global_reserved ?? 0);
+
+    if (consumeQty > physicalOnHand) {
+        throw new Error(`Cannot consume ${consumeQty} units. Insufficient physical on-hand stock (${physicalOnHand}).`);
+    }
+
+    const updatedEvent = {
+        ...eventStock,
+        event_allocated: allocated, // Cumulative allocation remains unchanged (no double deduction)
+        event_reserved: reserved - consumeQty,
+        event_consumed: consumed + consumeQty,
+        event_available: calculateEventAvailable({
+            eventAllocated: allocated,
+            eventReserved: reserved - consumeQty,
+            eventConsumed: consumed + consumeQty,
+        }),
+        event_physical_remaining: calculateEventPhysicalRemaining({
+            eventAllocated: allocated,
+            eventConsumed: consumed + consumeQty,
+        }),
+    };
+
+    const updatedGlobal = {
+        ...globalStock,
+        physical_on_hand: physicalOnHand - consumeQty,
+        total_allocated_to_events: Math.max(0, totalAllocated - consumeQty),
+        shop_reservations: shopReservations,
+        unallocated_stock: calculateUnallocatedStock({
+            physicalOnHand: physicalOnHand - consumeQty,
+            totalAllocatedToEvents: Math.max(0, totalAllocated - consumeQty),
+            shopReservations,
+        }),
+    };
+
+    validateInventoryInvariants({ globalStock: updatedGlobal, eventStocks: [updatedEvent] });
+
+    return { globalStock: updatedGlobal, eventStock: updatedEvent };
+}
+
+/**
+ * Releases reserved inventory upon pre-production order rejection or cancellation.
  */
 export function transitionReleaseStock(current, qty) {
-    const onHand = Number(current?.on_hand || 0);
-    const reserved = Number(current?.global_reserved || 0);
-    const newReserved = Math.max(0, reserved - qty);
+    const releaseQty = Math.floor(Number(qty || 0));
+    if (releaseQty <= 0) throw new Error("Release quantity must be greater than zero.");
+
+    if ("event_allocated" in current) {
+        const allocated = Number(current.event_allocated || 0);
+        const reserved = Number(current.event_reserved || 0);
+        const consumed = Number(current.event_consumed || 0);
+        const newReserved = Math.max(0, reserved - releaseQty);
+
+        return {
+            ...current,
+            event_allocated: allocated,
+            event_reserved: newReserved,
+            event_consumed: consumed,
+            available: calculateEventAvailable({ eventAllocated: allocated, eventReserved: newReserved, eventConsumed: consumed }),
+            event_available: calculateEventAvailable({ eventAllocated: allocated, eventReserved: newReserved, eventConsumed: consumed }),
+        };
+    }
+
+    const onHand = Number(current.on_hand ?? current.physical_on_hand ?? 0);
+    const reserved = Number(current.global_reserved ?? current.shop_reservations ?? 0);
+    const newReserved = Math.max(0, reserved - releaseQty);
 
     return {
+        ...current,
         on_hand: onHand,
+        physical_on_hand: onHand,
         global_reserved: newReserved,
+        shop_reservations: newReserved,
         available: Math.max(0, onHand - newReserved),
     };
 }
 
 /**
- * Handles post-production cancellation: recovers reusable components and logs damaged scrap.
- *
- * @param {Object} current - Current stock record { on_hand, global_reserved }
- * @param {number} recoveredQty - Reusable units returned to stock
- * @param {number} wastedQty - Damaged / customized units scrapped
- * @returns {Object} Updated counters and waste log
+ * Handles post-production cancellation:
+ * Reusable components (switches, keyrings) are returned to available stock;
+ * Damaged / customized pieces (printed caps) are permanently logged as waste.
  */
 export function transitionScrapOrRecoverStock(current, recoveredQty = 0, wastedQty = 0) {
-    const onHand = Number(current?.on_hand || 0);
-    const reserved = Number(current?.global_reserved || 0);
+    const safeRecovered = Math.max(0, Math.floor(Number(recoveredQty || 0)));
+    const safeWasted = Math.max(0, Math.floor(Number(wastedQty || 0)));
 
-    const safeRecovered = Math.max(0, Number(recoveredQty || 0));
-    const safeWasted = Math.max(0, Number(wastedQty || 0));
+    if ("event_allocated" in current) {
+        const allocated = Number(current.event_allocated || 0);
+        const reserved = Number(current.event_reserved || 0);
+        const consumed = Number(current.event_consumed || 0);
+
+        // Recovered items are unconsumed (returned to event availability)
+        const newConsumed = Math.max(0, consumed - safeRecovered);
+
+        return {
+            ...current,
+            event_allocated: allocated,
+            event_reserved: reserved,
+            event_consumed: newConsumed,
+            wasted_count: safeWasted,
+            available: calculateEventAvailable({ eventAllocated: allocated, eventReserved: reserved, eventConsumed: newConsumed }),
+            event_available: calculateEventAvailable({ eventAllocated: allocated, eventReserved: reserved, eventConsumed: newConsumed }),
+        };
+    }
+
+    const onHand = Number(current.on_hand ?? current.physical_on_hand ?? 0);
+    const reserved = Number(current.global_reserved ?? current.shop_reservations ?? 0);
 
     return {
+        ...current,
         on_hand: onHand + safeRecovered,
+        physical_on_hand: onHand + safeRecovered,
         global_reserved: reserved,
         wasted_count: safeWasted,
         available: Math.max(0, onHand + safeRecovered - reserved),
     };
 }
 
+// ─── Queue Capacity Controls ─────────────────────────────────────────────────
+
 /**
  * Evaluates event queue limits and booth acceptance state.
- *
- * @param {Object} params
- * @param {number} params.pendingCount - Current orders awaiting review
- * @param {number} params.activeCount - Current orders in active production (Accepted + Preparing)
- * @param {Object} params.eventConfig - Event configuration
- * @returns {Object} { allowed: boolean, reason: string | null }
  */
 export function checkQueueCapacity({
     pendingCount = 0,
@@ -150,14 +506,10 @@ export function checkQueueCapacity({
     return { allowed: true, reason: null, message: null };
 }
 
+// ─── Financial Analytics & Ledger Accounting ─────────────────────────────────
+
 /**
  * Calculates authoritative financial analytics from orders, expenses, and refunds.
- *
- * @param {Object} params
- * @param {Array<Object>} params.orders - All orders for event/shop
- * @param {Array<Object>} [params.expenses=[]] - Seller event expenses
- * @param {Array<Object>} [params.refunds=[]] - Refund records
- * @returns {Object} Accurate financial summary
  */
 export function calculateFinancialSummary({
     orders = [],
@@ -232,3 +584,110 @@ export function calculateFinancialSummary({
         },
     };
 }
+
+// ─── Matrix & Variant Inventory Domain Helpers ────────────────────────────────
+
+/**
+ * Builds a 2D matrix structure for Letter Caps across colors.
+ *
+ * @param {Object} params
+ * @param {Array<Object>} [params.inventoryItems=[]] - Flat inventory items
+ * @param {Array<string>} [params.letters] - Letters array (default A-Z, 0-9)
+ * @param {Array<string>} [params.colors] - Colors array (default Pink, Teal, Purple, White, Black)
+ * @returns {Object} Matrix rows, columns, and cell map
+ */
+export function buildLetterColorMatrix({
+    inventoryItems = [],
+    letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".split(""),
+    colors = ["Pink", "Teal", "Purple", "White", "Black"],
+    itemType = "letter_cap",
+} = {}) {
+    const isIcon = itemType === "icon_cap";
+    const itemMap = new Map();
+    for (const item of inventoryItems) {
+        if (item.char && item.color) {
+            const key = isIcon
+                ? `cap_icon_${String(item.char).toLowerCase()}_${String(item.color).toLowerCase()}`
+                : `cap_${String(item.char).toUpperCase()}_${String(item.color).toLowerCase()}`;
+            itemMap.set(key.toLowerCase(), item);
+        }
+        if (item.item_key) {
+            itemMap.set(item.item_key.toLowerCase(), item);
+        }
+    }
+
+    const rows = [];
+    for (const char of letters) {
+        const cells = {};
+        for (const col of colors) {
+            const key = isIcon
+                ? `cap_icon_${String(char).toLowerCase()}_${String(col).toLowerCase()}`
+                : `cap_${String(char).toUpperCase()}_${String(col).toLowerCase()}`;
+            const existing = itemMap.get(key.toLowerCase()) || {};
+            const onHand = Number(existing.on_hand ?? existing.onHand ?? 0);
+            const reserved = Number(existing.reserved ?? 0);
+            const available = Math.max(0, onHand - reserved);
+
+            cells[col] = {
+                key,
+                itemKey: key,
+                char,
+                color: col,
+                itemType: isIcon ? "icon_cap" : "letter_cap",
+                onHand,
+                reserved,
+                available,
+                lowThreshold: Number(existing.low_threshold ?? 5),
+                isLow: onHand <= Number(existing.low_threshold ?? 5),
+            };
+        }
+        rows.push({
+            char,
+            cells,
+        });
+    }
+
+    return {
+        letters,
+        colors,
+        rows,
+    };
+}
+
+/**
+ * Validates and executes an inventory balance adjustment.
+ * Strictly prevents negative balances.
+ *
+ * @param {Object} currentStock - Current stock record
+ * @param {number} delta - Quantity change (+/-)
+ * @returns {Object} Updated stock values and movement record
+ */
+export function adjustStockBalance(currentStock = {}, delta = 0) {
+    const change = Number(delta);
+    if (!Number.isFinite(change) || change === 0) {
+        throw new Error("A non-zero quantity change is required.");
+    }
+
+    const currentOnHand = Number(currentStock.on_hand ?? currentStock.onHand ?? 0);
+    const currentReserved = Number(currentStock.reserved ?? 0);
+    const newOnHand = currentOnHand + change;
+
+    if (newOnHand < 0) {
+        throw new Error(`Insufficient inventory: adjustment of ${change} would reduce balance (${currentOnHand}) below zero.`);
+    }
+
+    if (newOnHand < currentReserved) {
+        throw new Error(`Cannot reduce physical stock below reserved quantity (${currentReserved}). Active orders require this stock.`);
+    }
+
+    const newAvailable = Math.max(0, newOnHand - currentReserved);
+
+    return {
+        on_hand: newOnHand,
+        reserved: currentReserved,
+        available: newAvailable,
+        previous_on_hand: currentOnHand,
+        delta: change,
+    };
+}
+

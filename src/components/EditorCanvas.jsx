@@ -1,27 +1,14 @@
 import { useModelExport } from "../hooks/useModelExport";
 import { disposeExportScene } from "../engine/export/modelExport";
-import {
-    useRef,
-    useImperativeHandle,
-} from "react";
-
+import { useRef, useImperativeHandle } from "react";
 
 import { Canvas, useThree } from "@react-three/fiber";
 
-import {
-    OrbitControls,
-    GizmoHelper,
-    GizmoViewcube,
-} from "@react-three/drei";
+import { OrbitControls, GizmoHelper, GizmoViewcube } from "@react-three/drei";
 import * as THREE from "three";
-
-
 
 import PrintEstimatorHUD from "./PrintEstimatorHUD";
 import CsgLoadingOverlay from "./CsgLoadingOverlay";
-
-
-
 
 import { usePrinter } from "../contexts/PrinterContext";
 import TexturedBuildPlate from "./3D/TexturedBuildPlate";
@@ -121,8 +108,9 @@ export default function EditorCanvas({
     const buildPlateRef = useRef();
     const gizmoRef = useRef();
     const { activePrinter } = usePrinter();
-    const { exportModel, isExporting, exportError } = useModelExport();
-    const getExportScene = format => {
+    const { exportModel, exportAccess, isExporting, exportError } =
+        useModelExport();
+    const getExportScene = (format) => {
         if (getCustomExportScene) return getCustomExportScene(format);
         if (!exportGroupRef.current) return null;
         const clone = exportGroupRef.current.clone(true);
@@ -132,18 +120,36 @@ export default function EditorCanvas({
         return clone;
     };
     const runExport = (format, customFilename) => {
-        const safeTitle = typeof title === 'string' ? title : title?.text || title?.name || 'kencreations_model';
-        const filename = typeof customFilename === 'string' ? customFilename : safeTitle.replace(/[^a-z0-9_-]+/gi, '_').toLowerCase() + '.' + format;
+        const safeTitle =
+            typeof title === "string"
+                ? title
+                : title?.text || title?.name || "kencreations_model";
+        const filename =
+            typeof customFilename === "string"
+                ? customFilename
+                : safeTitle.replace(/[^a-z0-9_-]+/gi, "_").toLowerCase() +
+                  "." +
+                  format;
         return exportModel({
-            getScene: getExportScene, format, filename,
+            getScene: getExportScene,
+            format,
+            filename,
             // Custom scenes own their resources; regular clones share the live mesh.
             dispose: getCustomExportScene ? disposeExportScene : undefined,
-            printConfig: activePrinter ? { printableWidth: activePrinter.width, printableDepth: activePrinter.depth } : undefined,
+            printConfig: activePrinter
+                ? {
+                      printableWidth: activePrinter.width,
+                      printableDepth: activePrinter.depth,
+                  }
+                : undefined,
         });
     };
-    const handleExportSTL = name => runExport('stl', name);
-    const handleExport3MF = name => runExport('3mf', name);
-    useImperativeHandle(ref, () => ({ exportSTL: handleExportSTL, export3MF: handleExport3MF }));
+    const handleExportSTL = (name) => runExport("stl", name);
+    const handleExport3MF = (name) => runExport("3mf", name);
+    useImperativeHandle(ref, () => ({
+        exportSTL: handleExportSTL,
+        export3MF: handleExport3MF,
+    }));
 
     const handleCapture = () => {
         if (captureRef.current) {
@@ -154,7 +160,14 @@ export default function EditorCanvas({
     return (
         <div className="relative w-full h-full bg-transparent">
             <CsgLoadingOverlay />
-            {exportError && <p role="alert" className="absolute top-4 left-4 z-30 max-w-sm rounded-lg bg-white p-3 text-red-700 shadow">{exportError}</p>}
+            {exportError && (
+                <p
+                    role="alert"
+                    className="absolute top-4 left-4 z-30 max-w-sm rounded-lg bg-white p-3 text-red-700 shadow"
+                >
+                    {exportError}
+                </p>
+            )}
 
             <Canvas
                 // Cap at 1.5: on 4K screens dpr=2 doubles GPU load for minimal
@@ -177,7 +190,11 @@ export default function EditorCanvas({
                 */}
                 {/* ── Lights ── */}
                 <ambientLight intensity={0.5} />
-                <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
+                <directionalLight
+                    position={[10, 10, 5]}
+                    intensity={1}
+                    castShadow
+                />
 
                 {activePrinter?.modelPath ? (
                     <group ref={buildPlateRef}>
@@ -185,10 +202,13 @@ export default function EditorCanvas({
                     </group>
                 ) : (
                     <group ref={buildPlateRef}>
-                        <gridHelper args={[256, 25, SECONDARY, CELL_COLOR]} position={[0, -0.1, 0]} />
+                        <gridHelper
+                            args={[256, 25, SECONDARY, CELL_COLOR]}
+                            position={[0, -0.1, 0]}
+                        />
                     </group>
                 )}
-                
+
                 <group
                     ref={exportGroupRef}
                     rotation={[-Math.PI / 2, 0, 0]}
@@ -196,7 +216,6 @@ export default function EditorCanvas({
                 >
                     {children}
                 </group>
-
 
                 <OrbitControls
                     makeDefault
@@ -206,7 +225,11 @@ export default function EditorCanvas({
                     zoomSpeed={1.5}
                     panSpeed={1.2}
                     minDistance={20}
-                    maxDistance={(activePrinter ? Math.max(activePrinter.width, activePrinter.depth) : 256) * 2.5}
+                    maxDistance={
+                        (activePrinter
+                            ? Math.max(activePrinter.width, activePrinter.depth)
+                            : 256) * 2.5
+                    }
                 />
 
                 <group ref={gizmoRef}>
@@ -268,6 +291,7 @@ export default function EditorCanvas({
 
             <FloatingExportBar
                 disabled={isExporting}
+                exportAccess={exportAccess}
                 onExportSTL={handleExportSTL}
                 onExport3MF={handleExport3MF}
                 onScreenshot={handleCapture}
