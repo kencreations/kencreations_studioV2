@@ -1,3 +1,4 @@
+import { isIconSlot, iconComponents, validComponentKey } from './icons.js';
 /**
  * src/engine/bazaar/bom.js
  * Pure Bill of Materials (BOM) decomposition functions for Bazaar Hub.
@@ -34,6 +35,7 @@ export function getCharacterFrequencies(text) {
  * @param {number} [params.quantity=1] - Number of items ordered
  * @returns {Array<Object>} List of required inventory components
  */
+import { clickerOptions, validateClickerConfiguration } from './configuration.js';
 export function decomposeProductBOM({
     product,
     customization = {},
@@ -41,12 +43,58 @@ export function decomposeProductBOM({
 } = {}) {
     if (!product) throw new Error("Product definition is required for BOM decomposition.");
     const safeQty = Math.max(1, Math.floor(Number(quantity) || 1));
+    product = { ...product, id: product.productId || product.id };
+
+    if (product.type === 'made_to_order' && Array.isArray(customization.slotsData)) {
+        if (product.customizationOptions || product.customization_schema) {
+            validateClickerConfiguration(product, customization);
+        }
+        const schema = clickerOptions(product), components = new Map();
+        const add = (key, name, type, qty = 1) => {
+            const old = components.get(key);
+            components.set(key, { component_key: key, name, item_type: type, required_qty: (old?.required_qty || 0) + qty * safeQty });
+        };
+        for (const slot of customization.slotsData) {
+            if (isIconSlot(slot)) {
+                const icon = schema.available_icons.find(i => i.id === slot.iconId) || slot;
+                const iconComps = icon.components || (icon.inventorySku ? [{ component_key: icon.inventorySku, required_qty: 1, name: icon.name, item_type: 'icon_cap' }] : [{ component_key: `cap_icon_${icon.iconId || icon.id || 'icon'}`, required_qty: 1, name: icon.name || icon.iconName || 'Icon Cap', item_type: 'icon_cap' }]);
+                for (const component of iconComps) add(component.component_key, component.name || icon.name || 'Icon', component.item_type || 'material', component.required_qty || 1);
+            } else {
+                const color = schema.colors.find(c => c.id === slot.colorId);
+                const colorName = color?.name || slot.colorName || slot.colorId || 'white';
+                const suffix = slot.styleId ? `_${slot.styleId}` : '';
+                const capKey = `cap_${slot.char}_${colorName.toLowerCase().replace(/\s+/g, '_')}${suffix}`;
+                add(capKey, `${colorName} keycap ${slot.char}${suffix}`, 'letter_cap');
+            }
+            const sw = schema.allowed_switch_types.find(s => s.id === (slot.switchId || customization.switch_type_id));
+            const swId = sw?.consumableId || sw?.consumable_id || sw?.id || slot.switchId || customization.switch_type_id || 'switch';
+            const swName = sw?.name || slot.switchName || customization.switchType?.name || 'Mechanical Switch';
+            add(`consumable_${swId}`, swName, 'switch');
+        }
+        const base = schema.casing_base_colors.find(c => c.id === customization.casing_color);
+        const baseName = base?.name || customization.casingColor?.name || customization.casing_color || 'black';
+        const style = customization.casing_style_id || customization.casingStyle;
+        const slotsCount = customization.slots || customization.slotsData.length || 1;
+        // Existing inventory UI uses this key for the standard casing.
+        const key = `base_casing_${baseName.toLowerCase().replace(/\s+/g, '_')}_${slotsCount}key${style && style !== 'standard' ? `_${style}` : ''}`;
+        add(key, `${baseName} ${slotsCount}-slot casing${style && style !== 'standard' ? ` (${style})` : ''}`, 'casing_base');
+        for (const id of new Set(customization.selected_add_on_ids || [])) {
+            const item = schema.add_ons.find(a => a.id === id) || (customization.addons || []).find(a => a.id === id);
+            if (item) add(`consumable_${item.consumable_id || item.id}`, item.name, 'consumable');
+        }
+        return [...components.values()];
+    }
 
     // ── Case 1: Ready-Made Finished Product ──
     if (product.type === "ready_made") {
+        if (!validComponentKey(product.id)) throw new Error('Seller must repair the product ID before ordering.');
+        const variant = customization.selected_variant_id ? product.variants?.find(v => v.id === customization.selected_variant_id) : null;
+        if (customization.selected_variant_id && !variant) throw new Error('Choose a configured product variant.');
+        const sku = variant?.inventorySku || product.inventorySku || `finished_${product.id}${variant ? `_${variant.id}` : ''}`;
+        if (!validComponentKey(sku)) throw new Error('Seller must repair the finished inventory SKU before ordering.');
         return [
             {
-                component_key: `finished_${product.id}`,
+                component_key: sku,
                 item_type: "finished_good",
                 item_id: product.id,
                 name: product.title,

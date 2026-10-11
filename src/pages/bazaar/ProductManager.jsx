@@ -1,3 +1,5 @@
+import SellerIconLibrary from '../../components/bazaar/SellerIconLibrary';
+import { BUILTIN_ICONS as AVAILABLE_ICONS, normalizeIcon } from '../../engine/bazaar/icons.js';
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import {
@@ -72,20 +74,7 @@ const DEFAULT_BASE_COLORS = [
 ];
 
 // Available Icon Keycaps
-const AVAILABLE_ICONS = [
-    { id: "heart", label: "Heart", emoji: "❤️" },
-    { id: "star", label: "Star", emoji: "⭐" },
-    { id: "crown", label: "Crown", emoji: "👑" },
-    { id: "gamepad", label: "Gaming", emoji: "🎮" },
-    { id: "paw", label: "Paw", emoji: "🐾" },
-    { id: "zap", label: "Lightning", emoji: "⚡" },
-    { id: "music", label: "Music", emoji: "🎵" },
-    { id: "flame", label: "Fire", emoji: "🔥" },
-    { id: "smile", label: "Smile", emoji: "😊" },
-    { id: "cat", label: "Cat", emoji: "🐱" },
-    { id: "coffee", label: "Coffee", emoji: "☕" },
-    { id: "rocket", label: "Rocket", emoji: "🚀" },
-];
+
 
 const DEFAULT_CASING_STYLES = [
     { id: "standard", name: "Standard Block", extraPrice: 0 },
@@ -370,8 +359,8 @@ export default function ProductManager() {
 
     // Helper: Toggle icon selection
     const handleToggleIcon = (iconId) => {
-        if (selectedIcons.includes(iconId)) {
-            setSelectedIcons(selectedIcons.filter((i) => i !== iconId));
+        if (selectedIcons.some(i => (typeof i === "string" ? i : i.id) === iconId)) {
+            setSelectedIcons(selectedIcons.filter((i) => (typeof i === "string" ? i : i.id) !== iconId));
         } else {
             setSelectedIcons([...selectedIcons, iconId]);
         }
@@ -660,7 +649,7 @@ export default function ProductManager() {
                                   price: Number(a.price || 0),
                               })),
                               icon_caps_enabled: Boolean(enableIconKeycaps),
-                              available_icons: selectedIcons,
+                              available_icons: selectedIcons.map(normalizeIcon),
                               icon_cap_surcharge: Number(iconCapSurcharge) || 0,
                           }
                         : null,
@@ -1804,9 +1793,15 @@ export default function ProductManager() {
                                                     </div>
                                                 </div>
 
+                                                <SellerIconLibrary selected={selectedIcons} onChange={setSelectedIcons} />
+                                                <p className="text-xs text-amber-800">Legacy symbols are previews. Each needs an explicit inventory mapping before an order can be submitted.</p>
+                                                {selectedIcons.map(normalizeIcon).filter(icon => !icon.libraryId).map(icon => <label key={icon.id} className="block text-xs">
+                                                    {icon.name}: existing preprinted inventory SKU
+                                                    <input className="border rounded p-2 ml-2" aria-label={`${icon.name} inventory SKU`} value={icon.inventorySku || ''} placeholder="Select the exact SKU from inventory" onChange={e => setSelectedIcons(selectedIcons.map(normalizeIcon).map(value => value.id === icon.id ? {...value, fulfillmentMode:e.target.value ? 'preprinted' : 'artwork_only',inventorySku:e.target.value.trim()} : value))} />
+                                                </label>)}
                                                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                                                     {AVAILABLE_ICONS.map((ic) => {
-                                                        const isSelected = selectedIcons.includes(ic.id);
+                                                        const isSelected = selectedIcons.some(i => (typeof i === "string" ? i : i.id) === ic.id);
                                                         return (
                                                             <button
                                                                 key={ic.id}
@@ -1867,6 +1862,11 @@ export default function ProductManager() {
                                                 </div>
 
                                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                                    <label className="block text-[11px] font-bold text-gray-600">
+                                                        Existing inventory SKU
+                                                        <input className="w-full px-2.5 py-1.5 rounded-xl border border-gray-200" value={v.inventorySku || ''} aria-label={`Variant ${idx + 1} inventory SKU`} onChange={e => setReadyVariants(readyVariants.map((variant, index) => index === idx ? {...variant, inventorySku:e.target.value.trim()} : variant))} />
+                                                        <span className="font-normal">Links existing inventory; product stock fields do not restock it.</span>
+                                                    </label>
                                                     <div>
                                                         <label className="block text-[11px] font-bold text-gray-600 mb-1">Color</label>
                                                         <input

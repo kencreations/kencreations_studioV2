@@ -247,38 +247,93 @@ function App() {
                                 }
                             />
                             <Route
+                                path="/studio/bazaar/orders"
+                                element={
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/OrdersManager")))}
+                                    </React.Suspense>
+                                }
+                            />
+                            <Route
+                                path="/studio/bazaar/reports"
+                                element={
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/ReportsDashboard")))}
+                                    </React.Suspense>
+                                }
+                            />
+                            <Route
+                                path="/studio/bazaar/events/:eventId/reports"
+                                element={
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/ReportsDashboard")))}
+                                    </React.Suspense>
+                                }
+                            />
+                            {/* Milestone 4 Customer Storefront Routes */}
+                            <Route
+                                path="/shop/:shopSlug"
+                                element={
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/storefront/CustomerStorefront")))}
+                                    </React.Suspense>
+                                }
+                            />
+                            <Route
+                                path="/shop/:shopSlug/e/:eventSlug"
+                                element={
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/storefront/CustomerStorefront")))}
+                                    </React.Suspense>
+                                }
+                            />
+                            <Route
+                                path="/shop/:shopSlug/product/:productId"
+                                element={
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/storefront/ProductCustomizer")))}
+                                    </React.Suspense>
+                                }
+                            />
+                            <Route
+                                path="/shop/:shopSlug/cart"
+                                element={
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/storefront/CustomerCart")))}
+                                    </React.Suspense>
+                                }
+                            />
+                            <Route
+                                path="/shop/:shopSlug/checkout"
+                                element={
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/storefront/CustomerCheckout")))}
+                                    </React.Suspense>
+                                }
+                            />
+                            <Route
+                                path="/order/track/:privateToken"
+                                element={
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/storefront/CustomerOrderTracking")))}
+                                    </React.Suspense>
+                                }
+                            />
+
+                            {/* Backward Compatibility Aliases for Milestone 2 QR codes */}
+                            <Route
                                 path="/bazaar/e/:eventId"
                                 element={
-                                    <React.Suspense
-                                        fallback={
-                                            <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center">
-                                                <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
-                                            </div>
-                                        }>
-                                        {React.createElement(
-                                            React.lazy(
-                                                () =>
-                                                    import("./pages/bazaar/BazaarComingSoon"),
-                                            )
-                                        )}
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/storefront/CustomerStorefront")))}
                                     </React.Suspense>
                                 }
                             />
                             <Route
                                 path="/bazaar/:slug"
                                 element={
-                                    <React.Suspense
-                                        fallback={
-                                            <div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center">
-                                                <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
-                                            </div>
-                                        }>
-                                        {React.createElement(
-                                            React.lazy(
-                                                () =>
-                                                    import("./pages/bazaar/BazaarComingSoon"),
-                                            )
-                                        )}
+                                    <React.Suspense fallback={<div className="min-h-screen bg-[#f8f9fc] flex items-center justify-center"><div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" /></div>}>
+                                        {React.createElement(React.lazy(() => import("./pages/bazaar/storefront/CustomerStorefront")))}
                                     </React.Suspense>
                                 }
                             />

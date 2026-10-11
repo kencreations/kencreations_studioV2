@@ -1,5 +1,5 @@
-import React from "react";
-import { Sparkles, KeyRound } from "lucide-react";
+import IconArtwork from '../IconArtwork';
+import { Sparkles } from "lucide-react";
 
 /**
  * Calculates whether text on a hex color should be dark or light.
@@ -39,7 +39,7 @@ export default function ClickerVisualPreview({
             : "rounded-xl";
 
     return (
-        <div className="relative w-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-gray-50 to-gray-100 rounded-3xl border border-gray-200/80 shadow-inner overflow-hidden select-none">
+        <div className="relative w-full flex flex-col items-center justify-center p-3 sm:p-6 overflow-x-auto bg-gradient-to-b from-gray-50 to-gray-100 rounded-3xl border border-gray-200/80 shadow-inner overflow-hidden select-none">
             {/* Background subtle grid pattern */}
             <div
                 className="absolute inset-0 opacity-[0.03] pointer-events-none"
@@ -109,7 +109,7 @@ export default function ClickerVisualPreview({
                                                 : ""
                                         }`}
                                         style={{
-                                            backgroundColor: slot.colorHex || "#14b8a6",
+                                            backgroundColor: slot.isIcon ? "#ffffff" : slot.colorHex || "#14b8a6",
                                             color: contrast,
                                         }}
                                     >
@@ -118,7 +118,7 @@ export default function ClickerVisualPreview({
 
                                         {/* Char or Emoji display */}
                                         <span className="text-lg sm:text-xl font-black tracking-tight leading-none drop-shadow-xs z-10">
-                                            {slot.isIcon ? slot.iconEmoji || "✨" : slot.char || "A"}
+                                            {slot.isIcon ? <IconArtwork icon={{...slot, id:slot.iconId, name:slot.iconName}} /> : slot.char || "?"}
                                         </span>
                                     </div>
                                 </div>

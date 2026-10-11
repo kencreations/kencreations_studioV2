@@ -254,7 +254,7 @@ export function transitionReserveStock(current, qty) {
 
     // Fallback for simple single-pool global stock records
     const onHand = Number(current.on_hand ?? current.physical_on_hand ?? 0);
-    const reserved = Number(current.global_reserved ?? current.shop_reservations ?? 0);
+    const reserved = Number(current.reserved ?? current.global_reserved ?? current.shop_reservations ?? 0);
     const available = onHand - reserved;
 
     if (reserveQty > available) {
@@ -265,6 +265,7 @@ export function transitionReserveStock(current, qty) {
         ...current,
         on_hand: onHand,
         physical_on_hand: onHand,
+        reserved: reserved + reserveQty,
         global_reserved: reserved + reserveQty,
         shop_reservations: reserved + reserveQty,
         available: available - reserveQty,
@@ -311,7 +312,7 @@ export function transitionConsumeStock(current, qty) {
     }
 
     const onHand = Number(current.on_hand ?? current.physical_on_hand ?? 0);
-    const reserved = Number(current.global_reserved ?? current.shop_reservations ?? 0);
+    const reserved = Number(current.reserved ?? current.global_reserved ?? current.shop_reservations ?? 0);
 
     if (consumeQty > onHand) {
         throw new Error(`Cannot consume ${consumeQty} units. Only ${onHand} units on-hand.`);
@@ -321,6 +322,7 @@ export function transitionConsumeStock(current, qty) {
         ...current,
         on_hand: onHand - consumeQty,
         physical_on_hand: onHand - consumeQty,
+        reserved: Math.max(0, reserved - consumeQty),
         global_reserved: Math.max(0, reserved - consumeQty),
         shop_reservations: Math.max(0, reserved - consumeQty),
         available: Math.max(0, onHand - consumeQty - Math.max(0, reserved - consumeQty)),
@@ -425,13 +427,14 @@ export function transitionReleaseStock(current, qty) {
     }
 
     const onHand = Number(current.on_hand ?? current.physical_on_hand ?? 0);
-    const reserved = Number(current.global_reserved ?? current.shop_reservations ?? 0);
+    const reserved = Number(current.reserved ?? current.global_reserved ?? current.shop_reservations ?? 0);
     const newReserved = Math.max(0, reserved - releaseQty);
 
     return {
         ...current,
         on_hand: onHand,
         physical_on_hand: onHand,
+        reserved: newReserved,
         global_reserved: newReserved,
         shop_reservations: newReserved,
         available: Math.max(0, onHand - newReserved),
@@ -443,13 +446,22 @@ export function transitionReleaseStock(current, qty) {
  * Reusable components (switches, keyrings) are returned to available stock;
  * Damaged / customized pieces (printed caps) are permanently logged as waste.
  */
-export function transitionScrapOrRecoverStock(current, recoveredQty = 0, wastedQty = 0) {
-    const safeRecovered = Math.max(0, Math.floor(Number(recoveredQty || 0)));
-    const safeWasted = Math.max(0, Math.floor(Number(wastedQty || 0)));
+export function transitionScrapOrRecoverStock(param1, recoveredQtyParam = 0, wastedQtyParam = 0) {
+    let current = param1;
+    let safeRecovered;
+    let safeWasted;
+    if (param1 && typeof param1 === "object" && "inventoryItem" in param1) {
+        current = param1.inventoryItem;
+        safeRecovered = Math.max(0, Math.floor(Number(param1.recoveredQty || param1.recovered_qty || 0)));
+        safeWasted = Math.max(0, Math.floor(Number(param1.wastedQty || param1.wasted_qty || 0)));
+    } else {
+        safeRecovered = Math.max(0, Math.floor(Number(recoveredQtyParam || 0)));
+        safeWasted = Math.max(0, Math.floor(Number(wastedQtyParam || 0)));
+    }
 
     if ("event_allocated" in current) {
         const allocated = Number(current.event_allocated || 0);
-        const reserved = Number(current.event_reserved || 0);
+        const reserved = Number(current.reserved ?? current.event_reserved ?? 0);
         const consumed = Number(current.event_consumed || 0);
 
         // Recovered items are unconsumed (returned to event availability)
@@ -458,6 +470,7 @@ export function transitionScrapOrRecoverStock(current, recoveredQty = 0, wastedQ
         return {
             ...current,
             event_allocated: allocated,
+            reserved,
             event_reserved: reserved,
             event_consumed: newConsumed,
             wasted_count: safeWasted,
@@ -467,12 +480,13 @@ export function transitionScrapOrRecoverStock(current, recoveredQty = 0, wastedQ
     }
 
     const onHand = Number(current.on_hand ?? current.physical_on_hand ?? 0);
-    const reserved = Number(current.global_reserved ?? current.shop_reservations ?? 0);
+    const reserved = Number(current.reserved ?? current.global_reserved ?? current.shop_reservations ?? 0);
 
     return {
         ...current,
         on_hand: onHand + safeRecovered,
         physical_on_hand: onHand + safeRecovered,
+        reserved,
         global_reserved: reserved,
         wasted_count: safeWasted,
         available: Math.max(0, onHand + safeRecovered - reserved),
@@ -486,24 +500,32 @@ export function transitionScrapOrRecoverStock(current, recoveredQty = 0, wastedQ
  */
 export function checkQueueCapacity({
     pendingCount = 0,
+    currentPendingCount,
     activeCount = 0,
+    currentInProductionCount,
     eventConfig = {},
+    event,
 } = {}) {
-    if (eventConfig.is_accepting_orders === false) {
-        return { allowed: false, reason: "BOOTH_PAUSED", message: "This booth is currently paused and not accepting new orders." };
+    const ev = event || eventConfig || {};
+    const pCount = Number(currentPendingCount ?? pendingCount) || 0;
+    const aCount = Number(currentInProductionCount ?? activeCount) || 0;
+
+    const isAccepting = ev.is_accepting_orders !== false && ev.isAcceptingOrders !== false && ev.queueStatus !== "paused" && ev.queueStatus !== "closed";
+    if (!isAccepting) {
+        return { allowed: false, canAccept: false, reason: "BOOTH_PAUSED", message: "This booth is currently paused and not accepting new orders." };
     }
 
-    const pendingLimit = Number(eventConfig.pending_queue_capacity) || 10;
-    if (pendingCount >= pendingLimit) {
-        return { allowed: false, reason: "PENDING_QUEUE_FULL", message: `The order queue is currently at capacity (${pendingCount}/${pendingLimit}). Please try again in a few minutes.` };
+    const pendingLimit = Number(ev.pending_queue_capacity ?? ev.pendingQueueCapacity) || 10;
+    if (pCount >= pendingLimit) {
+        return { allowed: false, canAccept: false, reason: "PENDING_QUEUE_FULL", message: `The order queue is currently at capacity (${pCount}/${pendingLimit}). Please try again in a few minutes.` };
     }
 
-    const activeLimit = Number(eventConfig.active_production_capacity) || 25;
-    if (activeCount >= activeLimit) {
-        return { allowed: false, reason: "PRODUCTION_BUSY", message: `The production queue is busy (${activeCount}/${activeLimit}). Please check back shortly.` };
+    const activeLimit = Number(ev.active_production_capacity ?? ev.activeProductionCapacity) || 25;
+    if (aCount >= activeLimit) {
+        return { allowed: false, canAccept: false, reason: "PRODUCTION_BUSY", message: `The production queue is busy (${aCount}/${activeLimit}). Please check back shortly.` };
     }
 
-    return { allowed: true, reason: null, message: null };
+    return { allowed: true, canAccept: true, reason: null, message: null };
 }
 
 // ─── Financial Analytics & Ledger Accounting ─────────────────────────────────
@@ -518,15 +540,18 @@ export function calculateFinancialSummary({
 } = {}) {
     let grossOrderValue = 0;
     let collectedCash = 0;
+    let collectedGcash = 0;
     let uncollectedBalance = 0;
     let totalCogs = 0;
     let completedOrderCount = 0;
     let pendingOrderCount = 0;
 
     for (const order of orders) {
-        const total = Number(order.total_amount) || 0;
-        const status = order.fulfillment_status || "pending";
-        const paymentStatus = order.payment_status || "unpaid";
+        const total = Number(order.total_amount ?? order.totalAmount) || 0;
+        const status = (order.fulfillment_status ?? order.fulfillmentStatus ?? "pending").toLowerCase();
+        const paymentStatus = (order.payment_status ?? order.paymentStatus ?? "unpaid").toLowerCase();
+        const paymentMethod = (order.payment_method ?? order.paymentMethod ?? "cash").toLowerCase();
+        const paid = Number(order.paid_amount ?? order.paidAmount ?? (paymentStatus === "paid" ? total : 0));
 
         // Exclude cancelled and rejected orders from gross order value
         if (status !== "cancelled" && status !== "rejected") {
@@ -538,26 +563,39 @@ export function calculateFinancialSummary({
                 completedOrderCount += 1;
             }
 
-            if (paymentStatus === "paid") {
-                collectedCash += total;
-            } else {
-                uncollectedBalance += total;
+            collectedCash += paid;
+            if (paymentMethod === "gcash") {
+                collectedGcash += paid;
             }
+
+            const remaining = Math.max(0, total - paid);
+            uncollectedBalance += remaining;
 
             // Calculate COGS if order was accepted or produced
             if (status !== "pending") {
-                for (const item of order.items || []) {
-                    const unitCost = Number(item.unit_cost_snapshot) || 0;
-                    const qty = Number(item.quantity) || 1;
-                    totalCogs += unitCost * qty;
+                if (order.cogs != null) {
+                    totalCogs += Number(order.cogs);
+                } else {
+                    for (const item of order.items || []) {
+                        const unitCost = Number(item.unit_cost_snapshot ?? item.unitCost ?? 0);
+                        const qty = Number(item.quantity) || 1;
+                        totalCogs += unitCost * qty;
+                    }
                 }
             }
         }
     }
 
-    const totalRefunds = refunds.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+    const explicitRefunds = Array.isArray(refunds)
+        ? refunds.reduce((sum, r) => sum + (Number(r.amount) || 0), 0)
+        : (Number(refunds) || 0);
+
+    const totalRefunds = explicitRefunds;
     const netCollectedCash = Number((collectedCash - totalRefunds).toFixed(2));
-    const totalExpenses = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    const totalExpenses = Array.isArray(expenses)
+        ? expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
+        : (Number(expenses) || 0);
 
     const grossProfit = Number((netCollectedCash - totalCogs).toFixed(2));
     const netEventProfit = Number((grossProfit - totalExpenses).toFixed(2));
@@ -569,13 +607,19 @@ export function calculateFinancialSummary({
     return {
         grossOrderValue: Number(grossOrderValue.toFixed(2)),
         collectedCash: Number(collectedCash.toFixed(2)),
+        collectedGcash: Number(collectedGcash.toFixed(2)),
+        totalCollections: Number(collectedCash.toFixed(2)),
         totalRefunds: Number(totalRefunds.toFixed(2)),
+        netCashCollections: netCollectedCash,
         netCollectedCash,
         uncollectedBalance: Number(uncollectedBalance.toFixed(2)),
+        outstandingBalance: Number(uncollectedBalance.toFixed(2)),
         totalCogs: Number(totalCogs.toFixed(2)),
+        cogs: Number(totalCogs.toFixed(2)),
         totalExpenses: Number(totalExpenses.toFixed(2)),
         grossProfit,
         netEventProfit,
+        estimatedProfit: netEventProfit,
         grossMarginPercent,
         orderMetrics: {
             totalOrders: orders.length,

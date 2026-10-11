@@ -182,13 +182,18 @@ service cloud.firestore {
         allow delete: if false; // TAMPER-PROOF: financial records cannot be erased
       }
 
-      // Explicit Subcollection 6: Orders (Authoritative)
+      // Explicit Subcollection 6: Orders (Authoritative Queue)
       match /orders/{orderId} {
-        allow get: if admin() || (signedIn() && resource.data.sellerUid == request.auth.uid);
+        allow get: if admin() || (signedIn() && (shopId == 'shop_' + request.auth.uid || resource.data.sellerUid == request.auth.uid));
         allow list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
-        allow create: if admin() || (
-                        signedIn() && request.resource.data.sellerUid == request.auth.uid &&
-                        request.resource.data.shopId == shopId
+        allow create: if admin() ||
+                      (signedIn() && request.resource.data.sellerUid == request.auth.uid && request.resource.data.shopId == shopId) ||
+                      (
+                        // Guest storefront customer intake
+                        request.resource.data.shopId == shopId &&
+                        request.resource.data.orderId == orderId &&
+                        request.resource.data.fulfillmentStatus == 'pending' &&
+                        request.resource.data.paymentStatus == 'unpaid'
                       );
         allow update: if admin() || (
                         signedIn() && resource.data.sellerUid == request.auth.uid &&
@@ -196,6 +201,19 @@ service cloud.firestore {
                         request.resource.data.shopId == resource.data.shopId
                       );
         allow delete: if false; // Historical orders cannot be deleted; must be marked cancelled
+      }
+
+      // Explicit Subcollection 6b: Order Reconciliations (IMMUTABLE AUDIT TRAIL)
+      match /order_reconciliations/{reviewId} {
+        allow get, list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow create: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow update, delete: if false; // TAMPER-PROOF: modifications forbidden
+      }
+
+      // Explicit Subcollection 6c: Custom Artwork Icons
+      match /icons/{iconId} {
+        allow get, list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow create, update, delete: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
       }
 
       // Explicit Subcollection 7: Settings
@@ -209,6 +227,16 @@ service cloud.firestore {
                         request.resource.data.ownerUid == resource.data.ownerUid
                       );
         allow delete: if admin();
+      }
+
+      // Operational Request Idempotency & Queue Locks
+      match /order_requests/{requestId} {
+        allow get, list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow create: if true; // Idempotency reservation key for order intake
+        allow update, delete: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+      }
+      match /queue_locks/{lockId} {
+        allow read, write: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
       }
     }
 
@@ -232,7 +260,7 @@ service cloud.firestore {
 
     match /public_shops/{shopId} {
       // Only published profiles are public
-      allow get: if resource.data.isPublished == true || admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow get: if resource == null || resource.data.get('isPublished', false) == true || admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
       allow list: if admin();
       allow create: if hasBazaarEntitlement() &&
                     shopId == 'shop_' + request.auth.uid &&
@@ -249,21 +277,32 @@ service cloud.firestore {
     }
 
     match /public_events/{eventId} {
-      allow get: if resource.data.queueStatus != 'unpublished' || admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
-      allow list: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow get: if resource == null ||
+                    (resource.data.get('isPublished', false) == true && resource.data.get('queueStatus', 'open') != 'unpublished') ||
+                    admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow list: if resource.data.isPublished == true || admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
       allow create: if hasBazaarEntitlement() &&
                     request.resource.data.ownerUid == request.auth.uid &&
-                    request.resource.data.keys().hasOnly(['eventId', 'shopId', 'ownerUid', 'name', 'slug', 'venue', 'startDate', 'endDate', 'isAcceptingOrders', 'queueStatus', 'updatedAt']);
+                    request.resource.data.keys().hasOnly(['eventId', 'shopId', 'ownerUid', 'name', 'slug', 'venue', 'startDate', 'endDate', 'isAcceptingOrders', 'queueStatus', 'isPublished', 'status', 'catalog', 'updatedAt']);
       allow update: if admin() || (
                       signedIn() && resource.data.ownerUid == request.auth.uid &&
                       request.resource.data.ownerUid == resource.data.ownerUid &&
-                      request.resource.data.keys().hasOnly(['eventId', 'shopId', 'ownerUid', 'name', 'slug', 'venue', 'startDate', 'endDate', 'isAcceptingOrders', 'queueStatus', 'updatedAt'])
+                      request.resource.data.keys().hasOnly(['eventId', 'shopId', 'ownerUid', 'name', 'slug', 'venue', 'startDate', 'endDate', 'isAcceptingOrders', 'queueStatus', 'isPublished', 'status', 'catalog', 'updatedAt'])
                     );
       allow delete: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
     }
 
+    match /event_slugs/{slug} {
+      allow get, list: if true;
+      allow create: if hasBazaarEntitlement() &&
+                    request.resource.data.ownerUid == request.auth.uid &&
+                    request.resource.data.keys().hasOnly(['ownerUid', 'shopId', 'eventId', 'slug', 'createdAt']);
+      allow update: if false; // Slugs are immutable identifiers
+      allow delete: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
     match /public_products/{productId} {
-      allow get: if resource.data.inStock != null || admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow get: if resource == null || resource.data.get('inStock', null) != null || admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
       allow list: if true;
       allow create: if hasBazaarEntitlement() &&
                     request.resource.data.ownerUid == request.auth.uid &&
@@ -276,12 +315,19 @@ service cloud.firestore {
       allow delete: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
     }
 
-    // Public Order Tracking: Capability token lookup only, NO listing/enumeration, expiry-enforced
+    // Public Order Tracking: Capability token lookup only, NO listing/enumeration
     match /order_tracking/{trackingToken} {
-      allow get: if resource.data.revoked != true &&
-                 (resource.data.expiresAt == null || resource.data.expiresAt > request.time);
+      allow get: if resource == null || resource.data.get('revoked', false) != true;
       allow list: if false; // ANTI-ENUMERATION: Collection listing strictly denied
-      allow create, update: if admin() || (signedIn() && request.resource.data.sellerUid == request.auth.uid);
+      allow create: if admin() ||
+                    (signedIn() && request.resource.data.sellerUid == request.auth.uid) ||
+                    (
+                      // Capability token created during customer checkout intake
+                      request.resource.data.trackingToken == trackingToken &&
+                      request.resource.data.fulfillmentStatus == 'pending' &&
+                      request.resource.data.paymentStatus == 'unpaid'
+                    );
+      allow update: if admin() || (signedIn() && resource.data.sellerUid == request.auth.uid);
       allow delete: if admin() || (signedIn() && resource.data.sellerUid == request.auth.uid);
     }
 
@@ -292,6 +338,12 @@ service cloud.firestore {
       allow get, list: if admin() || (signedIn() && resource.data.sellerUid == request.auth.uid);
       allow create: if admin(); // Anonymous creation blocked
       allow update, delete: if admin() || (signedIn() && resource.data.sellerUid == request.auth.uid);
+    }
+
+    // Physical stock ledger
+    match /bazaar_stock/{stockId} {
+      allow read, write: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
     }
 
     // No authenticated-user catch-all. Unlisted app collections need explicit review.

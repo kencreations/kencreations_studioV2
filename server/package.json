@@ -1,0 +1,11 @@
+{
+  "name": "kencreations-bazaar-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "local": "node local.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0"
+  }
+}

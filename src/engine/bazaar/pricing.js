@@ -1,3 +1,4 @@
+import { isIconSlot } from './icons.js';
 /**
  * src/engine/bazaar/pricing.js
  * Pure domain pricing calculation functions for Bazaar Hub.
@@ -16,6 +17,7 @@
  * @param {number} [params.quantity=1] - Item quantity
  * @returns {Object} Price calculation result and breakdown
  */
+import { clickerOptions, validateClickerConfiguration } from './configuration.js';
 export function calculateItemPrice({
     product,
     customization = {},
@@ -23,6 +25,7 @@ export function calculateItemPrice({
     quantity = 1,
 } = {}) {
     if (!product) throw new Error("Product definition is required for pricing.");
+    product = { ...product, base_price: product.base_price ?? product.retailPrice ?? product.price, customization_schema: clickerOptions(product) };
 
     const safeQty = Math.max(1, Math.floor(Number(quantity) || 1));
 
@@ -48,7 +51,26 @@ export function calculateItemPrice({
     };
 
     // 2. Customization extras (for made-to-order clickers, keychains, etc.)
-    if ((product.type === "made_to_order" || product.customization_schema) && product.customization_schema) {
+    if (product.type === 'made_to_order' && Array.isArray(customization.slotsData)) {
+        validateClickerConfiguration(product, customization);
+        const schema = product.customization_schema;
+        const price = o => Number(o?.price ?? o?.additional_price ?? o?.extra_price ?? o?.extraPrice ?? 0);
+        const find = (options, id) => options.find(o => o.id === id);
+        const free = Number(schema.free_letter_count ?? schema.base_included_letters ?? 0);
+        breakdown.letterCountExtra = Math.max(0, customization.slots - free) * Number(schema.extra_per_letter_price ?? schema.extra_letter_price ?? 0);
+        breakdown.slotExtra = Number(schema.slot_pricing?.[customization.slots] ?? price(schema.base_slots?.find(o => Number(o.slots) === customization.slots)));
+        breakdown.casingStyleExtra = price(find(schema.casing_styles, customization.casing_style_id));
+        breakdown.baseColorExtra = price(find(schema.casing_base_colors, customization.casing_color));
+        breakdown.keycapExtras = 0;
+        for (const slot of customization.slotsData) {
+            if (isIconSlot(slot)) breakdown.keycapExtras += price(find(schema.available_icons, slot.iconId)) + Number(schema.icon_cap_surcharge || 0);
+            else breakdown.keycapExtras += price(find(schema.colors, slot.colorId)) + price(find(schema.keycap_styles, slot.styleId));
+            const sw = find(schema.allowed_switch_types, slot.switchId || customization.switch_type_id);
+            breakdown.switchExtras += Number(sw?.additional_price_per_key ?? price(sw));
+        }
+        breakdown.addOnsTotal = [...new Set(customization.selected_add_on_ids || [])].reduce((n,id) => n + price(find(schema.add_ons,id)), 0);
+        customizationExtras = ['letterCountExtra','slotExtra','casingStyleExtra','baseColorExtra','keycapExtras','switchExtras','addOnsTotal'].reduce((n,key) => n + breakdown[key], 0);
+    } else if (product.type !== 'ready_made' && product.customization_schema) {
         const schema = product.customization_schema;
 
         // Letters extra charge if beyond threshold
@@ -84,7 +106,7 @@ export function calculateItemPrice({
         // Casing style extra
         if (customization.casing_style_id && Array.isArray(schema.casing_styles)) {
             const style = schema.casing_styles.find((s) => s.id === customization.casing_style_id);
-            const styleExtra = Number(style?.additional_price ?? style?.extra_price ?? 0);
+            const styleExtra = Number(style?.additional_price ?? style?.extra_price ?? style?.extraPrice ?? 0);
             if (styleExtra > 0) {
                 breakdown.casingStyleExtra = styleExtra;
                 customizationExtras += styleExtra;
@@ -95,10 +117,10 @@ export function calculateItemPrice({
         const switchList = schema.allowed_switch_types || schema.switch_types;
         if (customization.switch_type_id && Array.isArray(switchList)) {
             const switchOpt = switchList.find((s) => s.id === customization.switch_type_id);
-            const switchPrice = Number(switchOpt?.additional_price_per_key ?? switchOpt?.extra_price ?? 0);
+            const switchPrice = Number(switchOpt?.additional_price_per_key ?? switchOpt?.extra_price ?? switchOpt?.extraPrice ?? 0);
             if (switchPrice > 0) {
-                // If extra_price is specified as a flat fee or per-key:
-                const switchCharge = switchOpt.additional_price_per_key != null
+                // Charge per key if multi-key clicker and per_key is specified
+                const switchCharge = (switchOpt.additional_price_per_key != null || switchOpt.per_key === true)
                     ? switchPrice * Math.max(1, letterCount)
                     : switchPrice;
                 breakdown.switchExtras = switchCharge;
@@ -107,12 +129,14 @@ export function calculateItemPrice({
         }
 
         // Add-ons
-        if (Array.isArray(customization.selected_add_on_ids) && Array.isArray(schema.add_ons)) {
+        const selectedAddonList = customization.selected_add_on_ids || customization.selected_add_ons;
+        if (Array.isArray(selectedAddonList) && Array.isArray(schema.add_ons)) {
             let addOnSum = 0;
-            for (const addOnId of customization.selected_add_on_ids) {
+            for (const addOnId of selectedAddonList) {
                 const opt = schema.add_ons.find((a) => a.id === addOnId);
-                if (opt && Number(opt.price) > 0) {
-                    addOnSum += Number(opt.price);
+                const addOnPrice = Number(opt?.price ?? opt?.extraPrice ?? opt?.additional_price ?? 0);
+                if (opt && addOnPrice > 0) {
+                    addOnSum += addOnPrice;
                 }
             }
             breakdown.addOnsTotal = addOnSum;
@@ -120,12 +144,21 @@ export function calculateItemPrice({
         }
     }
 
+    if (product.type === 'ready_made' && product.variants?.length) {
+        const variant = product.variants.find(v => v.id === customization.selected_variant_id);
+        if (!variant) throw new Error('Choose a configured finished-product variant.');
+        if (!hasEventOverride) unitBase = Number(variant.retailPrice ?? variant.price ?? unitBase);
+        customizationExtras += Number(variant.extraPrice || 0);
+    }
+    if (![unitBase, customizationExtras].every(n => Number.isFinite(n) && n >= 0)) throw new Error('Seller pricing is invalid.');
+
     breakdown.customizationTotal = Number(customizationExtras.toFixed(2));
     const unitPrice = Number((unitBase + customizationExtras).toFixed(2));
     const totalPrice = Number((unitPrice * safeQty).toFixed(2));
 
     return {
         unitPrice,
+        finalUnitPrice: unitPrice,
         quantity: safeQty,
         totalPrice,
         breakdown,

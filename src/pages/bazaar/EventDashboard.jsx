@@ -1,3 +1,4 @@
+import { getSellerOrders } from '../../services/orderSubmissionService.js';
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
@@ -20,9 +21,9 @@ import {
     ArrowLeft,
     AlertCircle,
     Package,
-    Layers,
-    ClipboardList,
-    DollarSign,
+    ListOrdered,
+    Receipt,
+    ArrowRight,
 } from "lucide-react";
 
 export default function EventDashboard() {
@@ -30,6 +31,8 @@ export default function EventDashboard() {
     const { currentUser } = useAuth();
 
     const [shop, setShop] = useState(null);
+    const [eventOrders,setEventOrders]=useState(null);
+    const [readError,setReadError]=useState('');
     const [event, setEvent] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
@@ -43,16 +46,18 @@ export default function EventDashboard() {
         async function fetchEventDetails() {
             setLoading(true);
             try {
-                const [shopData, eventData] = await Promise.all([
-                    getSellerShop(currentUser.uid).catch(() => null),
-                    getSellerEvent(currentUser.uid, eventId).catch(() => null),
+                const [shopData, eventData, ordersData] = await Promise.all([
+                    getSellerShop(currentUser.uid),
+                    getSellerEvent(currentUser.uid, eventId),
+                    getSellerOrders(currentUser.uid,eventId).catch(()=>null),
                 ]);
                 if (isMounted) {
                     setShop(shopData);
                     setEvent(eventData);
+                    setEventOrders(ordersData);
                 }
             } catch (err) {
-                console.error("[EventDashboard] Failed to load event:", err);
+                if(isMounted)setReadError(err.message || "Event could not be loaded.");
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -302,129 +307,100 @@ export default function EventDashboard() {
                     </div>
                 </div>
 
-                {/* Upcoming Milestone Workspaces Placeholders */}
                 <div className="space-y-4">
-                    <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">
-                        Event Modules Roadmap
-                    </h3>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        {/* Milestone 3: Catalog Assignment Placeholder */}
-                        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2.5">
-                                    <div className="w-9 h-9 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center">
-                                        <Package size={18} />
-                                    </div>
-                                    <div>
-                                        <h4 className="text-sm font-black text-gray-900">
-                                            Product Catalog Assignment
-                                        </h4>
-                                        <p className="text-[11px] text-gray-400 font-medium">
-                                            Select products and event price overrides
-                                        </p>
-                                    </div>
-                                </div>
-                                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
-                                    Milestone 3
-                                </span>
-                            </div>
-                            <p className="text-xs text-gray-500 leading-relaxed">
-                                In Milestone 3, configure which keychains, bagtags, and pop sockets are active for this event with BOM formulas and customization schemas.
-                            </p>
-                            <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100 text-[11px] text-gray-400 font-medium flex items-center justify-between">
-                                <span>Catalog Assignment module ready in Milestone 3</span>
-                                <span className="font-mono text-gray-400">0 products assigned</span>
-                            </div>
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">Event Operational Workspaces</h3>
+                        <span className="text-xs text-gray-400 font-medium">Booth Modules & Tooling</span>
+                    </div>
+                    {readError && (
+                        <div role="alert" className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl text-xs font-bold flex items-center gap-2">
+                            <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                            <span>{readError}</span>
                         </div>
-
-                        {/* Milestone 4: Inventory Allocation Placeholder */}
-                        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2.5">
-                                    <div className="w-9 h-9 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center">
-                                        <Layers size={18} />
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                        {/* 1. Product Catalog & Booth Stock */}
+                        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xs hover:shadow-md transition-shadow flex flex-col justify-between space-y-4">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="w-10 h-10 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center font-bold">
+                                        <Package size={20} />
                                     </div>
-                                    <div>
-                                        <h4 className="text-sm font-black text-gray-900">
-                                            Event Catalog & Stock Allocation
-                                        </h4>
-                                        <p className="text-[11px] text-gray-400 font-medium">
-                                            Product menu, pricing overrides, and booth stock
-                                        </p>
-                                    </div>
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                        Operational
+                                    </span>
                                 </div>
-                                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200">
-                                    Milestone 3 Live
-                                </span>
+                                <div>
+                                    <h4 className="font-bold text-gray-900 text-sm">Product Catalog & Booth Stock</h4>
+                                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                                        {Object.values(event.catalog || {}).filter(item => item.enabled).length} active products. Configure event pricing, allocate components, and audit booth BOM readiness.
+                                    </p>
+                                </div>
                             </div>
-                            <p className="text-xs text-gray-500 leading-relaxed">
-                                Select products from your master catalog, set event-specific price discounts, and allocate component variant stock to this booth.
-                            </p>
                             <Link
                                 to={`/studio/bazaar/events/${eventId}/catalog`}
-                                className="w-full py-2.5 px-4 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                className="inline-flex items-center justify-between w-full px-4 py-2.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 font-bold text-xs transition-colors"
                             >
-                                <Layers size={14} /> Manage Event Catalog & Stock
+                                <span>Manage Catalog & Stock</span>
+                                <ArrowRight size={14} />
                             </Link>
                         </div>
 
-                        {/* Milestone 5: Order Queue Placeholder */}
-                        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2.5">
-                                    <div className="w-9 h-9 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center">
-                                        <ClipboardList size={18} />
+                        {/* 2. Live Order Queue */}
+                        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xs hover:shadow-md transition-shadow flex flex-col justify-between space-y-4">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                                        <ListOrdered size={20} />
                                     </div>
-                                    <div>
-                                        <h4 className="text-sm font-black text-gray-900">
-                                            Live Order Queue & POS
-                                        </h4>
-                                        <p className="text-[11px] text-gray-400 font-medium">
-                                            Acceptance, print tracking, and pickup
-                                        </p>
-                                    </div>
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+                                        Active Queue
+                                    </span>
                                 </div>
-                                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
-                                    Milestone 5
-                                </span>
+                                <div>
+                                    <h4 className="font-bold text-gray-900 text-sm">Live Order Queue</h4>
+                                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                                        {eventOrders ? `${eventOrders.filter(order => ['pending', 'accepted', 'preparing', 'ready'].includes(order.fulfillmentStatus)).length} active orders (${eventOrders.length} total recorded). Process acceptance, reserve stock, and update status.` : 'Open the queue to review incoming customer orders.'}
+                                    </p>
+                                </div>
                             </div>
-                            <p className="text-xs text-gray-500 leading-relaxed">
-                                In Milestone 5, view incoming customer self-service orders, counter orders, and live print job status updates with capability tracking tokens.
-                            </p>
-                            <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100 text-[11px] text-gray-400 font-medium flex items-center justify-between">
-                                <span>Live Order Queue module ready in Milestone 5</span>
-                                <span className="font-mono text-gray-400">0 orders in queue</span>
-                            </div>
+                            <Link
+                                to={`/studio/bazaar/orders?event=${encodeURIComponent(eventId)}`}
+                                className="inline-flex items-center justify-between w-full px-4 py-2.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold text-xs transition-colors"
+                            >
+                                <span>Open Live Orders</span>
+                                <ArrowRight size={14} />
+                            </Link>
                         </div>
 
-                        {/* Milestone 6: Financial Expenses Placeholder */}
-                        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-[0_2px_12px_rgba(0,0,0,0.04)] space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2.5">
-                                    <div className="w-9 h-9 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center">
-                                        <DollarSign size={18} />
+                        {/* 3. Booth Reports & Expenses */}
+                        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-2xs hover:shadow-md transition-shadow flex flex-col justify-between space-y-4">
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                                        <Receipt size={20} />
                                     </div>
-                                    <div>
-                                        <h4 className="text-sm font-black text-gray-900">
-                                            Booth Cash & Expenses
-                                        </h4>
-                                        <p className="text-[11px] text-gray-400 font-medium">
-                                            Table fees, petty cash float, and P&L
-                                        </p>
-                                    </div>
+                                    <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200">
+                                        Cash Tracking
+                                    </span>
                                 </div>
-                                <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
-                                    Milestone 6
-                                </span>
+                                <div>
+                                    <h4 className="font-bold text-gray-900 text-sm">Booth Cash & Financials</h4>
+                                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                                        Track event sales totals, register booth expenses, and audit cash drawer balance.
+                                    </p>
+                                    <p className="text-[11px] text-gray-400 mt-1">
+                                        Automated payment gateway verification: <span className="font-bold text-gray-500">Coming Soon</span>.
+                                    </p>
+                                </div>
                             </div>
-                            <p className="text-xs text-gray-500 leading-relaxed">
-                                In Milestone 6, record booth registration fees, transportation costs, cash float, and live event gross margins.
-                            </p>
-                            <div className="p-3 rounded-2xl bg-gray-50 border border-gray-100 text-[11px] text-gray-400 font-medium flex items-center justify-between">
-                                <span>Financial Ledger module ready in Milestone 6</span>
-                                <span className="font-mono text-gray-400">0 expenses logged</span>
-                            </div>
+                            <Link
+                                to={`/studio/bazaar/reports?event=${encodeURIComponent(eventId)}`}
+                                className="inline-flex items-center justify-between w-full px-4 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-800 font-bold text-xs transition-colors"
+                            >
+                                <span>View Financial Reports</span>
+                                <ArrowRight size={14} />
+                            </Link>
                         </div>
                     </div>
                 </div>

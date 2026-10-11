@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { stockAvailability } from '../../engine/bazaar/stockAvailability.js';
+import EventProductReadiness from '../../components/bazaar/EventProductReadiness';
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
     getSellerShop,
@@ -9,30 +11,24 @@ import {
     updateEventProductCatalog,
     getShopInventory,
     allocateEventStock,
-    getEventStockAllocations,
+    getEventStockState,
 } from "../../services/bazaarService";
 import BazaarLayout from "../../components/bazaar/BazaarLayout";
 import {
-    Calendar,
     ArrowLeft,
     Package,
-    Tag,
     Layers,
     Save,
     CheckCircle2,
     AlertCircle,
     X,
     Eye,
-    Percent,
-    Sliders,
-    Store,
     MapPin,
-    AlertTriangle,
 } from "lucide-react";
 
 export default function EventCatalogManager() {
     const { eventId } = useParams();
-    const navigate = useNavigate();
+    const requestVersion=useRef(0);
     const { currentUser } = useAuth();
 
     const [shop, setShop] = useState(null);
@@ -40,6 +36,7 @@ export default function EventCatalogManager() {
     const [masterProducts, setMasterProducts] = useState([]);
     const [eventProductsMap, setEventProductsMap] = useState({});
     const [inventoryItems, setInventoryItems] = useState([]);
+    const [stockState,setStockState] = useState({});
     const [eventAllocations, setEventAllocations] = useState({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -56,18 +53,20 @@ export default function EventCatalogManager() {
 
     const loadData = useCallback(async () => {
         if (!currentUser?.uid || !eventId) return;
+        const version=++requestVersion.current;
         setLoading(true);
         try {
             const [shopData, eventData, prodsData, eventProdsData, invData, allocsData] =
                 await Promise.all([
-                    getSellerShop(currentUser.uid).catch(() => null),
-                    getSellerEvent(currentUser.uid, eventId).catch(() => null),
-                    getSellerProducts(currentUser.uid).catch(() => []),
-                    getEventProducts(currentUser.uid, eventId).catch(() => ({})),
-                    getShopInventory(currentUser.uid).catch(() => []),
-                    getEventStockAllocations(currentUser.uid, eventId).catch(() => ({})),
+                    getSellerShop(currentUser.uid),
+                    getSellerEvent(currentUser.uid, eventId),
+                    getSellerProducts(currentUser.uid),
+                    getEventProducts(currentUser.uid, eventId),
+                    getShopInventory(currentUser.uid),
+                    getEventStockState(currentUser.uid, eventId),
                 ]);
 
+            if(version!==requestVersion.current)return;
             if (!eventData) {
                 setErrorMessage("Event not found or unauthorized access.");
                 return;
@@ -78,17 +77,19 @@ export default function EventCatalogManager() {
             setMasterProducts(prodsData);
             setEventProductsMap(eventProdsData || {});
             setInventoryItems(invData);
-            setEventAllocations(allocsData || {});
+            setStockState(allocsData || {});
+            setEventAllocations(allocsData?.allocations || {});
         } catch (err) {
             console.error("[EventCatalogManager] Failed to load data:", err);
-            setErrorMessage("Failed to load event catalog configuration.");
+            if(version===requestVersion.current)setErrorMessage("Failed to load event catalog configuration. Retry before changing stock.");
         } finally {
-            setLoading(false);
+            if(version===requestVersion.current)setLoading(false);
         }
     }, [currentUser, eventId]);
 
     useEffect(() => {
-        loadData();
+        let active=true;queueMicrotask(()=>{if(active)loadData();});
+        return()=>{active=false;requestVersion.current++;};
     }, [loadData]);
 
     // Toggle Product for Event
@@ -164,15 +165,17 @@ export default function EventCatalogManager() {
 
             for (const [key, allocQty] of Object.entries(eventAllocations)) {
                 const item = itemMap.get(key);
-                const onHand = Number(item?.on_hand || 0);
-                if (allocQty > onHand) {
+                const state=stockAvailability(item,stockState,key);
+                const onHand=(stockState.allocations?.[key] || 0)+state.workshopAvailable;
+                if (!Number.isSafeInteger(allocQty) || allocQty < state.reserved+state.consumed || allocQty > onHand) {
                     throw new Error(
-                        `Cannot allocate ${allocQty} for "${item?.name || key}". Only ${onHand} units on hand in workshop.`
+                        `Cannot allocate ${allocQty} for "${item?.name || key}". Allowed total is ${state.reserved+state.consumed} to ${onHand}; reserved/consumed units cannot be removed.`
                     );
                 }
             }
 
             await allocateEventStock(currentUser.uid, eventId, eventAllocations);
+            await loadData();
             setSuccessMessage("Booth inventory allocations saved successfully.");
         } catch (err) {
             console.error("[EventCatalogManager] Allocation error:", err);
@@ -231,7 +234,7 @@ export default function EventCatalogManager() {
                         <div>
                             <div className="flex items-center gap-2">
                                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200/60">
-                                    Milestone 3 Event Catalog
+                                    Event Catalog
                                 </span>
                                 <span className="text-xs text-gray-400 font-medium">
                                     {event.venue}
@@ -330,6 +333,25 @@ export default function EventCatalogManager() {
                                 Select which products from your master catalog appear on this event's customer self-service QR kiosk. You can apply event-specific prices (e.g. fair promo) and order caps without modifying your master shop defaults.
                             </div>
 
+                            {/* Stock Readiness Alert Banner */}
+                            {enabledProductsCount > 0 && (
+                                <div className="p-3.5 rounded-2xl bg-gray-50 border border-gray-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 text-gray-700">
+                                        <Layers size={16} className="text-teal-600 shrink-0" />
+                                        <span>
+                                            <strong>Booth Component Check:</strong> Stock readiness reflects inventory assigned to this event booth.
+                                        </span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab("booth_stock")}
+                                        className="text-teal-700 hover:text-teal-900 font-bold text-xs underline cursor-pointer text-left"
+                                    >
+                                        Review Booth Stock Allocation →
+                                    </button>
+                                </div>
+                            )}
+
                             {masterProducts.length === 0 ? (
                                 <div className="text-center py-12 text-gray-400 space-y-2">
                                     <Package size={32} className="mx-auto text-gray-300" />
@@ -347,7 +369,7 @@ export default function EventCatalogManager() {
                                         <thead>
                                             <tr className="bg-gray-50/80 border-b border-gray-200">
                                                 <th className="py-3 px-4 font-bold text-gray-600 w-12 text-center">Enable</th>
-                                                <th className="py-3 px-4 font-bold text-gray-600">Product Name</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">Product Name & Readiness</th>
                                                 <th className="py-3 px-4 font-bold text-gray-600">Type</th>
                                                 <th className="py-3 px-4 font-bold text-gray-600">Master Price</th>
                                                 <th className="py-3 px-4 font-bold text-gray-600">Event Price Override (₱)</th>
@@ -378,6 +400,7 @@ export default function EventCatalogManager() {
                                                         </td>
                                                         <td className="py-3 px-4 font-bold text-gray-900">
                                                             <div>{prod.name}</div>
+                                                            <EventProductReadiness product={prod} inventory={inventoryItems} allocation={stockState} />
                                                             <span className="text-[10px] font-mono text-gray-400">{prod.sku}</span>
                                                         </td>
                                                         <td className="py-3 px-4">
@@ -385,7 +408,7 @@ export default function EventCatalogManager() {
                                                                 prod.type === "ready_made"
                                                                     ? "bg-amber-50 text-amber-700"
                                                                     : "bg-purple-50 text-purple-700"
-                                                            }`}>
+                                                              }`}>
                                                                 {prod.type === "ready_made" ? "Ready-Made" : "Made-to-Order"}
                                                             </span>
                                                         </td>
@@ -429,7 +452,7 @@ export default function EventCatalogManager() {
                     {activeTab === "booth_stock" && (
                         <div className="p-6 space-y-4">
                             <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/40 text-xs text-amber-900 leading-relaxed">
-                                Allocate physical component stock (letter caps, switches, casings) from your workshop to this event booth. The inventory engine validates that allocated stock does not exceed workshop on-hand balances.
+                                Allocate physical component stock (letter caps, switches, casings) from your workshop to this event booth. Event orders are fulfilled from stock allocated to this event, ensuring booth inventory is preserved even if workshop unallocated stock is zero.
                             </div>
 
                             {inventoryItems.length === 0 ? (
@@ -450,16 +473,20 @@ export default function EventCatalogManager() {
                                             <tr className="bg-gray-50/80 border-b border-gray-200">
                                                 <th className="py-3 px-4 font-bold text-gray-600">Item Component</th>
                                                 <th className="py-3 px-4 font-bold text-gray-600">Category</th>
-                                                <th className="py-3 px-4 font-bold text-gray-600">Workshop On-Hand</th>
-                                                <th className="py-3 px-4 font-bold text-gray-600">Allocated to Booth</th>
-                                                <th className="py-3 px-4 font-bold text-gray-600">Available Remaining</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">Total Physical Stock</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">Allocated to This Event</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">Available at Booth</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">Reserved for Orders</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">Consumed at Booth</th>
+                                                <th className="py-3 px-4 font-bold text-gray-600">Remaining in Workshop</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
                                             {inventoryItems.map((item) => {
-                                                const onHand = Number(item.on_hand || 0);
+                                                const onHand = Number(item.on_hand || item.physical_on_hand || 0);
                                                 const allocated = Number(eventAllocations[item.item_key] || 0);
-                                                const remaining = Math.max(0, onHand - allocated);
+                                                const state = stockAvailability(item, stockState, item.item_key);
+                                                const remaining = state.eventAvailable;
 
                                                 return (
                                                     <tr key={item.item_key} className="hover:bg-gray-50/60 transition-colors">
@@ -478,15 +505,27 @@ export default function EventCatalogManager() {
                                                         <td className="py-3 px-4">
                                                             <input
                                                                 type="number"
-                                                                min="0"
-                                                                max={onHand}
+                                                                min={state.reserved + state.consumed}
+                                                                max={(stockState.allocations?.[item.item_key] || 0) + state.workshopAvailable}
                                                                 value={allocated}
                                                                 onChange={(e) => handleAllocationChange(item.item_key, e.target.value)}
-                                                                className="w-24 px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white text-xs font-mono font-bold text-teal-800 outline-none"
+                                                                className="w-24 px-2.5 py-1.5 rounded-xl border border-gray-200 bg-white text-xs font-mono font-bold text-teal-800 outline-none focus:ring-2 focus:ring-teal-500"
                                                             />
                                                         </td>
                                                         <td className="py-3 px-4 font-mono font-bold text-emerald-600">
                                                             {remaining}
+                                                        </td>
+                                                        <td className="py-3 px-4 font-mono text-amber-600 font-bold">
+                                                            {state.reserved}
+                                                        </td>
+                                                        <td className="py-3 px-4 font-mono text-gray-500">
+                                                            {state.consumed}
+                                                        </td>
+                                                        <td className="py-3 px-4 font-mono text-slate-700">
+                                                            {state.workshopAvailable}
+                                                            {!state.valid && (
+                                                                <span className="block text-[10px] text-red-600 font-bold">Ledger needs review</span>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 );

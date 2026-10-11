@@ -16,6 +16,8 @@ import {
     ClipboardList,
     LayoutDashboard,
     KeyRound,
+    ShoppingBag,
+    BarChart3,
 } from "lucide-react";
 
 export default function BazaarLayout({ children, activeTab = "dashboard" }) {
@@ -158,6 +160,8 @@ export default function BazaarLayout({ children, activeTab = "dashboard" }) {
         { id: "products", label: "Products", icon: Package, path: "/studio/bazaar/products" },
         { id: "inventory", label: "Inventory", icon: Layers, path: "/studio/bazaar/inventory" },
         { id: "events", label: "Events & Bazaars", icon: Calendar, path: "/studio/bazaar/events" },
+        { id: "orders", label: "Orders Queue", icon: ShoppingBag, path: "/studio/bazaar/orders" },
+        { id: "reports", label: "Reports & Profit", icon: BarChart3, path: "/studio/bazaar/reports" },
     ];
 
     return (

@@ -16,17 +16,16 @@ import {
     getDoc,
     getDocs,
     setDoc,
-    updateDoc,
-    deleteDoc,
     query,
     where,
     orderBy,
     limit,
     serverTimestamp,
     runTransaction,
+    writeBatch,
 } from "firebase/firestore";
 import { db } from "../firebase.js";
-import { adjustStockBalance } from "../engine/bazaar/inventoryMath.js";
+import { publicClickerOptions } from '../engine/bazaar/configuration.js';
 
 
 // ─── Helpers & Deterministic IDs ──────────────────────────────────────────────
@@ -71,6 +70,7 @@ export const shopDoc = (shopId) => doc(db, "shops", shopId);
 export const publicShopsCol = () => collection(db, "public_shops");
 export const publicShopDoc = (shopId) => doc(db, "public_shops", shopId);
 export const slugDoc = (slug) => doc(db, "shop_slugs", slug);
+export const eventSlugDoc = (slug) => doc(db, "event_slugs", slug);
 
 export const publicEventsCol = () => collection(db, "public_events");
 export const publicEventDoc = (eventId) => doc(db, "public_events", eventId);
@@ -147,6 +147,9 @@ export function sanitizePublicEvent(privateEvent = {}) {
         endDate: privateEvent.endDate || privateEvent.end_date || null,
         isAcceptingOrders: privateEvent.isAcceptingOrders !== false && privateEvent.is_accepting_orders !== false,
         queueStatus: privateEvent.queueStatus || privateEvent.queue_status || "open",
+        status: privateEvent.status || 'Scheduled',
+        isPublished: privateEvent.isPublished !== false && privateEvent.queueStatus !== 'unpublished',
+        catalog: Object.fromEntries(Object.entries(privateEvent.catalog || {}).map(([id, value]) => [id, Object.fromEntries(Object.entries(value).filter(([key]) => ['enabled', 'price_override', 'max_order_qty'].includes(key)))])),
         updatedAt: serverTimestamp(),
     };
 }
@@ -166,10 +169,13 @@ export function sanitizePublicProduct(privateProduct = {}) {
         name: privateProduct.name || privateProduct.title || "Custom 3D Print",
         description: privateProduct.description || "",
         category: privateProduct.category || "custom",
+        type: privateProduct.type || null,
+        maxOrderQty: privateProduct.maxOrderQty || 5,
+        variants: (privateProduct.variants || []).map(v => Object.fromEntries(Object.entries(v).filter(([key]) => ['id', 'name', 'color', 'size', 'price', 'retailPrice', 'extraPrice'].includes(key)))),
         price,
         retailPrice: price,
         images: Array.isArray(privateProduct.images) ? privateProduct.images : [],
-        customizationOptions: privateProduct.customizationOptions || privateProduct.customization_schema || {},
+        customizationOptions: publicClickerOptions(privateProduct),
         inStock: privateProduct.inStock !== false && privateProduct.in_stock !== false,
         isPublished: privateProduct.isPublished !== false,
         badge: privateProduct.badge || "",
@@ -314,6 +320,12 @@ export async function getPublicShopBySlug(slug) {
     return { id: pSnap.id, ...pSnap.data() };
 }
 
+export async function getPublicShopById(shopId) {
+    const snap = await getDoc(publicShopDoc(shopId));
+    if (!snap.exists() || snap.data().isPublished !== true) return null;
+    return { ...snap.data(), id: snap.id, shopId: snap.id };
+}
+
 /**
  * Retrieves public event details by event ID.
  */
@@ -331,7 +343,7 @@ export async function getPublicEvent(eventId) {
 export async function getPublicProducts(shopId) {
     const q = query(
         publicProductsCol(),
-        where("shopId", "==", shopId)
+        where("shopId", "==", shopId), where('isPublished', '==', true)
     );
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -343,7 +355,7 @@ export async function getPublicProducts(shopId) {
 export async function getPublicProduct(productId) {
     if (!productId) return null;
     const snap = await getDoc(publicProductDoc(productId));
-    if (!snap.exists()) return null;
+    if (!snap.exists() || snap.data().isPublished !== true) return null;
     return { id: snap.id, ...snap.data() };
 }
 
@@ -352,21 +364,76 @@ export async function getPublicProduct(productId) {
  */
 export async function getPublicEventBySlugOrId(identifier) {
     if (!identifier) return null;
-    // 1. Check direct doc by ID
-    const snap = await getDoc(publicEventDoc(identifier));
-    if (snap.exists()) {
-        const data = snap.data();
-        if (data.status !== "Ended" && data.queueStatus !== "closed") {
-            return { id: snap.id, ...data };
+    const cleanId = String(identifier).trim();
+    const cleanSlug = normalizeSlug(cleanId);
+
+    // Tier 1: Direct doc lookup by ID
+    try {
+        const snap = await getDoc(publicEventDoc(cleanId));
+        if (snap.exists()) {
+            const data = snap.data();
+            if (data.isPublished !== false && data.queueStatus !== 'unpublished') {
+                return { id: snap.id, ...data };
+            }
+        }
+    } catch (err) {
+        // Safe catch: non-existent document or temporary network blip
+    }
+
+    // Tier 2: Direct lookup by Slug Registry (event_slugs/{slug})
+    try {
+        const slugSnap = await getDoc(eventSlugDoc(cleanSlug));
+        if (slugSnap.exists()) {
+            const evId = slugSnap.data().eventId || slugSnap.data().id;
+            if (evId) {
+                const targetSnap = await getDoc(publicEventDoc(evId));
+                if (targetSnap.exists()) {
+                    const data = targetSnap.data();
+                    if (data.isPublished !== false && data.queueStatus !== 'unpublished') {
+                        return { id: targetSnap.id, ...data };
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        // Safe catch
+    }
+
+    // Tier 3: Direct doc lookup by slug as document ID (public_events/{slug})
+    if (cleanSlug !== cleanId) {
+        try {
+            const slugDocSnap = await getDoc(publicEventDoc(cleanSlug));
+            if (slugDocSnap.exists()) {
+                const data = slugDocSnap.data();
+                if (data.isPublished !== false && data.queueStatus !== 'unpublished') {
+                    return { id: slugDocSnap.id, ...data };
+                }
+            }
+        } catch (err) {
+            // Safe catch
         }
     }
-    // 2. Query by slug
-    const q = query(publicEventsCol(), where("slug", "==", normalizeSlug(identifier)), limit(1));
-    const querySnap = await getDocs(q);
-    if (!querySnap.empty) {
-        const d = querySnap.docs[0];
-        return { id: d.id, ...d.data() };
+
+    // Tier 4: Query by published slug
+    try {
+        const q = query(
+            publicEventsCol(),
+            where("slug", "==", cleanSlug),
+            where("isPublished", "==", true),
+            limit(1)
+        );
+        const querySnap = await getDocs(q);
+        if (!querySnap.empty) {
+            const d = querySnap.docs[0];
+            const data = d.data();
+            if (data.isPublished !== false && data.queueStatus !== 'unpublished') {
+                return { id: d.id, ...data };
+            }
+        }
+    } catch (err) {
+        console.warn(`[getPublicEventBySlugOrId] Slug query fallback for "${cleanSlug}":`, err?.code || err?.message);
     }
+
     return null;
 }
 
@@ -382,7 +449,8 @@ export async function getPublicOrderTracking(cryptoToken) {
 
     // Check revocation and expiration
     if (data.revoked === true) return null;
-    if (data.expiresAt && typeof data.expiresAt.toMillis === "function" && data.expiresAt.toMillis() < Date.now()) {
+    const expires = typeof data.expiresAt?.toMillis === 'function' ? data.expiresAt.toMillis() : Number(data.expiresAt);
+    if (data.expiresAt && Number.isFinite(expires) && expires < Date.now()) {
         return null;
     }
 
@@ -449,6 +517,21 @@ export async function createEvent(userId, eventData) {
     await setDoc(shopEventDoc(shopId, eventId), privateEvent);
     await setDoc(publicEventDoc(eventId), publicEvent);
 
+    // Register atomic event slug mapping for direct O(1) public lookups
+    if (slug) {
+        try {
+            await setDoc(eventSlugDoc(slug), {
+                ownerUid: userId,
+                shopId,
+                eventId,
+                slug,
+                createdAt: serverTimestamp(),
+            });
+        } catch (slugErr) {
+            console.warn('[createEvent] Could not register event slug:', slugErr?.message);
+        }
+    }
+
     return { id: eventId, ...privateEvent };
 }
 
@@ -480,7 +563,123 @@ export async function updateEvent(userId, eventId, eventData) {
     await setDoc(shopEventDoc(shopId, eventId), updatedPrivate, { merge: true });
     await setDoc(publicEventDoc(eventId), publicEvent, { merge: true });
 
+    // Sync atomic event slug registry
+    if (slug) {
+        try {
+            await setDoc(eventSlugDoc(slug), {
+                ownerUid: userId,
+                shopId,
+                eventId,
+                slug,
+                createdAt: serverTimestamp(),
+            });
+        } catch (slugErr) {
+            console.warn('[updateEvent] Could not update event slug:', slugErr?.message);
+        }
+    }
+
     return { id: eventId, ...updatedPrivate };
+}
+
+/**
+ * Controlled migration for published event public projections & slug registry.
+ * Validates queueStatus, isPublished, slug registry, and projection consistency.
+ * Supports dry-run reporting without fabricating data.
+ */
+export async function migrateEventPublicProjections(userId, dryRun = true) {
+    if (!userId) throw new Error("A valid user ID is required to migrate event projections.");
+    const shopId = getShopId(userId);
+    const events = await getSellerEvents(userId);
+
+    const report = {
+        shopId,
+        totalEvents: events.length,
+        scannedAt: new Date().toISOString(),
+        dryRun,
+        synced: 0,
+        skipped: 0,
+        errors: 0,
+        results: [],
+    };
+
+    for (const ev of events) {
+        const eventId = ev.eventId || ev.id;
+        const slug = normalizeSlug(ev.slug || ev.name || "");
+        const entry = {
+            eventId,
+            name: ev.name || "Untitled Event",
+            slug,
+            issuesDetected: [],
+            actionsTaken: [],
+        };
+
+        try {
+            // Check public event projection
+            let publicSnap = null;
+            try {
+                publicSnap = await getDoc(publicEventDoc(eventId));
+            } catch (err) {
+                entry.issuesDetected.push(`PUBLIC_DOC_READ_ERROR: ${err.message}`);
+            }
+
+            const publicData = publicSnap?.exists() ? publicSnap.data() : null;
+            if (!publicData) {
+                entry.issuesDetected.push("MISSING_PUBLIC_PROJECTION");
+            } else {
+                if (!publicData.queueStatus) entry.issuesDetected.push("MISSING_QUEUE_STATUS");
+                if (publicData.isPublished === undefined) entry.issuesDetected.push("MISSING_IS_PUBLISHED");
+                if (publicData.shopId !== shopId) entry.issuesDetected.push("INCONSISTENT_SHOP_ID");
+                if (publicData.slug !== slug) entry.issuesDetected.push("STALE_SLUG");
+            }
+
+            // Check slug registry
+            if (slug) {
+                let slugSnap = null;
+                try {
+                    slugSnap = await getDoc(eventSlugDoc(slug));
+                } catch (err) {
+                    entry.issuesDetected.push(`SLUG_DOC_READ_ERROR: ${err.message}`);
+                }
+                if (!slugSnap?.exists()) {
+                    entry.issuesDetected.push("MISSING_SLUG_REGISTRY");
+                }
+            }
+
+            // Actions
+            if (entry.issuesDetected.length > 0) {
+                if (!dryRun) {
+                    const sanitized = sanitizePublicEvent(ev);
+                    await setDoc(publicEventDoc(eventId), sanitized, { merge: true });
+                    entry.actionsTaken.push("UPDATED_PUBLIC_PROJECTION");
+
+                    if (slug) {
+                        await setDoc(eventSlugDoc(slug), {
+                            ownerUid: userId,
+                            shopId,
+                            eventId,
+                            slug,
+                            createdAt: serverTimestamp(),
+                        });
+                        entry.actionsTaken.push("REGISTERED_EVENT_SLUG");
+                    }
+                    report.synced++;
+                } else {
+                    entry.actionsTaken.push("DRY_RUN_NO_ACTION");
+                    report.skipped++;
+                }
+            } else {
+                entry.actionsTaken.push("ALREADY_IN_SYNC");
+                report.skipped++;
+            }
+        } catch (itemErr) {
+            entry.issuesDetected.push(`FATAL_ERROR: ${itemErr.message}`);
+            report.errors++;
+        }
+
+        report.results.push(entry);
+    }
+
+    return report;
 }
 
 /**
@@ -612,14 +811,16 @@ export async function createProduct(userId, productData) {
     });
 
     // Save private master catalog document
-    await setDoc(shopProductDoc(shopId, productId), privateProduct);
+    const batch = writeBatch(db);
+    batch.set(shopProductDoc(shopId, productId), privateProduct);
 
     // Save public projection if published and active
     if (privateProduct.isPublished && privateProduct.status === "active") {
         const publicProduct = sanitizeForFirestore(sanitizePublicProduct(privateProduct));
-        await setDoc(publicProductDoc(productId), publicProduct);
+        batch.set(publicProductDoc(productId), publicProduct);
     }
 
+    await batch.commit();
     return { id: productId, ...privateProduct };
 }
 
@@ -643,16 +844,18 @@ export async function updateProduct(userId, productId, productData) {
         updatedAt: serverTimestamp(),
     });
 
-    await setDoc(shopProductDoc(shopId, productId), updatedPrivate, { merge: true });
+    const batch = writeBatch(db);
+    batch.set(shopProductDoc(shopId, productId), updatedPrivate);
 
     // Sync public projection
     if (updatedPrivate.isPublished && updatedPrivate.status === "active") {
         const publicProduct = sanitizeForFirestore(sanitizePublicProduct(updatedPrivate));
-        await setDoc(publicProductDoc(productId), publicProduct, { merge: true });
+        batch.set(publicProductDoc(productId), publicProduct);
     } else {
-        await setDoc(publicProductDoc(productId), sanitizeForFirestore({ inStock: false, isPublished: false, updatedAt: serverTimestamp() }), { merge: true });
+        batch.set(publicProductDoc(productId), sanitizeForFirestore({...sanitizePublicProduct(updatedPrivate), inStock:false, isPublished:false}));
     }
 
+    await batch.commit();
     return { id: productId, ...updatedPrivate };
 }
 
@@ -702,79 +905,9 @@ export async function getShopInventory(userId) {
  * Adjusts inventory stock balance for a specific item transactionally.
  * Strictly prevents negative balances.
  */
-export async function adjustInventoryStock(userId, {
-    itemKey,
-    itemType = "letter_cap",
-    name = "",
-    char = "",
-    color = "",
-    delta = 0,
-    reason = "Manual Adjustment",
-    unitCost = 0,
-    lowThreshold = 5,
-} = {}) {
-    if (!userId || !itemKey) throw new Error("User ID and item key are required.");
-    const shopId = getShopId(userId);
-    const docRef = shopInventoryDoc(shopId, itemKey);
-
-    let updatedResult = null;
-
-    await runTransaction(db, async (txn) => {
-        const snap = await txn.get(docRef);
-        const currentData = snap.exists() ? snap.data() : {
-            item_key: itemKey,
-            item_type: itemType,
-            name: name || itemKey,
-            char: char || "",
-            color: color || "",
-            on_hand: 0,
-            reserved: 0,
-            low_threshold: Number(lowThreshold) || 5,
-            unit_cost: Number(unitCost) || 0,
-        };
-
-        const adjusted = adjustStockBalance(currentData, delta);
-
-        const newRecord = {
-            ...currentData,
-            item_key: itemKey,
-            item_type: itemType,
-            name: name || currentData.name || itemKey,
-            char: char || currentData.char || "",
-            color: color || currentData.color || "",
-            on_hand: adjusted.on_hand,
-            reserved: adjusted.reserved,
-            low_threshold: Number(lowThreshold ?? currentData.low_threshold ?? 5),
-            unit_cost: Number(unitCost || currentData.unit_cost || 0),
-            updated_at: serverTimestamp(),
-            ...(snap.exists() ? {} : { created_at: serverTimestamp() }),
-        };
-
-        txn.set(docRef, newRecord, { merge: true });
-
-        // Record immutable audit movement
-        const movementId = `mov_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
-        const mRef = shopInventoryMovementDoc(shopId, movementId);
-        txn.set(mRef, {
-            movementId,
-            shopId,
-            ownerUid: userId,
-            itemKey,
-            itemType,
-            name: newRecord.name,
-            char: newRecord.char,
-            color: newRecord.color,
-            delta,
-            previousOnHand: adjusted.previous_on_hand,
-            newOnHand: adjusted.on_hand,
-            reason,
-            createdAt: serverTimestamp(),
-        });
-
-        updatedResult = newRecord;
-    });
-
-    return updatedResult;
+export async function adjustInventoryStock(userId, adjustment = {}) {
+    const { adjustTrustedStock } = await import('./orderSubmissionService.js');
+    return adjustTrustedStock(userId, adjustment);
 }
 
 /**
@@ -808,17 +941,17 @@ export async function getEventProducts(userId, eventId) {
     try {
         const snap = await getDoc(shopEventProductCatalogDoc(shopId, eventId));
         if (snap.exists() && snap.data().products) return snap.data().products;
-    } catch (_) {}
+    } catch (error) { if (error.code !== 'not-found') throw error; }
 
     try {
         const evSnap = await getDoc(shopEventDoc(shopId, eventId));
         if (evSnap.exists() && evSnap.data().catalog) return evSnap.data().catalog;
-    } catch (_) {}
+    } catch (error) { if (error.code !== 'not-found') throw error; }
 
     try {
         const nestedSnap = await getDoc(doc(db, "shops", shopId, "events", eventId, "catalog", "settings"));
         if (nestedSnap.exists() && nestedSnap.data().products) return nestedSnap.data().products;
-    } catch (_) {}
+    } catch (error) { if (error.code !== 'not-found') throw error; }
 
     return {};
 }
@@ -830,20 +963,15 @@ export async function updateEventProductCatalog(userId, eventId, eventProductsMa
     if (!userId || !eventId) throw new Error("User ID and Event ID are required.");
     const shopId = getShopId(userId);
     const docRef = shopEventProductCatalogDoc(shopId, eventId);
-    await setDoc(docRef, {
-        eventId,
-        shopId,
-        ownerUid: userId,
-        products: eventProductsMap,
-        updatedAt: serverTimestamp(),
-    }, { merge: true });
-
-    try {
-        await updateDoc(shopEventDoc(shopId, eventId), {
-            catalog: eventProductsMap,
-            updatedAt: serverTimestamp(),
-        });
-    } catch (_) {}
+    await runTransaction(db, async tx => {
+        const eventRef = shopEventDoc(shopId, eventId);
+        const snapshot = await tx.get(eventRef);
+        if (!snapshot.exists() || snapshot.data().ownerUid !== userId) throw new Error('Event ownership could not be verified.');
+        const event = { ...snapshot.data(), catalog: eventProductsMap };
+        tx.set(docRef, { eventId, shopId, ownerUid: userId, products: eventProductsMap, updatedAt: serverTimestamp() });
+        tx.update(eventRef, { catalog: eventProductsMap, updatedAt: serverTimestamp() });
+        tx.set(publicEventDoc(eventId), sanitizeForFirestore(sanitizePublicEvent(event)));
+    });
 
     return eventProductsMap;
 }
@@ -852,27 +980,20 @@ export async function updateEventProductCatalog(userId, eventId, eventProductsMa
  * Allocates booth stock for an event.
  */
 export async function allocateEventStock(userId, eventId, allocations) {
-    if (!userId || !eventId) throw new Error("User ID and Event ID are required.");
-    const shopId = getShopId(userId);
-    const docRef = shopEventAllocationDoc(shopId, eventId);
-    await setDoc(docRef, {
-        eventId,
-        shopId,
-        ownerUid: userId,
-        allocations,
-        updatedAt: serverTimestamp(),
-    }, { merge: true });
-    return allocations;
+    const { allocateTrustedEventStock } = await import('./orderSubmissionService.js');
+    return allocateTrustedEventStock(userId, eventId, allocations);
 }
 
 /**
  * Retrieves current stock allocations for an event.
  */
-export async function getEventStockAllocations(userId, eventId) {
+export async function getEventStockState(userId, eventId) {
     if (!userId || !eventId) return {};
     const shopId = getShopId(userId);
     const snap = await getDoc(shopEventAllocationDoc(shopId, eventId));
     if (!snap.exists()) return {};
-    return snap.data().allocations || {};
+    return snap.data();
 }
 
+// Backward-compatible totals-only reader. New availability views need all ledgers.
+export async function getEventStockAllocations(userId,eventId) { return (await getEventStockState(userId,eventId)).allocations || {}; }
