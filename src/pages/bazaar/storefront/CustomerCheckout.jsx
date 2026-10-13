@@ -131,6 +131,19 @@ export default function CustomerCheckout({ onOrderSubmit = null }) {
             return;
         }
 
+        if (!Number.isFinite(subtotal) || subtotal < 0) {
+            setErrorMessage("One or more items have an invalid or missing price. Please review your cart before submitting.");
+            return;
+        }
+
+        for (const item of cartItems) {
+            const raw = item.finalUnitPrice ?? item.price;
+            if (raw === undefined || raw === null || !Number.isFinite(Number(raw)) || Number(raw) < 0) {
+                setErrorMessage(`Item "${item.productName || 'Custom item'}" has an invalid price.`);
+                return;
+            }
+        }
+
         // Validate event status
         if (event && (event.isAcceptingOrders === false || event.queueStatus === "paused" || event.queueStatus === "closed")) {
             setErrorMessage("Ordering is currently paused for this booth. Please speak with booth staff.");

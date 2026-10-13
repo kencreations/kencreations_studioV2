@@ -25,17 +25,26 @@ export function calculateItemPrice({
     quantity = 1,
 } = {}) {
     if (!product) throw new Error("Product definition is required for pricing.");
-    product = { ...product, base_price: product.base_price ?? product.retailPrice ?? product.price, customization_schema: clickerOptions(product) };
+    if (quantity !== undefined && (!Number.isFinite(Number(quantity)) || Number(quantity) <= 0)) {
+        throw new Error("Item quantity must be a positive number.");
+    }
+    const rawBase = product.base_price ?? product.retailPrice ?? product.price;
+    if (rawBase !== undefined && rawBase !== null && (!Number.isFinite(Number(rawBase)) || Number(rawBase) < 0)) {
+        throw new Error("Product pricing is invalid. Seller must configure a finite price.");
+    }
+    product = { ...product, base_price: rawBase, customization_schema: clickerOptions(product) };
 
     const safeQty = Math.max(1, Math.floor(Number(quantity) || 1));
 
     // 1. Authoritative base price (event override takes precedence if enabled)
-    let unitBase = Number(product.base_price) || 0;
+    let unitBase = rawBase != null ? Number(rawBase) : 0;
     let hasEventOverride = false;
 
     if (eventConfig && eventConfig.enabled !== false && typeof eventConfig.price_override === "number" && eventConfig.price_override >= 0) {
         unitBase = Number(eventConfig.price_override);
         hasEventOverride = true;
+    } else if (rawBase == null && product.type !== 'ready_made') {
+        throw new Error("Product price is missing. Seller must configure a valid price.");
     }
 
     let customizationExtras = 0;
@@ -174,10 +183,24 @@ export function calculateItemPrice({
  * @returns {Object} Order financial totals
  */
 export function calculateOrderTotal({ items = [], discountPercent = 0 } = {}) {
-    const subtotal = items.reduce((sum, item) => sum + (Number(item.totalPrice) || 0), 0);
+    if (!Array.isArray(items)) throw new Error("Order items must be an array.");
+    for (const item of items) {
+        const lineTotal = item.totalPrice ?? item.lineTotal;
+        if (lineTotal !== undefined && (!Number.isFinite(Number(lineTotal)) || Number(lineTotal) < 0)) {
+            throw new Error(`Item "${item.productName || item.productId || 'Item'}" has an invalid price.`);
+        }
+    }
+    const subtotal = items.reduce((sum, item) => sum + (Number(item.totalPrice ?? item.lineTotal) || 0), 0);
+    if (!Number.isFinite(subtotal) || subtotal < 0) {
+        throw new Error("Calculated subtotal is not a valid finite number.");
+    }
     const safeDiscountPct = Math.max(0, Math.min(100, Number(discountPercent) || 0));
     const discountAmount = Number(((subtotal * safeDiscountPct) / 100).toFixed(2));
     const totalAmount = Number((subtotal - discountAmount).toFixed(2));
+
+    if (!Number.isFinite(totalAmount) || totalAmount < 0) {
+        throw new Error("Calculated order total is not a valid finite number.");
+    }
 
     return {
         subtotal: Number(subtotal.toFixed(2)),

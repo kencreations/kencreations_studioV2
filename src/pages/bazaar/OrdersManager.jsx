@@ -465,7 +465,13 @@ export default function OrdersManager() {
                                                             {item.quantity}× {item.productName}
                                                         </span>
                                                         <span className="font-mono font-bold text-gray-800">
-                                                            ₱{Number(item.lineTotal || item.authoritativeUnitPrice * item.quantity).toFixed(0)}
+                                                            {Number.isFinite(Number(item.lineTotal)) ? (
+                                                                `₱${Number(item.lineTotal).toFixed(0)}`
+                                                            ) : Number.isFinite(Number(item.authoritativeUnitPrice)) && Number.isFinite(Number(item.quantity)) ? (
+                                                                `₱${Number(item.authoritativeUnitPrice * item.quantity).toFixed(0)}`
+                                                            ) : (
+                                                                <span className="text-amber-600 font-bold text-xs">Price unverified</span>
+                                                            )}
                                                         </span>
                                                     </div>
 
@@ -531,18 +537,30 @@ export default function OrdersManager() {
                                     <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                         <div className="text-xs">
                                             <span className="text-gray-400">Total: </span>
-                                            <strong className="text-base font-black text-gray-900">
-                                                ₱{Number(ord.totalAmount).toFixed(0)}
-                                            </strong>
+                                            {Number.isFinite(Number(ord.totalAmount)) ? (
+                                                <strong className="text-base font-black text-gray-900">
+                                                    ₱{Number(ord.totalAmount).toFixed(0)}
+                                                </strong>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 font-bold text-xs border border-amber-300">
+                                                    <AlertCircle size={12} className="text-amber-700" />
+                                                    Price Needs Review
+                                                </span>
+                                            )}
                                         </div>
 
+                                        {!Number.isFinite(Number(ord.totalAmount)) && (
+                                            <p role="alert" className="text-xs text-amber-700 font-semibold">
+                                                This order has an invalid or missing price. Review before fulfillment; no automatic price was fabricated.
+                                            </p>
+                                        )}
                                         {invalidInventory && <p role="alert" className="text-xs text-red-700">Legacy inventory references need seller review. Verify and map the actual stock items before fulfillment; no automatic remapping or stock creation will occur. <button className="underline font-bold" onClick={()=>setReviewOrder(ord)}>Review inventory mapping</button></p>}
                                         {/* State Machine Transition Actions */}
                                         <div className="flex flex-wrap items-center gap-2">
                                             {status === "pending" && (
                                                 <>
                                                     <button
-                                                        disabled={isActionLoading || invalidInventory}
+                                                        disabled={isActionLoading || invalidInventory || !Number.isFinite(Number(ord.totalAmount))}
                                                         onClick={() => handleAccept(orderId)}
                                                         className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
                                                     >

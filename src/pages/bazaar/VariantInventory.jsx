@@ -6,9 +6,16 @@ import {
     getShopInventory,
     adjustInventoryStock,
     getShopInventoryMovements,
+    updateShopCustomColors,
 } from "../../services/bazaarService";
 import { getFilaments, getConsumables, addConsumable, updateConsumable } from "../../services/studioService";
 import { buildLetterColorMatrix } from "../../engine/bazaar/inventoryMath";
+import {
+    CANONICAL_COLORS,
+    canonicalColorId,
+    buildLetterCapSku,
+    buildCasingBaseSku,
+} from "../../engine/bazaar/configuration";
 import BazaarLayout from "../../components/bazaar/BazaarLayout";
 import {
     Layers,
@@ -32,6 +39,13 @@ import {
     ExternalLink,
     Grid,
     Smile,
+    Archive,
+    Trash2,
+    Edit2,
+    RotateCcw,
+    Check,
+    Eye,
+    EyeOff,
 } from "lucide-react";
 
 // Standard English alphabet letters
@@ -56,15 +70,15 @@ const ICON_KEYCAPS = [
 // Base casing slots 1 through 8
 const CASING_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8];
 
-// Initial default color palette
-const DEFAULT_COLORS = [
-    { id: "teal", name: "Teal", hex: "#14b8a6" },
-    { id: "pink", name: "Pink", hex: "#f472b6" },
-    { id: "purple", name: "Purple", hex: "#a855f7" },
-    { id: "white", name: "White", hex: "#f8fafc" },
-    { id: "black", name: "Black", hex: "#1e293b" },
-    { id: "mint", name: "Mint", hex: "#6ee7b7" },
-];
+// Initial default color palette (derived canonically)
+const DEFAULT_COLORS = CANONICAL_COLORS.map((c) => ({
+    id: c.id,
+    name: c.name,
+    hex: c.hex,
+    active: c.active !== false,
+    archived: false,
+    isDefault: true,
+}));
 
 const ADJUSTMENT_REASONS = [
     "Batch 3D Print Restock",
@@ -103,6 +117,14 @@ export default function VariantInventory() {
     const [newColorName, setNewColorName] = useState("");
     const [newColorHex, setNewColorHex] = useState("#3b82f6");
 
+    // Comprehensive Color Management State
+    const [isManageColorsOpen, setIsManageColorsOpen] = useState(false);
+    const [showArchivedColors, setShowArchivedColors] = useState(false);
+    const [editingColorId, setEditingColorId] = useState(null);
+    const [editColorForm, setEditColorForm] = useState({ name: "", hex: "#14b8a6" });
+    const [deleteConfirmColor, setDeleteConfirmColor] = useState(null);
+    const [deleteBlockedReason, setDeleteBlockedReason] = useState(null);
+
     // Adjustment Modal State
     const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
     const [selectedItem, setSelectedItem] = useState(null);
@@ -128,16 +150,20 @@ export default function VariantInventory() {
             setFilaments(filsData || []);
             setConsumables(consData || []);
 
-            // Load seller's custom colors if stored in shop or localStorage
+            // Load seller's custom/managed colors if stored in shop or localStorage
+            let savedColors = null;
             if (shopData?.customColors && Array.isArray(shopData.customColors)) {
-                setCustomColors(shopData.customColors);
+                savedColors = shopData.customColors;
             } else {
                 const saved = localStorage.getItem(`bazaar_custom_colors_${currentUser.uid}`);
                 if (saved) {
                     try {
-                        setCustomColors(JSON.parse(saved));
+                        savedColors = JSON.parse(saved);
                     } catch (_) {}
                 }
+            }
+            if (savedColors) {
+                setCustomColors(savedColors);
             }
         } catch (err) {
             console.error("[VariantInventory] Failed to load data:", err);
@@ -151,41 +177,137 @@ export default function VariantInventory() {
         loadData();
     }, [loadData]);
 
-    // Combined active colors list (Defaults + Studio Filaments + User Custom Colors)
+    // Combined active colors list (Canonical Defaults + Studio Filaments + User Custom Colors)
     const allAvailableColors = useMemo(() => {
         const colorMap = new Map();
 
-        // 1. Add defaults
+        // 1. Initialize base canonical colors
         for (const c of DEFAULT_COLORS) {
-            colorMap.set(c.name.toLowerCase(), c);
+            colorMap.set(c.id, { ...c });
         }
 
-        // 2. Add Studio Hub Filaments
-        for (const f of filaments) {
-            const name = f.color_name || f.color || f.name;
-            if (name && !colorMap.has(name.toLowerCase())) {
-                colorMap.set(name.toLowerCase(), {
-                    id: `fil_${f.id || name.toLowerCase().replace(/\s+/g, "_")}`,
-                    name: name,
-                    hex: f.color_hex || "#6366f1",
-                    isFilament: true,
-                    filamentId: f.id,
+        // 2. Add or overlay custom / saved colors (seller modifications)
+        for (const c of customColors) {
+            if (!c) continue;
+            const cid = canonicalColorId(c.id || c.name);
+            const existing = colorMap.get(cid);
+            if (existing) {
+                colorMap.set(cid, {
+                    ...existing,
+                    ...c,
+                    id: cid, // preserve stable canonical ID
+                });
+            } else {
+                colorMap.set(cid, {
+                    id: cid,
+                    name: c.name || cid,
+                    hex: c.hex || "#6366f1",
+                    active: c.active !== false && !c.disabled,
+                    archived: !!c.archived,
+                    isCustom: true,
                 });
             }
         }
 
-        // 3. Add Custom Colors added by user
-        for (const c of customColors) {
-            if (c.name && !colorMap.has(c.name.toLowerCase())) {
-                colorMap.set(c.name.toLowerCase(), c);
+        // 3. Add Studio Hub Filaments if not already present
+        for (const f of filaments) {
+            const name = f.color_name || f.color || f.name;
+            if (name) {
+                const fid = canonicalColorId(f.id || name);
+                if (!colorMap.has(fid)) {
+                    colorMap.set(fid, {
+                        id: fid,
+                        name: name,
+                        hex: f.color_hex || "#6366f1",
+                        active: true,
+                        archived: false,
+                        isFilament: true,
+                        filamentId: f.id,
+                    });
+                }
             }
         }
 
         return Array.from(colorMap.values());
-    }, [filaments, customColors]);
+    }, [customColors, filaments]);
+
+    // Visible colors filtered by archived status
+    const visibleColors = useMemo(() => {
+        return allAvailableColors.filter((c) => showArchivedColors || !c.archived);
+    }, [allAvailableColors, showArchivedColors]);
+
+    const archivedCount = useMemo(() => {
+        return allAvailableColors.filter((c) => c.archived).length;
+    }, [allAvailableColors]);
+
+    // Persist colors to state, localStorage, and shop document
+    const saveColors = async (newColorsList) => {
+        setCustomColors(newColorsList);
+        if (currentUser?.uid) {
+            localStorage.setItem(`bazaar_custom_colors_${currentUser.uid}`, JSON.stringify(newColorsList));
+            try {
+                await updateShopCustomColors(currentUser.uid, newColorsList);
+            } catch (err) {
+                console.warn("[VariantInventory] Could not save custom colors remotely, preserved locally:", err);
+            }
+        }
+    };
+
+    // Safety check: is a color safe to permanently delete (zero stock, zero reservations, zero ledger history)?
+    const isColorSafeToDelete = useCallback((color) => {
+        if (!color) return { safe: false, reason: "Invalid color." };
+
+        const cId = canonicalColorId(color.id || color.name);
+        const cName = String(color.name || "").toLowerCase().trim();
+
+        // 1. Check inventory balances (on_hand, reserved, allocated)
+        for (const item of inventoryItems) {
+            const itemKey = String(item.item_key || "").toLowerCase();
+            const itemColor = String(item.color || "").toLowerCase();
+            const matchesColor =
+                itemColor === cName ||
+                itemColor === cId ||
+                itemKey.endsWith(`_${cId}`) ||
+                itemKey.includes(`_${cId}_`) ||
+                itemKey.endsWith(`_${cName.replace(/\s+/g, "_")}`) ||
+                itemKey.includes(`_${cName.replace(/\s+/g, "_")}_`);
+
+            if (matchesColor) {
+                const onHand = Number(item.on_hand ?? 0);
+                const reserved = Number(item.reserved ?? 0);
+                const allocated = Number(item.allocated ?? 0);
+                if (onHand > 0 || reserved > 0 || allocated > 0) {
+                    return {
+                        safe: false,
+                        reason: `Color "${color.name}" has active stock records (On-hand: ${onHand}, Reserved: ${reserved}, Allocated: ${allocated}) in inventory (${item.name || item.item_key}).`,
+                    };
+                }
+            }
+        }
+
+        // 2. Check historical movements audit trail
+        for (const m of movements) {
+            const mKey = String(m.itemKey || m.item_key || "").toLowerCase();
+            const mName = String(m.name || "").toLowerCase();
+            if (
+                mKey.endsWith(`_${cId}`) ||
+                mKey.includes(`_${cId}_`) ||
+                mKey.endsWith(`_${cName.replace(/\s+/g, "_")}`) ||
+                mKey.includes(`_${cName.replace(/\s+/g, "_")}_`) ||
+                mName.includes(cName)
+            ) {
+                return {
+                    safe: false,
+                    reason: `Color "${color.name}" has recorded inventory movements in the audit ledger and cannot be erased to preserve accounting history.`,
+                };
+            }
+        }
+
+        return { safe: true };
+    }, [inventoryItems, movements]);
 
     // Handle adding a new color
-    const handleAddCustomColor = (e) => {
+    const handleAddCustomColor = async (e) => {
         e.preventDefault();
         const trimmed = newColorName.trim();
         if (!trimmed) {
@@ -193,46 +315,123 @@ export default function VariantInventory() {
             return;
         }
 
+        const cid = canonicalColorId(trimmed);
+        if (allAvailableColors.some((c) => c.id === cid)) {
+            setErrorMessage(`A color with identifier "${cid}" or name "${trimmed}" already exists.`);
+            return;
+        }
+
         const newCol = {
-            id: `custom_${trimmed.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${Date.now().toString(36)}`,
+            id: cid,
             name: trimmed,
             hex: newColorHex,
+            active: true,
+            archived: false,
             isCustom: true,
         };
 
-        const updated = [...customColors, newCol];
-        setCustomColors(updated);
-        if (currentUser?.uid) {
-            localStorage.setItem(`bazaar_custom_colors_${currentUser.uid}`, JSON.stringify(updated));
-        }
+        const updated = [...allAvailableColors.filter((c) => c.id !== cid), newCol];
+        await saveColors(updated);
 
         setNewColorName("");
         setIsColorModalOpen(false);
-        setSuccessMessage(`Custom color "${trimmed}" added to inventory.`);
+        setSuccessMessage(`Color "${trimmed}" (ID: ${cid}) added to inventory.`);
     };
 
-    // Color names list for matrix columns
-    const colorNames = useMemo(() => allAvailableColors.map((c) => c.name), [allAvailableColors]);
+    // Inline Color Editing
+    const handleStartEditColor = (col) => {
+        setEditingColorId(col.id);
+        setEditColorForm({ name: col.name, hex: col.hex });
+    };
+
+    const handleSaveEditColor = async (colId) => {
+        const trimmed = editColorForm.name.trim();
+        if (!trimmed) {
+            setErrorMessage("Color name cannot be empty.");
+            return;
+        }
+        const updated = allAvailableColors.map((c) => {
+            if (c.id === colId) {
+                return { ...c, name: trimmed, hex: editColorForm.hex };
+            }
+            return c;
+        });
+        await saveColors(updated);
+        setEditingColorId(null);
+        setSuccessMessage(`Color "${trimmed}" updated successfully.`);
+    };
+
+    // Toggle color enabled/disabled
+    const handleToggleColorActive = async (col) => {
+        const nextActive = !col.active;
+        const updated = allAvailableColors.map((c) => {
+            if (c.id === col.id) {
+                return { ...c, active: nextActive, disabled: !nextActive };
+            }
+            return c;
+        });
+        await saveColors(updated);
+        setSuccessMessage(`Color "${col.name}" is now ${nextActive ? "enabled" : "disabled"}.`);
+    };
+
+    // Toggle color archived status
+    const handleToggleColorArchive = async (col) => {
+        const nextArchived = !col.archived;
+        const updated = allAvailableColors.map((c) => {
+            if (c.id === col.id) {
+                return { ...c, archived: nextArchived };
+            }
+            return c;
+        });
+        await saveColors(updated);
+        setSuccessMessage(
+            nextArchived
+                ? `Color "${col.name}" archived. It is hidden from customer customizers while preserving inventory history.`
+                : `Color "${col.name}" restored from archive.`
+        );
+    };
+
+    // Request delete with safety check
+    const handleRequestDeleteColor = (col) => {
+        const check = isColorSafeToDelete(col);
+        if (!check.safe) {
+            setDeleteBlockedReason(check.reason);
+            setDeleteConfirmColor(col);
+            return;
+        }
+        setDeleteBlockedReason(null);
+        setDeleteConfirmColor(col);
+    };
+
+    const handleConfirmDeleteColor = async () => {
+        if (!deleteConfirmColor) return;
+        const colId = deleteConfirmColor.id;
+        const updated = allAvailableColors.filter((c) => c.id !== colId);
+        await saveColors(updated);
+        setSuccessMessage(`Color "${deleteConfirmColor.name}" removed permanently.`);
+        setDeleteConfirmColor(null);
+        setDeleteBlockedReason(null);
+    };
 
     // 2D Matrix for Letter Caps
     const letterMatrix = useMemo(() => {
         return buildLetterColorMatrix({
             inventoryItems,
             letters: MATRIX_LETTERS,
-            colors: colorNames,
+            colors: visibleColors,
             itemType: "letter_cap",
         });
-    }, [inventoryItems, colorNames]);
+    }, [inventoryItems, visibleColors]);
 
     // 2D Matrix for Icon Keycaps
     const iconMatrix = useMemo(() => {
         return buildLetterColorMatrix({
             inventoryItems,
             letters: ICON_KEYCAPS.map((i) => i.id),
-            colors: colorNames,
+            colors: visibleColors,
             itemType: "icon_cap",
         });
-    }, [inventoryItems, colorNames]);
+    }, [inventoryItems, visibleColors]);
 
     // Active matrix based on sub-mode
     const activeMatrix = matrixMode === "letters" ? letterMatrix : iconMatrix;
@@ -350,17 +549,20 @@ export default function VariantInventory() {
     };
 
     // Quick Casing Adjustment
-    const handleOpenCasingAdjustment = (color, slots) => {
-        const itemKey = `base_casing_${color.toLowerCase().replace(/\s+/g, "_")}_${slots}key`;
-        const existing = inventoryMap.get(itemKey) || {};
+    const handleOpenCasingAdjustment = (colorOrName, slots) => {
+        const colId = canonicalColorId(colorOrName);
+        const itemKey = buildCasingBaseSku(colId, slots);
+        const legacyKey = `base_casing_${String(colorOrName).toLowerCase().replace(/\s+/g, "_")}_${slots}key`;
+        const existing = inventoryMap.get(itemKey) || inventoryMap.get(legacyKey) || {};
         const onHand = Number(existing.on_hand ?? 0);
         const reserved = Number(existing.reserved ?? 0);
 
         setSelectedItem({
             itemKey,
             itemType: "casing_base",
-            name: `Base Casing [${color}] (${slots}-Slot Key)`,
-            color,
+            name: `Base Casing [${colorOrName}] (${slots}-Slot Key)`,
+            color: colorOrName,
+            colorId: colId,
             slots,
             onHand,
             reserved,
@@ -521,6 +723,13 @@ export default function VariantInventory() {
                             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-xs font-bold text-indigo-700 transition-all cursor-pointer shadow-2xs"
                         >
                             <Palette size={14} /> + Add Color
+                        </button>
+
+                        <button
+                            onClick={() => setIsManageColorsOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-teal-50 hover:bg-teal-100 border border-teal-200 text-xs font-bold text-teal-800 transition-all cursor-pointer shadow-2xs"
+                        >
+                            <Sliders size={14} /> Manage Colors
                         </button>
 
                         <button
@@ -716,17 +925,24 @@ export default function VariantInventory() {
 
                             {/* Color Legend Bar */}
                             <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs text-gray-500">
-                                <span className="font-bold text-gray-400 shrink-0">Colors ({allAvailableColors.length}):</span>
-                                {allAvailableColors.map((col) => (
+                                <span className="font-bold text-gray-400 shrink-0">Colors ({visibleColors.length}):</span>
+                                {visibleColors.map((col) => (
                                     <span
-                                        key={col.name}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-50 border border-gray-200 shrink-0 font-medium"
+                                        key={col.id || col.name}
+                                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border shrink-0 font-medium ${
+                                            col.archived
+                                                ? "bg-gray-100/90 border-gray-300 text-gray-400"
+                                                : "bg-gray-50 border-gray-200 text-gray-700"
+                                        }`}
                                     >
                                         <div
                                             className="w-2.5 h-2.5 rounded-full border border-gray-300 shrink-0"
                                             style={{ backgroundColor: col.hex }}
                                         />
                                         <span>{col.name}</span>
+                                        {col.archived && (
+                                            <span className="text-[9px] px-1 rounded bg-gray-200 text-gray-600 font-bold">Archived</span>
+                                        )}
                                         {col.isFilament && (
                                             <span className="text-[9px] px-1 rounded bg-teal-100 text-teal-700 font-bold">Filament</span>
                                         )}
@@ -741,6 +957,21 @@ export default function VariantInventory() {
                                 >
                                     + Add More
                                 </button>
+                                <button
+                                    onClick={() => setIsManageColorsOpen(true)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-xs font-bold text-gray-700 transition-all cursor-pointer shrink-0 ml-1"
+                                >
+                                    <Sliders size={12} /> Manage Colors
+                                </button>
+                                <label className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 cursor-pointer shrink-0 ml-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={showArchivedColors}
+                                        onChange={(e) => setShowArchivedColors(e.target.checked)}
+                                        className="rounded border-gray-300 text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                    />
+                                    <span>Show Archived ({archivedCount})</span>
+                                </label>
                             </div>
 
                             {/* Matrix Grid Table */}
@@ -751,14 +982,19 @@ export default function VariantInventory() {
                                             <th className="py-3 px-4 font-black text-gray-700 uppercase tracking-wider sticky left-0 bg-gray-50 z-30 w-24">
                                                 {matrixMode === "letters" ? "Letter" : "Icon Cap"}
                                             </th>
-                                            {allAvailableColors.map((col) => (
-                                                <th key={col.name} className="py-3 px-4 font-bold text-gray-700 text-center min-w-[100px]">
+                                            {visibleColors.map((col) => (
+                                                <th key={col.id || col.name} className="py-3 px-4 font-bold text-gray-700 text-center min-w-[100px]">
                                                     <div className="flex items-center justify-center gap-1.5">
                                                         <div
                                                             className="w-3 h-3 rounded-full border border-gray-300 shrink-0"
                                                             style={{ backgroundColor: col.hex }}
                                                         />
                                                         <span className="truncate max-w-[90px]">{col.name}</span>
+                                                        {col.archived && (
+                                                            <span className="text-[9px] px-1 rounded bg-gray-200 text-gray-500 font-extrabold uppercase">
+                                                                Archived
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </th>
                                             ))}
@@ -779,10 +1015,10 @@ export default function VariantInventory() {
                                                             </div>
                                                         )}
                                                     </td>
-                                                    {allAvailableColors.map((col) => {
-                                                        const cell = row.cells[col.name] || { onHand: 0, available: 0, isLow: true };
+                                                    {visibleColors.map((col) => {
+                                                        const cell = row.cells[col.name] || row.cells[col.id] || { onHand: 0, available: 0, isLow: true };
                                                         return (
-                                                            <td key={col.name} className="py-2 px-3 text-center">
+                                                            <td key={col.id || col.name} className="py-2 px-3 text-center">
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleOpenMatrixAdjustment(row.char, col.name, cell)}
@@ -822,8 +1058,8 @@ export default function VariantInventory() {
                             </div>
 
                             <div className="space-y-6">
-                                {allAvailableColors.map((col) => (
-                                    <div key={col.name} className="bg-gray-50/60 rounded-2xl p-4 border border-gray-200/80">
+                                {visibleColors.map((col) => (
+                                    <div key={col.id || col.name} className="bg-gray-50/60 rounded-2xl p-4 border border-gray-200/80">
                                         <div className="flex items-center justify-between pb-3 border-b border-gray-200 mb-3">
                                             <div className="flex items-center gap-2">
                                                 <div
@@ -833,6 +1069,11 @@ export default function VariantInventory() {
                                                 <h4 className="text-sm font-black text-gray-900">
                                                     Base Casing — Color: {col.name}
                                                 </h4>
+                                                {col.archived && (
+                                                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full ml-1">
+                                                        Archived
+                                                    </span>
+                                                )}
                                             </div>
                                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                                                 1–8 Slots Available
@@ -841,8 +1082,9 @@ export default function VariantInventory() {
 
                                         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2.5">
                                             {CASING_SLOTS.map((slots) => {
-                                                const itemKey = `base_casing_${col.name.toLowerCase().replace(/\s+/g, "_")}_${slots}key`;
-                                                const existing = inventoryMap.get(itemKey);
+                                                const colId = canonicalColorId(col.id || col.name);
+                                                const itemKey = buildCasingBaseSku(colId, slots);
+                                                const existing = inventoryMap.get(itemKey) || inventoryMap.get(`base_casing_${col.name.toLowerCase().replace(/\s+/g, "_")}_${slots}key`);
                                                 const onHand = Number(existing?.on_hand ?? 0);
                                                 const reserved = Number(existing?.reserved ?? 0);
                                                 const available = Math.max(0, onHand - reserved);
@@ -1305,6 +1547,338 @@ export default function VariantInventory() {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* MANAGE COLORS MODAL */}
+            {isManageColorsOpen && (
+                <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-gray-100 shadow-2xl overflow-hidden">
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-100 shrink-0">
+                            <div>
+                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-600 flex items-center gap-1">
+                                    <Sliders size={12} /> Color Management
+                                </span>
+                                <h3 className="text-base font-black text-gray-900 mt-0.5">
+                                    Manage Variant & Matrix Colors
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    Control color availability, rename, adjust hex swatches, archive, or safely remove unused colors.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setIsManageColorsOpen(false);
+                                    setEditingColorId(null);
+                                }}
+                                className="p-1.5 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* Quick Add Bar */}
+                        <div className="p-6 py-4 bg-gray-50/70 border-b border-gray-100 shrink-0">
+                            <form onSubmit={handleAddCustomColor} className="flex flex-col sm:flex-row items-center gap-3">
+                                <div className="flex-1 w-full">
+                                    <input
+                                        type="text"
+                                        placeholder="Add new color (e.g. Lavender, Cyber Yellow)..."
+                                        value={newColorName}
+                                        onChange={(e) => setNewColorName(e.target.value)}
+                                        className="w-full px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-xs text-gray-900 focus:border-teal-500 outline-none"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-xl border border-gray-200">
+                                        <input
+                                            type="color"
+                                            value={newColorHex}
+                                            onChange={(e) => setNewColorHex(e.target.value)}
+                                            className="w-6 h-6 rounded-lg border-0 cursor-pointer p-0 bg-transparent"
+                                        />
+                                        <span className="text-xs font-mono font-bold text-gray-600">{newColorHex}</span>
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1 shrink-0"
+                                    >
+                                        <Plus size={13} /> Add Color
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        {/* Colors List */}
+                        <div className="p-6 overflow-y-auto space-y-2.5 flex-1">
+                            {allAvailableColors.map((col) => {
+                                const isEditing = editingColorId === col.id;
+
+                                if (isEditing) {
+                                    return (
+                                        <div
+                                            key={col.id}
+                                            className="p-3.5 rounded-2xl border-2 border-teal-500 bg-teal-50/20 flex flex-col sm:flex-row items-center justify-between gap-3"
+                                        >
+                                            <div className="flex items-center gap-2.5 w-full sm:w-auto flex-1">
+                                                <input
+                                                    type="color"
+                                                    value={editColorForm.hex}
+                                                    onChange={(e) =>
+                                                        setEditColorForm((prev) => ({ ...prev, hex: e.target.value }))
+                                                    }
+                                                    className="w-9 h-9 rounded-xl border border-gray-200 cursor-pointer p-0.5 bg-white shrink-0"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={editColorForm.name}
+                                                    onChange={(e) =>
+                                                        setEditColorForm((prev) => ({ ...prev, name: e.target.value }))
+                                                    }
+                                                    placeholder="Color name"
+                                                    className="px-3 py-1.5 rounded-xl border border-gray-200 bg-white text-xs font-bold text-gray-900 focus:border-teal-500 outline-none flex-1"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={editColorForm.hex}
+                                                    onChange={(e) =>
+                                                        setEditColorForm((prev) => ({ ...prev, hex: e.target.value }))
+                                                    }
+                                                    className="w-24 px-2 py-1.5 rounded-xl border border-gray-200 bg-white text-xs font-mono font-bold text-gray-800 outline-none"
+                                                />
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setEditingColorId(null)}
+                                                    className="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs cursor-pointer"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSaveEditColor(col.id)}
+                                                    className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1"
+                                                >
+                                                    <Check size={13} /> Save
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div
+                                        key={col.id}
+                                        className={`p-3 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                                            col.archived
+                                                ? "bg-gray-50/70 border-gray-200 opacity-75"
+                                                : "bg-white border-gray-100 hover:border-gray-200 shadow-2xs"
+                                        }`}
+                                    >
+                                        {/* Color Details */}
+                                        <div className="flex items-center gap-3">
+                                            <div
+                                                className="w-7 h-7 rounded-full border border-gray-300 shrink-0 shadow-2xs"
+                                                style={{ backgroundColor: col.hex }}
+                                            />
+                                            <div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className="text-xs font-black text-gray-900">
+                                                        {col.name}
+                                                    </span>
+                                                    <code className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                                                        id: {col.id}
+                                                    </code>
+                                                    {col.isDefault && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-bold">
+                                                            Standard
+                                                        </span>
+                                                    )}
+                                                    {col.isFilament && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 font-bold">
+                                                            Filament
+                                                        </span>
+                                                    )}
+                                                    {col.isCustom && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold">
+                                                            Custom
+                                                        </span>
+                                                    )}
+                                                    {col.archived && (
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 font-extrabold uppercase">
+                                                            Archived
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="text-[11px] font-mono text-gray-400 block mt-0.5">
+                                                    Hex: {col.hex}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Actions */}
+                                        <div className="flex items-center gap-1.5 flex-wrap shrink-0 self-end sm:self-center">
+                                            {/* Enable / Disable toggle */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleColorActive(col)}
+                                                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                                    col.active !== false
+                                                        ? "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
+                                                        : "bg-gray-100 text-gray-500 hover:bg-gray-200 border border-gray-200"
+                                                }`}
+                                                title={col.active !== false ? "Disable color" : "Enable color"}
+                                            >
+                                                {col.active !== false ? <Eye size={12} /> : <EyeOff size={12} />}
+                                                <span>{col.active !== false ? "Active" : "Disabled"}</span>
+                                            </button>
+
+                                            {/* Edit */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleStartEditColor(col)}
+                                                className="px-2.5 py-1 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                                                title="Rename or change hex"
+                                            >
+                                                <Edit2 size={12} />
+                                                <span>Edit</span>
+                                            </button>
+
+                                            {/* Archive / Restore */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleColorArchive(col)}
+                                                className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                                                    col.archived
+                                                        ? "bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200"
+                                                        : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                                                }`}
+                                                title={col.archived ? "Restore from archive" : "Archive color (preserves history, hides from customer)"}
+                                            >
+                                                {col.archived ? <RotateCcw size={12} /> : <Archive size={12} />}
+                                                <span>{col.archived ? "Restore" : "Archive"}</span>
+                                            </button>
+
+                                            {/* Delete */}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRequestDeleteColor(col)}
+                                                className="p-1.5 rounded-xl hover:bg-red-50 text-red-600 hover:text-red-700 transition-all cursor-pointer"
+                                                title="Delete unused color permanently"
+                                            >
+                                                <Trash2 size={13} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 px-6 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between shrink-0">
+                            <span className="text-[11px] text-gray-400">
+                                Canonical IDs remain immutable across renames to safeguard past orders and ledger accounting.
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsManageColorsOpen(false);
+                                    setEditingColorId(null);
+                                }}
+                                className="px-5 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-bold text-xs shadow-xs cursor-pointer"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* DELETE / REMOVE CONFIRMATION & SAFETY CHECK DIALOG */}
+            {deleteConfirmColor && (
+                <div className="fixed inset-0 z-60 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl w-full max-w-md border border-gray-100 shadow-2xl p-6 space-y-4">
+                        {deleteBlockedReason ? (
+                            <>
+                                <div className="flex items-start gap-3">
+                                    <div className="p-2.5 rounded-2xl bg-amber-100 text-amber-700 shrink-0">
+                                        <AlertTriangle size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-black text-gray-900">
+                                            Cannot Delete "{deleteConfirmColor.name}"
+                                        </h3>
+                                        <p className="text-xs text-gray-600 mt-1.5 leading-relaxed">
+                                            {deleteBlockedReason}
+                                        </p>
+                                        <div className="p-3 bg-teal-50 rounded-2xl border border-teal-200 text-xs text-teal-800 mt-3 font-medium leading-relaxed">
+                                            <strong>Recommended Action:</strong> Archive this color instead. Archived colors are hidden from new customer customizers while preserving past order records and movement history.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setDeleteConfirmColor(null);
+                                            setDeleteBlockedReason(null);
+                                        }}
+                                        className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs cursor-pointer"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            await handleToggleColorArchive(deleteConfirmColor);
+                                            setDeleteConfirmColor(null);
+                                            setDeleteBlockedReason(null);
+                                        }}
+                                        className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
+                                    >
+                                        <Archive size={13} /> Archive Color Instead
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex items-start gap-3">
+                                    <div className="p-2.5 rounded-2xl bg-red-100 text-red-700 shrink-0">
+                                        <Trash2 size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-black text-gray-900">
+                                            Delete Color "{deleteConfirmColor.name}"?
+                                        </h3>
+                                        <p className="text-xs text-gray-600 mt-1.5 leading-relaxed">
+                                            This color has zero on-hand stock, zero active reservations or allocations, and no recorded movement history. Are you sure you want to permanently remove it? This action cannot be undone.
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setDeleteConfirmColor(null);
+                                            setDeleteBlockedReason(null);
+                                        }}
+                                        className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs cursor-pointer"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleConfirmDeleteColor}
+                                        className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                                    >
+                                        Delete Permanently
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

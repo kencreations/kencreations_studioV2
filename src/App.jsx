@@ -3,6 +3,7 @@ import React from "react";
 import { AccessProvider } from "./contexts/AccessContext";
 import { GeneratorProvider } from "./hooks/useGenerators";
 import GeneratorRoute from "./components/GeneratorRoute";
+import BetaTrialNotice from './components/BetaTrialNotice';
 import DesktopHome from "./pages/DesktopHome";
 
 import BannerNotification from "./components/BannerNotification";
@@ -25,6 +26,7 @@ import LithophaneEditor from "./pages/LithophaneEditor";
 import ModularOrganizerEditor from "./pages/ModularOrganizerEditor";
 import PopSocketEditor from "./pages/PopSocketEditor";
 import MakesGallery from "./pages/MakesGallery";
+import Pricing from "./pages/Pricing";
 import UpdateToast from "./components/UpdateToast";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ProfileProvider } from "./contexts/ProfileContext";
@@ -63,11 +65,11 @@ function App() {
                         {isDesktop && <UpdateToast />}
                         {isDesktop && <NotificationListener />}
 
+                        <BetaTrialNotice />
                         <Routes>
                             <Route path="/editor/clicker" element={<Navigate to="/editor/clicker-v2" replace />} />
                             <Route path="/editor/lithophanekeychain" element={<Navigate to="/editor/lithophane" replace />} />
                             <Route path="/editor/whistle-bagtag" element={<Navigate to="/editor/whistlebagtag" replace />} />
-                            <Route path="*" element={<Navigate to="/" replace />} />
                             <Route
                                 path="/"
                                 element={
@@ -75,6 +77,10 @@ function App() {
                                         isWeb={!isDesktop} 
                                     />
                                 }
+                            />
+                            <Route
+                                path="/pricing"
+                                element={<Pricing />}
                             />
                             <Route
                                 path="/app"
@@ -417,6 +423,7 @@ function App() {
                                 path="/editor/popsocket"
                                 element={<GeneratorRoute><PopSocketEditor /></GeneratorRoute>}
                             />
+                            <Route path="*" element={<Navigate to="/" replace />} />
                             </Routes>
                         </ErrorBoundary>
                     </PrinterProvider>

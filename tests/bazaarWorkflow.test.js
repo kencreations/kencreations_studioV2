@@ -108,6 +108,8 @@ test('unpublished events, disabled catalog items and invalid variants fail befor
     await assert.rejects(submitOrder(store,payload),/not accepting/);ev.isPublished=true;ev.catalog.clicker.enabled=false;
     await assert.rejects(submitOrder(store,payload),/unavailable/);
     assert.throws(()=>calculateItemPrice({product:{...product,type:'ready_made',variants:[{id:'pink',price:99}]},customization:{selected_variant_id:'wrong'}}),/variant/);
+    assert.throws(()=>calculateItemPrice({product:{...product,base_price:NaN},customization}),/invalid/);
+    assert.throws(()=>calculateItemPrice({product:{...product,retailPrice:undefined,base_price:undefined,price:undefined},customization}),/missing/);
     assert.equal(aggregateBOM([{requiredBOM:[{component_key:'x',required_qty:1}]},{requiredBOM:[{component_key:'x',required_qty:2}]}])[0].required_qty,3);
 });
 

@@ -44,14 +44,8 @@ export default function BazaarLayout({ children, activeTab = "dashboard" }) {
         ? access.evaluateBazaar()
         : evaluateBazaarAccess(access);
 
-    // Any valid active license on the account grants Studio Pro / Bazaar Hub access
-    const isAuthorized = Boolean(
-        bazaarDecision?.allowed ||
-        (access?.hasActiveLicense &&
-            (access?.active || []).every(
-                (l) => String(l.tier || l.tier_id || l.plan_type || l.plan || "").toLowerCase() !== "maker",
-            ))
-    );
+    // Entitlement is governed strictly by the authoritative policy evaluation
+    const isAuthorized = Boolean(bazaarDecision?.allowed);
 
     // Unauthenticated State
     if (!currentUser && !window.electronAPI) {

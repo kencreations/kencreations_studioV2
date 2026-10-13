@@ -1,6 +1,6 @@
 import IconArtwork from '../../../components/bazaar/IconArtwork';
 import { bazaarOperation } from '../../../services/bazaarDiagnostics';
-import { clickerOptions, canonicalClickerConfiguration } from '../../../engine/bazaar/configuration';
+import { clickerOptions, canonicalClickerConfiguration, canonicalColorId, buildLetterCapSku } from '../../../engine/bazaar/configuration';
 import { decomposeProductBOM } from '../../../engine/bazaar/bom';
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
@@ -212,6 +212,95 @@ export default function ProductCustomizer() {
     const availableSlots = schema.available_slots;
     const [configurationError, setConfigurationError] = useState('');
 
+    // Event stock availability map (sanitized booth allocation minus reservations/consumed)
+    const eventStockMap = useMemo(() => {
+        return event?.catalog?._stock || event?.availableStock || null;
+    }, [event]);
+
+    // Check availability of colors for a specific character, respecting event stock and quota used by other slots
+    const getAvailableColorsForChar = useCallback((char, slotIndex = -1) => {
+        if (!char) return availableColors;
+        const cleanChar = String(char).toUpperCase();
+        if (!eventStockMap) {
+            return availableColors;
+        }
+
+        const safeQty = Math.max(1, Number(quantity) || 1);
+        return availableColors.filter((col) => {
+            const sku = buildLetterCapSku(cleanChar, col.id);
+            const stockQty = Number(eventStockMap[sku] || 0);
+            if (stockQty <= 0) return false;
+
+            if (slotIndex >= 0) {
+                let usedByOtherSlots = 0;
+                slotConfigs.forEach((s, idx) => {
+                    if (idx !== slotIndex && !s.isIcon && String(s.char).toUpperCase() === cleanChar) {
+                        if (canonicalColorId(s.colorId) === col.id) {
+                            usedByOtherSlots += 1;
+                        }
+                    }
+                });
+                const totalNeeded = (usedByOtherSlots + 1) * safeQty;
+                if (totalNeeded > stockQty) return false;
+            }
+            return true;
+        });
+    }, [availableColors, eventStockMap, slotConfigs, quantity]);
+
+    // Validate aggregate demand for repeated letters across the entire order
+    const aggregateStockIssues = useMemo(() => {
+        if (!eventStockMap) return [];
+        const issues = [];
+        const skuCounts = {};
+        const skuDetails = {};
+        const safeQty = Math.max(1, Number(quantity) || 1);
+
+        slotConfigs.forEach((slot, idx) => {
+            if (!slot.isIcon && slot.char) {
+                const cId = canonicalColorId(slot.colorId);
+                const sku = buildLetterCapSku(slot.char, cId, slot.styleId);
+                skuCounts[sku] = (skuCounts[sku] || 0) + safeQty;
+                skuDetails[sku] = {
+                    char: slot.char,
+                    colorName: slot.colorName || cId,
+                    slotIndex: idx,
+                };
+            }
+        });
+
+        for (const [sku, needed] of Object.entries(skuCounts)) {
+            const available = Number(eventStockMap[sku] || 0);
+            if (needed > available) {
+                issues.push({
+                    sku,
+                    char: skuDetails[sku].char,
+                    colorName: skuDetails[sku].colorName,
+                    needed,
+                    available,
+                });
+            }
+        }
+        return issues;
+    }, [eventStockMap, slotConfigs, quantity]);
+
+    // Active slot stock status
+    const activeSlot = slotConfigs[activeSlotIndex];
+    const activeSlotAvailableColors = useMemo(() => {
+        if (!activeSlot || activeSlot.isIcon || !activeSlot.char) return availableColors;
+        return getAvailableColorsForChar(activeSlot.char, activeSlotIndex);
+    }, [activeSlot, activeSlotIndex, getAvailableColorsForChar, availableColors]);
+
+    const isCurrentLetterUnavailable = useMemo(() => {
+        if (!activeSlot || activeSlot.isIcon || !activeSlot.char) return false;
+        return eventStockMap ? activeSlotAvailableColors.length === 0 : false;
+    }, [activeSlot, eventStockMap, activeSlotAvailableColors]);
+
+    const isCurrentColorOutOfStock = useMemo(() => {
+        if (!activeSlot || activeSlot.isIcon || !activeSlot.char || !eventStockMap) return false;
+        const cId = canonicalColorId(activeSlot.colorId);
+        return !activeSlotAvailableColors.some(col => col.id === cId);
+    }, [activeSlot, eventStockMap, activeSlotAvailableColors]);
+
     // Change slot count (1 to 8 keys)
     const handleSlotCountChange = (newCount) => {
         const count = Number(newCount);
@@ -223,12 +312,14 @@ export default function ProductCustomizer() {
             const next = [...prev];
             if (next.length < count) {
                 for (let i = next.length; i < count; i++) {
-                    const fallbackColor = availableColors[i % availableColors.length];
+                    const fallbackChar = Array.from(schema.allowed_characters || '')[0] || '';
+                    const stockedColors = getAvailableColorsForChar(fallbackChar);
+                    const fallbackColor = stockedColors[0] || availableColors[i % availableColors.length];
                     next.push({
-                        char: Array.from(schema.allowed_characters || '')[0] || '',
+                        char: fallbackChar,
                         colorId: fallbackColor?.id || '', styleId: schema.keycap_styles[0]?.id || '', switchId: selectedSwitchId,
                         colorHex: fallbackColor?.hex || "#14b8a6",
-                        colorName: fallbackColor?.name || "Teal",
+                        colorName: fallbackColor?.name || "Teal Green",
                         isIcon: false,
                     });
                 }
@@ -374,8 +465,33 @@ export default function ProductCustomizer() {
         if (!shopSlug || !product) return;
         if (priceBreakdown.error) { setConfigurationError(priceBreakdown.error); return; }
 
+        if (aggregateStockIssues.length > 0) {
+            const issue = aggregateStockIssues[0];
+            setConfigurationError(`Keycap [${issue.char}] in ${issue.colorName} exceeds event stock (${issue.needed} required, ${issue.available} available). Please choose an available replacement.`);
+            return;
+        }
+
         const evKey = event?.slug || event?.eventId || event?.id || eventParam || "general";
         const isMadeToOrder = product.type === "made_to_order";
+
+        // Check if any slot has an out-of-stock color or letter
+        if (eventStockMap && isMadeToOrder) {
+            for (let i = 0; i < slotConfigs.length; i++) {
+                const slot = slotConfigs[i];
+                if (!slot.isIcon && slot.char) {
+                    const availableForChar = getAvailableColorsForChar(slot.char);
+                    if (availableForChar.length === 0) {
+                        setConfigurationError(`Letter "${slot.char}" is currently unavailable in this event. Please choose another letter or contact the seller.`);
+                        return;
+                    }
+                    const cId = canonicalColorId(slot.colorId);
+                    if (!availableForChar.some(c => c.id === cId)) {
+                        setConfigurationError(`Color "${slot.colorName}" for Letter "${slot.char}" is out of stock. Please select an available color.`);
+                        return;
+                    }
+                }
+            }
+        }
 
         const cartItem = {
             productId: product.productId || product.id,
@@ -391,15 +507,15 @@ export default function ProductCustomizer() {
                 text: textSequence,
                 slots: slotCount,
                 casing_style_id: selectedCasingStyleId,
-                casing_color: selectedCasingColor.id,
+                casing_color: canonicalColorId(selectedCasingColor.id),
                 switch_type_id: selectedSwitchId,
                 selected_add_on_ids: selectedAddonIds,
-                letter_color_array: slotConfigs.map(s => s.colorId),
+                letter_color_array: slotConfigs.map(s => canonicalColorId(s.colorId)),
                 casingStyle: selectedCasingStyleId,
                 casingColor: selectedCasingColor,
                 switchType: activeSwitchObj,
                 addons: availableAddons.filter((a) => selectedAddonIds.includes(a.id)),
-                slotsData: slotConfigs,
+                slotsData: slotConfigs.map(s => ({ ...s, colorId: canonicalColorId(s.colorId) })),
                 letterColorArray: slotConfigs.map((s) => s.colorName),
             } : null,
 
@@ -413,6 +529,14 @@ export default function ProductCustomizer() {
             if (!['made_to_order', 'ready_made'].includes(product.type)) throw new Error('The seller must republish this product with its product type.');
             if (isMadeToOrder) cartItem.customization = canonicalClickerConfiguration(product, cartItem.customization);
             cartItem.requiredBOM = decomposeProductBOM({ product, customization: cartItem.customization, quantity: cartItem.quantity });
+            if (eventStockMap) {
+                for (const part of cartItem.requiredBOM) {
+                    const available = Number(eventStockMap[part.component_key] || 0);
+                    if (part.required_qty > available) {
+                        throw new Error(`Insufficient event stock for ${part.name} [${part.component_key}]: ${part.required_qty} required, but only ${available} available.`);
+                    }
+                }
+            }
         } catch (error) { setConfigurationError(error.message); return; }
         setConfigurationError('');
         addToCart(shopSlug, evKey, cartItem);
@@ -625,6 +749,19 @@ export default function ProductCustomizer() {
                         </div>
 
                         {(configurationError || priceBreakdown.error) && <p role="alert" className="text-red-700">{configurationError || priceBreakdown.error}</p>}
+                        {aggregateStockIssues.length > 0 && (
+                            <div role="alert" className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold space-y-1.5 shadow-2xs">
+                                <div className="flex items-center gap-2">
+                                    <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                                    <span className="font-extrabold">Stock Limit Exceeded for Repeated Letters:</span>
+                                </div>
+                                {aggregateStockIssues.map((issue) => (
+                                    <p key={issue.sku} className="font-medium text-[11px] ml-6 text-amber-800">
+                                        Keycap [{issue.char}] in {issue.colorName} requires {issue.needed} units across your order, but only {issue.available} are available at this event. Please select an available color for one of the keys.
+                                    </p>
+                                ))}
+                            </div>
+                        )}
                         {/* SECTION 1: KEYS & COLORS */}
                         {activeSection === "slots" && (
                             <div className="bg-white rounded-3xl p-5 border border-gray-100 shadow-2xs space-y-5 animate-in fade-in duration-150">
@@ -736,37 +873,53 @@ export default function ProductCustomizer() {
                                 </div>
 
                                 {/* Icons use the seller artwork unchanged. */}
-                                {!slotConfigs[activeSlotIndex]?.isIcon && <div className="pt-2 border-t border-gray-100">
-                                    <label className="block text-xs font-bold text-gray-700 mb-2">
-                                        Select Color for Key #{activeSlotIndex + 1} ({slotConfigs[activeSlotIndex]?.char}):
-                                    </label>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                                        {availableColors.map((col) => {
-                                            const isSelected = slotConfigs[activeSlotIndex]?.colorHex === col.hex;
-                                            return (
-                                                <button
-                                                    key={col.id || col.name}
-                                                    type="button"
-                                                    onClick={() => handleSetSlotColor(col)}
-                                                    className={`p-2.5 rounded-2xl border flex items-center gap-2.5 text-xs font-bold transition-all cursor-pointer ${
-                                                        isSelected
-                                                            ? "border-teal-500 bg-teal-50 text-teal-900 shadow-2xs"
-                                                            : "border-gray-200 hover:border-gray-300 text-gray-700"
-                                                    }`}
-                                                >
-                                                    <span
-                                                        className="w-4 h-4 rounded-full border border-black/10 shrink-0 shadow-xs"
-                                                        style={{ backgroundColor: col.hex }}
-                                                    />
-                                                    <span className="truncate">{col.name}</span>
-                                                    {isSelected && <Check size={14} className="ml-auto text-teal-600 shrink-0" />}
-                                                </button>
-                                            );
-                                        })}
+                                {!slotConfigs[activeSlotIndex]?.isIcon && (
+                                    <div className="pt-2 border-t border-gray-100">
+                                        <label className="block text-xs font-bold text-gray-700 mb-2">
+                                            Select Color for Key #{activeSlotIndex + 1} ({slotConfigs[activeSlotIndex]?.char || 'Select letter'}):
+                                        </label>
+                                        {isCurrentLetterUnavailable ? (
+                                            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2">
+                                                <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                                                <span>This letter is currently unavailable. Please choose another letter or contact the seller.</span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                {isCurrentColorOutOfStock && (
+                                                    <div className="p-3 mb-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold flex items-center gap-2">
+                                                        <AlertCircle size={15} className="text-amber-600 shrink-0" />
+                                                        <span>Selected color "{slotConfigs[activeSlotIndex]?.colorName}" is out of stock for Letter {slotConfigs[activeSlotIndex]?.char}. Please choose an available color below:</span>
+                                                    </div>
+                                                )}
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                                                    {activeSlotAvailableColors.map((col) => {
+                                                        const isSelected = canonicalColorId(slotConfigs[activeSlotIndex]?.colorId) === col.id;
+                                                        return (
+                                                            <button
+                                                                key={col.id || col.name}
+                                                                type="button"
+                                                                onClick={() => handleSetSlotColor(col)}
+                                                                className={`p-2.5 rounded-2xl border flex items-center gap-2.5 text-xs font-bold transition-all cursor-pointer ${
+                                                                    isSelected
+                                                                        ? "border-teal-500 bg-teal-50 text-teal-900 shadow-2xs"
+                                                                        : "border-gray-200 hover:border-gray-300 text-gray-700"
+                                                                }`}
+                                                            >
+                                                                <span
+                                                                    className="w-4 h-4 rounded-full border border-black/10 shrink-0 shadow-xs"
+                                                                    style={{ backgroundColor: col.hex }}
+                                                                />
+                                                                <span className="truncate">{col.name}</span>
+                                                                {isSelected && <Check size={14} className="ml-auto text-teal-600 shrink-0" />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
-                                </div>
+                                )}
 
-                                }
                                 {slotConfigs[activeSlotIndex]?.isIcon && <button type="button" onClick={() => setSlotConfigs(prev => prev.map((s,i) => i === activeSlotIndex ? {...s, type:"letter", isIcon:false} : s))} className="text-sm font-bold text-teal-700">Use a letter on this key</button>}
                                 {/* Icon Keycaps (if enabled) */}
                                 {iconOptions.length > 0 && (
@@ -1015,31 +1168,38 @@ export default function ProductCustomizer() {
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={handleAddToCart}
-                            className="flex-1 py-3 px-6 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-black text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                            <ShoppingBag size={17} />
-                            <span>Add to Cart (₱{Number(priceBreakdown.total).toFixed(0)})</span>
-                        </button>
-
                         {isEventClosedOrPaused ? (
-                            <div className="py-3 px-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 font-bold text-xs whitespace-nowrap flex items-center gap-1.5" title="Event orders are currently paused">
+                            <div className="flex-1 py-3 px-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 font-bold text-xs flex items-center justify-center gap-1.5" title="Event orders are currently paused">
                                 <AlertCircle size={14} className="text-amber-600 shrink-0" />
-                                <span>Orders Paused</span>
+                                <span>Event Orders Paused</span>
+                            </div>
+                        ) : aggregateStockIssues.length > 0 || isCurrentLetterUnavailable ? (
+                            <div className="flex-1 py-3 px-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 font-bold text-xs flex items-center justify-center gap-1.5" title="Stock unavailable for selected letters">
+                                <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                                <span>{isCurrentLetterUnavailable ? "Selected letter is unavailable" : "Insufficient stock for repeated letters"}</span>
                             </div>
                         ) : (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    handleAddToCart();
-                                    navigate(`/shop/${shopSlug}/cart${eventParam ? `?event=${eventParam}` : ""}`);
-                                }}
-                                className="py-3 px-4 rounded-2xl bg-slate-900 hover:bg-black text-white font-black text-xs transition-all cursor-pointer whitespace-nowrap"
-                            >
-                                Buy Now
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={handleAddToCart}
+                                    className="flex-1 py-3 px-6 rounded-2xl bg-teal-600 hover:bg-teal-700 text-white font-black text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                    <ShoppingBag size={17} />
+                                    <span>Add to Cart (₱{Number(priceBreakdown.total).toFixed(0)})</span>
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        handleAddToCart();
+                                        navigate(`/shop/${shopSlug}/cart${eventParam ? `?event=${eventParam}` : ""}`);
+                                    }}
+                                    className="py-3 px-4 rounded-2xl bg-slate-900 hover:bg-black text-white font-black text-xs transition-all cursor-pointer whitespace-nowrap"
+                                >
+                                    Buy Now
+                                </button>
+                            </>
                         )}
                     </div>
 

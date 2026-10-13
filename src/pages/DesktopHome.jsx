@@ -113,10 +113,10 @@ export default function DesktopHome({ isWeb = false }) {
             return true;
         })
         .sort((a, b) => {
-            const aUnlocked = !a.isExclusive || accessibleIds.has(a.id);
-            const bUnlocked = !b.isExclusive || accessibleIds.has(b.id);
+            const aUnlocked = accessibleIds.has(a.id);
+            const bUnlocked = accessibleIds.has(b.id);
 
-            if (aUnlocked === bUnlocked) return a.sort_order - b.sort_order;
+            if (aUnlocked === bUnlocked) return (a.sort_order || 0) - (b.sort_order || 0);
             return aUnlocked ? -1 : 1;
         });
 
@@ -276,16 +276,31 @@ export default function DesktopHome({ isWeb = false }) {
                                             size={16}
                                             className="text-teal-400"
                                         />{" "}
-                                        Studio Pro Active
+                                        {access.isVip
+                                            ? "VIP All-Access Active"
+                                            : access.tier === "pro_plus"
+                                            ? "Pro+ Lifetime Active"
+                                            : access.tier === "pro"
+                                            ? "Studio Pro Active"
+                                            : access.tier === "basic"
+                                            ? "Basic Plan Active"
+                                            : "Active License"}
                                     </div>
                                     <p className="text-sm text-slate-300 leading-relaxed mb-4">
-                                        Your perpetual license is active. You
-                                        have unlimited commercial exports.
+                                        {access.isVip
+                                            ? "Your VIP lifetime pass gives you all-inclusive access to all tools and hubs."
+                                            : access.tier === "pro_plus"
+                                            ? "Your lifetime Pro+ license gives you permanent access to all Pro tools and hubs."
+                                            : access.tier === "pro"
+                                            ? "Your Pro subscription includes all Premium tools, Studio Hub, and Bazaar Hub."
+                                            : access.tier === "basic"
+                                            ? "Your Basic commercial license gives you full print sales rights for basic tools."
+                                            : "Your commercial license is active. You have commercial export rights."}
                                     </p>
                                 </div>
                                 <div className="flex gap-2 relative z-10">
-                                    <div className="bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold px-4 py-2 rounded-full cursor-default">
-                                        Activated
+                                    <div className="bg-teal-500/20 text-teal-300 border border-teal-500/30 text-xs font-bold px-4 py-2 rounded-full cursor-default uppercase tracking-wider">
+                                        {access.isVip ? "VIP" : access.tier?.replace("_", "+") || "Active"}
                                     </div>
                                 </div>
                             </div>
@@ -419,16 +434,27 @@ export default function DesktopHome({ isWeb = false }) {
                                                 }}
                                             />
 
-                                            {/* Status & VIP Badges */}
-                                            <div className="absolute top-3 left-3 flex flex-col gap-2 items-start z-10">
-                                                {editor.isExclusive && (
-                                                    <div className="bg-gradient-to-r from-amber-200 to-orange-200 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm border border-white/50 backdrop-blur-md">
+                                            {/* Status & Category Badges */}
+                                            <div className="absolute top-3 left-3 flex flex-col gap-1.5 items-start z-10">
+                                                {editor.category === "exclusive" ? (
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                        <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black px-2.5 py-0.5 rounded-md shadow-sm border border-white/40 backdrop-blur-md">
+                                                            Exclusive
+                                                        </div>
+                                                        <div className="bg-slate-900/80 text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm backdrop-blur-md border border-white/20">
+                                                            {typeof editor.purchasePricePHP === "number" && editor.purchasePricePHP > 0
+                                                                ? `₱${editor.purchasePricePHP.toLocaleString("en-PH")}`
+                                                                : "Config Pending"}
+                                                        </div>
+                                                    </div>
+                                                ) : editor.category === "premium" ? (
+                                                    <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-md shadow-sm border border-white/40 backdrop-blur-md">
                                                         Premium
                                                     </div>
-                                                )}
+                                                ) : null}
                                                 {isBeta && (
-                                                    <div className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm border border-white/50 backdrop-blur-md">
-                                                        New
+                                                    <div className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm border border-white/50 backdrop-blur-md">
+                                                        Beta
                                                     </div>
                                                 )}
                                             </div>
@@ -505,8 +531,8 @@ export default function DesktopHome({ isWeb = false }) {
 
                                             {isLocked && (
                                                 <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <div className="bg-white text-gray-900 font-bold px-4 py-2 rounded-full shadow-xl flex items-center gap-2 border border-gray-100">
-                                                        <span>🔒</span> Unlock
+                                                    <div className="bg-white text-gray-900 font-bold text-xs px-4 py-2 rounded-full shadow-xl flex items-center gap-1.5 border border-gray-100">
+                                                        <span>🔒</span> {editor.category === "exclusive" ? (typeof editor.purchasePricePHP === "number" && editor.purchasePricePHP > 0 ? `Unlock (₱${editor.purchasePricePHP.toLocaleString("en-PH")})` : "Unlock Exclusive") : "Unlock with Pro"}
                                                     </div>
                                                 </div>
                                             )}
@@ -552,6 +578,7 @@ export default function DesktopHome({ isWeb = false }) {
                 isOpen={!!selectedExclusive}
                 onClose={() => setSelectedExclusive(null)}
                 generatorName={selectedExclusive?.title}
+                generator={selectedExclusive}
                 isLicensed={isLicensed}
                 onUpgradeClick={() => {
                     setSelectedExclusive(null);

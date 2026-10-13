@@ -4,7 +4,7 @@ import React, { useEffect } from "react";
  * A highly styled, reusable Glassmorphism Modal component.
  * Features a sticky header with a close button and a scrollable body.
  */
-export default function GlassModal({ isOpen, onClose, title, children }) {
+export default function GlassModal({ isOpen, onClose, title, children, maxWidth = "max-w-4xl" }) {
     // Prevent background scrolling when modal is open
     useEffect(() => {
         if (isOpen) {
@@ -21,7 +21,7 @@ export default function GlassModal({ isOpen, onClose, title, children }) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-            <div className="bg-white/80 backdrop-blur-2xl border border-white/50 shadow-2xl rounded-[2rem] w-full max-w-4xl max-h-[90vh] flex flex-col relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className={`bg-white/90 backdrop-blur-2xl border border-white/50 shadow-2xl rounded-[2rem] w-full ${maxWidth} max-h-[92vh] flex flex-col relative overflow-hidden animate-in fade-in zoom-in-95 duration-200`}>
                 {/* Sticky Header */}
                 <div className="sticky top-0 z-10 flex items-center justify-between px-8 py-6 border-b border-gray-200/50 bg-white/50 backdrop-blur-md">
                     <h2 className="text-xl font-bold text-gray-900 tracking-tight">{title}</h2>

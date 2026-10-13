@@ -174,7 +174,7 @@ async function syncEntitlements(licenseKey, hwid, mainWindow) {
     if (!data) return;
 
     // Check if revoked
-    if (data.status !== 'active' || data.disabled === true || data.revoked === true || (data.hwid && data.hwid !== hwid) || (data.expiresAt && (!Number.isFinite(Date.parse(data.expiresAt)) || Date.parse(data.expiresAt) <= Date.now()))) {
+    if (data.licenseType === 'beta_trial' || String(licenseKey).startsWith('KC-BETA-') || data.status !== 'active' || data.disabled === true || data.revoked === true || (data.hwid && data.hwid !== hwid) || (data.expiresAt && (!Number.isFinite(Date.parse(data.expiresAt)) || Date.parse(data.expiresAt) <= Date.now()))) {
       console.warn('[syncWorker] License revoked/expired on server. Locking app.');
       db.clearLicenseState();
       if (mainWindow && !mainWindow.isDestroyed()) {

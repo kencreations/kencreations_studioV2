@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from 'react';
+import { isBetaTrial } from '../utils/betaTrialPolicy';
 import { useAuth } from './AuthContext';
 import { summarizeLicenses, evaluateGeneratorAccess, evaluateStudioHubAccess, evaluateBazaarAccess, expiryMillis } from '../utils/licensePolicy';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -73,17 +74,47 @@ export function AccessProvider({ children }) {
         ? (desktop.status === 'ready' || auth.status === 'ready' ? 'ready' : (desktop.status === 'loading' && auth.status === 'loading' ? 'loading' : desktop.status))
         : auth.status;
 
+    const resolvedTier = isVip ? 'vip'
+        : [desktopSummary?.tier, auth?.tier].includes('pro_plus') ? 'pro_plus'
+        : [desktopSummary?.tier, auth?.tier].includes('pro') ? 'pro'
+        : [desktopSummary?.tier, auth?.tier].includes('basic') ? 'basic'
+        : 'maker';
+
+    const resolvedBilling = isVip || resolvedTier === 'pro_plus' ? 'lifetime'
+        : auth.billingType === 'trial' && !['pro', 'pro_plus', 'vip'].includes(desktopSummary?.tier) ? 'trial'
+        : [desktopSummary?.billingType, auth?.billingType].includes('annual') ? 'annual'
+        : [desktopSummary?.billingType, auth?.billingType].includes('monthly') ? 'monthly'
+        : auth.billingType === 'trial' && resolvedTier === 'pro' ? 'trial'
+        : 'none';
+
+    const isBasicTier = resolvedTier === 'basic';
+    const isProOrAbove = ['pro', 'pro_plus', 'vip'].includes(resolvedTier);
+
+    const capabilities = {
+        basicGenerators: isBasicTier || isProOrAbove || combinedActive.length > 0,
+        premiumGenerators: isProOrAbove,
+        studioHub: isProOrAbove || entitlements.includes('studio-hub') || entitlements.includes('studio_hub'),
+        bazaarHub: isProOrAbove || (!isBasicTier && entitlements.some(e => ['bazaar-hub', 'bazaar_hub', 'bazaar'].includes(e))),
+        commercialPrinting: isBasicTier || isProOrAbove || entitlements.includes('commercial'),
+        vip: isVip,
+    };
+
     const summary = {
         active: combinedActive,
+        betaTrial: auth.betaTrial,
+        endedBetaTrial: auth.endedBetaTrial,
         entitlements,
         isVip,
+        tier: resolvedTier,
+        billingType: resolvedBilling,
+        capabilities,
         hasActiveLicense,
         hasExpired,
         status,
         desktop: isDesktop,
         currentUser: auth.currentUser,
     };
-    const promoAllAccess = promo?.promo_all_access === true && expiryMillis(promo.promo_expiry) > now;
+    const promoAllAccess = combinedActive.some(l => !isBetaTrial(l)) && promo?.promo_all_access === true && expiryMillis(promo.promo_expiry) > now;
     const value = { ...summary, promoAllAccess, desktop: isDesktop, currentUser: auth.currentUser };
     return (
         <AccessContext.Provider

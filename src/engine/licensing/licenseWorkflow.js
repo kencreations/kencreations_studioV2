@@ -2,6 +2,7 @@ import { expiryMillis } from '../../utils/licensePolicy.js';
 
 export function sanitizeLicense(license) {
     if (!license) return null;
+    if (license.licenseType === 'beta_trial') throw new Error('Beta trials cannot be converted to ordinary licenses.');
     return {
         id: license.id || license.licenseKey || null,
         licenseKey: license.licenseKey || license.id || null,
@@ -41,6 +42,8 @@ export async function activateLicenseInStore(store, uid, { licenseKey, hwid = nu
         if (!license) {
             throw new Error('Invalid License Code.');
         }
+
+        if (license.licenseType === 'beta_trial') throw new Error('Beta trials require signed-in beta activation.');
 
         // Check if disabled or revoked
         if (

@@ -88,7 +88,11 @@ export async function submitOrder(store, payload, { now = Date.now(), uuid = () 
             customerName: String(payload.customerName || '').trim().slice(0, 120), customerContact: String(payload.customerContact || '').slice(0, 200),
             orderNotes: String(payload.orderNotes || '').slice(0, 1000), paymentMethod: payload.paymentMethod === 'gcash' ? 'gcash' : 'cash',
             fulfillmentStatus: 'pending', paymentStatus: 'unpaid', inventoryVersion:1, items,
-            totalAmount: Math.round(items.reduce((n, i) => n + i.lineTotal, 0) * 100) / 100,
+            totalAmount: (() => {
+                const total = Math.round(items.reduce((n, i) => n + (Number(i.lineTotal) || 0), 0) * 100) / 100;
+                if (!Number.isFinite(total) || total < 0) fail('Calculated order total is invalid.');
+                return total;
+            })(),
             pickupInstructions: event?.pickupInstructions || shop.pickupInstructions || '',
             submittedAt: now, updatedAt: now, expiresAt: now + 30 * 86400000,
         };
@@ -108,6 +112,8 @@ export async function transitionOrder(store, uid, { shopId, orderId, action, rea
     return store.transaction(async tx => {
         const path = `shops/${shopId}/orders/${orderId}`;
         const shop = await tx.get(`shops/${shopId}`), order = await tx.get(path);
+        const shopEvent = order?.eventId ? await tx.get(`shops/${shopId}/events/${order.eventId}`) : null;
+        const publicEvent = order?.eventId ? await tx.get(`public_events/${order.eventId}`) : null;
         if (!shop || shop.ownerUid !== uid || !order || order.sellerUid !== uid || order.shopId !== shopId) fail('This order does not belong to this seller.');
         const states = { accept: ['pending','accepted'], prepare: ['accepted','preparing'], ready: ['preparing','ready'], collect: ['ready','collected'] };
         const current = order.fulfillmentStatus;
@@ -120,10 +126,9 @@ export async function transitionOrder(store, uid, { shopId, orderId, action, rea
         } else if (current !== states[action][0]) fail(`Cannot ${action} an order with status ${current}.`);
         if (action === 'accept') {
             if (order.inventoryVersion !== 1) fail('Legacy order requires verified inventory reconciliation before acceptance.');
-            const event = order.eventId ? await tx.get(`shops/${shopId}/events/${order.eventId}`) : null;
             const queue = await tx.list(`shops/${shopId}/orders`, {eventId:order.eventId || null});
             const active = queue.filter(o=>['accepted','preparing'].includes(o.fulfillmentStatus)).length;
-            const capacity = Number(event?.activeProductionCapacity ?? shop.activeProductionCapacity ?? 5);
+            const capacity = Number(shopEvent?.activeProductionCapacity ?? shop.activeProductionCapacity ?? 5);
             if (!Number.isSafeInteger(capacity) || capacity<1 || active>=capacity) fail('Production capacity is full. Keep this order pending until a slot is available.');
         }
         const changeStock = action === 'accept' || action === 'prepare' || (action === 'cancel' && current === 'accepted');
@@ -173,7 +178,20 @@ export async function transitionOrder(store, uid, { shopId, orderId, action, rea
             tx.set(update.path, update.data);
             tx.set(`shops/${shopId}/inventory_movements/${orderId}_${action}_${encodeURIComponent(update.part.component_key)}`, { shopId, ownerUid: uid, orderId, itemKey: update.part.component_key, type: action, qty: update.part.required_qty, createdAt: now });
         }
-        if (allocationPath && changeStock) tx.set(allocationPath, allocation);
+        if (allocationPath && changeStock) {
+            tx.set(allocationPath, allocation);
+            if (order.eventId) {
+                const availableStock = {};
+                for (const k of Object.keys(allocation.allocations || {})) {
+                    const a = allocation.allocations[k] || 0;
+                    const r = allocation.reservations?.[k] || 0;
+                    const c = allocation.consumed?.[k] || 0;
+                    availableStock[k] = Math.max(0, a - r - c);
+                }
+                if (shopEvent) tx.set(`shops/${shopId}/events/${order.eventId}`, { ...shopEvent, catalog: { ...(shopEvent.catalog || {}), _stock: availableStock }, updatedAt: now });
+                if (publicEvent) tx.set(`public_events/${order.eventId}`, { ...publicEvent, catalog: { ...(publicEvent.catalog || {}), _stock: availableStock }, updatedAt: now });
+            }
+        }
         tx.set(path, updated);
         if (!order.trackingToken) fail('Order has no tracking capability. Reconcile this legacy order before changing status.');
         tx.set(`order_tracking/${order.trackingToken}`, trackingProjection(updated));
@@ -188,6 +206,7 @@ export async function allocateStock(store, uid, { shopId, eventId, allocations }
         if (shop?.ownerUid !== uid || event?.shopId !== shopId) fail('Event ownership could not be verified.');
         const path = `shops/${shopId}/event_allocations/${eventId}`;
         const old = await tx.get(path) || { allocations: {}, reservations: {}, consumed: {} };
+        const publicEvent = await tx.get(`public_events/${eventId}`);
         const updates = [];
         for (const key of new Set([...Object.keys(old.allocations || {}), ...Object.keys(allocations)])) {
             if (!validComponentKey(key)) fail('Invalid SKU.');
@@ -206,6 +225,19 @@ export async function allocateStock(store, uid, { shopId, eventId, allocations }
         for (const [stockPath, stock] of updates) tx.set(stockPath, stock);
         const next = { ...old, allocations, shopId, eventId, ownerUid: uid, updatedAt: now };
         tx.set(path, next);
+        const availableStock = {};
+        for (const k of Object.keys(allocations)) {
+            const a = allocations[k] ?? 0;
+            const r = old.reservations?.[k] || 0;
+            const c = old.consumed?.[k] || 0;
+            availableStock[k] = Math.max(0, a - r - c);
+        }
+        if (event) {
+            tx.set(`shops/${shopId}/events/${eventId}`, { ...event, catalog: { ...(event.catalog || {}), _stock: availableStock }, updatedAt: now });
+        }
+        if (publicEvent) {
+            tx.set(`public_events/${eventId}`, { ...publicEvent, catalog: { ...(publicEvent.catalog || {}), _stock: availableStock }, updatedAt: now });
+        }
         return next.allocations;
     });
 }

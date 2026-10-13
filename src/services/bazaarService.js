@@ -136,6 +136,21 @@ export function sanitizePublicShop(privateShop = {}) {
  * Strictly excludes booth cash float, private event notes, and target revenues.
  */
 export function sanitizePublicEvent(privateEvent = {}) {
+    const rawCatalog = privateEvent.catalog || {};
+    const stock = rawCatalog._stock || privateEvent._stock || privateEvent.availableStock || null;
+    const sanitizedCatalog = Object.fromEntries(
+        Object.entries(rawCatalog)
+            .filter(([id]) => id !== '_stock')
+            .map(([id, value]) => [
+                id,
+                Object.fromEntries(Object.entries(value || {}).filter(([key]) => ['enabled', 'price_override', 'max_order_qty'].includes(key)))
+            ])
+    );
+    if (stock && typeof stock === 'object') {
+        sanitizedCatalog._stock = Object.fromEntries(
+            Object.entries(stock).filter(([k, v]) => Number.isFinite(v)).map(([k, v]) => [k, Math.max(0, Math.floor(v))])
+        );
+    }
     return {
         eventId: privateEvent.eventId || privateEvent.event_id || privateEvent.id,
         shopId: privateEvent.shopId || privateEvent.shop_id,
@@ -149,7 +164,7 @@ export function sanitizePublicEvent(privateEvent = {}) {
         queueStatus: privateEvent.queueStatus || privateEvent.queue_status || "open",
         status: privateEvent.status || 'Scheduled',
         isPublished: privateEvent.isPublished !== false && privateEvent.queueStatus !== 'unpublished',
-        catalog: Object.fromEntries(Object.entries(privateEvent.catalog || {}).map(([id, value]) => [id, Object.fromEntries(Object.entries(value).filter(([key]) => ['enabled', 'price_override', 'max_order_qty'].includes(key)))])),
+        catalog: sanitizedCatalog,
         updatedAt: serverTimestamp(),
     };
 }
@@ -218,6 +233,19 @@ export async function getSellerShop(userId) {
     const snap = await getDoc(shopDoc(shopId));
     if (!snap.exists()) return null;
     return { id: snap.id, ...snap.data() };
+}
+
+/**
+ * Updates seller custom colors on the private shop document.
+ */
+export async function updateShopCustomColors(userId, customColors) {
+    const shopId = getShopId(userId);
+    const sRef = shopDoc(shopId);
+    await setDoc(sRef, {
+        customColors,
+        updatedAt: serverTimestamp(),
+    }, { merge: true });
+    return customColors;
 }
 
 /**
@@ -967,9 +995,14 @@ export async function updateEventProductCatalog(userId, eventId, eventProductsMa
         const eventRef = shopEventDoc(shopId, eventId);
         const snapshot = await tx.get(eventRef);
         if (!snapshot.exists() || snapshot.data().ownerUid !== userId) throw new Error('Event ownership could not be verified.');
-        const event = { ...snapshot.data(), catalog: eventProductsMap };
-        tx.set(docRef, { eventId, shopId, ownerUid: userId, products: eventProductsMap, updatedAt: serverTimestamp() });
-        tx.update(eventRef, { catalog: eventProductsMap, updatedAt: serverTimestamp() });
+        const existingStock = snapshot.data().catalog?._stock;
+        const mergedCatalog = {
+            ...eventProductsMap,
+            ...(existingStock ? { _stock: existingStock } : {}),
+        };
+        const event = { ...snapshot.data(), catalog: mergedCatalog };
+        tx.set(docRef, { eventId, shopId, ownerUid: userId, products: mergedCatalog, updatedAt: serverTimestamp() });
+        tx.update(eventRef, { catalog: mergedCatalog, updatedAt: serverTimestamp() });
         tx.set(publicEventDoc(eventId), sanitizeForFirestore(sanitizePublicEvent(event)));
     });
 

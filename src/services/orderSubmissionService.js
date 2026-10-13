@@ -34,13 +34,13 @@ export function bazaarApiUrl() {
 }
 
 export function checkoutAvailability() {
-    try {
-        bazaarApiUrl();
-        return { available: true, message: '' };
-    } catch {
-        // Fallback for direct Firestore intake when no remote backend URL is provisioned
+    if (hasRemoteBackend()) {
         return { available: true, message: '' };
     }
+    return {
+        available: false,
+        message: 'Online kiosk checkout requires the cloud order service (available upon Blaze upgrade). Please place your order directly at the booth counter.'
+    };
 }
 
 async function request(action, payload, seller = false) {
@@ -89,101 +89,31 @@ export const submitGuestOrder = async (payload) => {
         return request('submit', payload);
     }
 
-    // Direct Firestore client intake submission
-    const shopId = payload.shopId;
-    const orderId = `ord_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
-    const orderNumber = orderId.slice(4, 12).toUpperCase();
-    const trackingToken = generateTrackingToken();
-    const pickupCode = generatePickupCode();
-    const now = Date.now();
+    // Blaze tier integration: Callable Cloud Function
+    try {
+        const { getFunctions, httpsCallable } = await import('firebase/functions');
+        const { app } = await import('../firebase.js');
+        const functions = getFunctions(app, 'us-central1');
+        const submitCallable = httpsCallable(functions, 'submitBazaarOrder');
+        const res = await submitCallable(payload);
+        if (res?.data) return res.data;
+    } catch (fnErr) {
+        const isNotDeployed = fnErr?.code === 'functions/not-found' ||
+            fnErr?.code === 'functions/internal' ||
+            fnErr?.message?.includes('404') ||
+            fnErr?.message?.includes('not found') ||
+            fnErr?.message?.includes('internal');
 
-    const sellerUid = payload.sellerUid || (shopId.startsWith('shop_') ? shopId.replace('shop_', '') : '');
-
-    const resolvedItems = (payload.items || []).map((item) => {
-        let requiredBOM = item.requiredBOM;
-        if (!requiredBOM || !requiredBOM.length) {
-            try {
-                requiredBOM = decomposeProductBOM({
-                    product: item,
-                    customization: item.customization,
-                    quantity: item.quantity,
-                });
-            } catch {
-                requiredBOM = [];
-            }
+        if (isNotDeployed) {
+            throw Object.assign(
+                new Error('Online kiosk checkout requires the cloud order service (available upon Blaze upgrade). Please place your order directly at the booth counter.'),
+                { code: 'backend-unavailable' }
+            );
         }
-        return { ...item, requiredBOM };
-    });
-
-    const orderData = {
-        shopId,
-        sellerUid,
-        eventId: payload.eventId || null,
-        eventName: payload.eventName || null,
-        boothNumber: payload.boothNumber || null,
-        orderId,
-        orderNumber,
-        pickupCode,
-        trackingToken,
-        customerName: String(payload.customerName || '').trim().slice(0, 120),
-        customerContact: String(payload.customerContact || '').slice(0, 200),
-        orderNotes: String(payload.orderNotes || '').slice(0, 1000),
-        paymentMethod: payload.paymentMethod === 'gcash' ? 'gcash' : 'cash',
-        gcashReference: payload.paymentMethod === 'gcash' ? (payload.gcashReference || null) : null,
-        fulfillmentStatus: 'pending',
-        paymentStatus: 'unpaid',
-        inventoryVersion: 1,
-        items: resolvedItems,
-        totalAmount: Number(payload.estimatedTotal || payload.totalAmount || 0),
-        pickupInstructions: payload.pickupInstructions || 'Pick up at counter',
-        submittedAt: now,
-        updatedAt: now,
-        expiresAt: now + 30 * 86400000,
-    };
-
-    const trackingData = {
-        shopId,
-        sellerUid,
-        orderId,
-        trackingToken,
-        orderNumber,
-        fulfillmentStatus: 'pending',
-        paymentStatus: 'unpaid',
-        pickupCode,
-        pickupInstructions: orderData.pickupInstructions,
-        itemsSummary: (orderData.items || []).map((item) => ({
-            title: item.productName || item.name || 'Custom Item',
-            summary: item.customization?.text
-                ? `${item.customization.text.length}-Letter (${item.customization.text})`
-                : item.productName || 'Custom Item',
-        })),
-        expiresAt: orderData.expiresAt,
-        revoked: false,
-        updatedAt: now,
-    };
-
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'shops', shopId, 'orders', orderId), sanitizeForFirestore(orderData));
-    batch.set(doc(db, 'order_tracking', trackingToken), sanitizeForFirestore(trackingData));
-    if (payload.idempotencyKey) {
-        batch.set(doc(db, 'shops', shopId, 'order_requests', payload.idempotencyKey), {
-            orderId,
-            orderNumber,
-            trackingToken,
-            createdAt: now,
-        });
+        throw fnErr;
     }
-    await batch.commit();
 
-    return {
-        success: true,
-        orderId,
-        orderNumber,
-        trackingToken,
-        pickupCode,
-        totalAmount: orderData.totalAmount,
-        order: orderData,
-    };
+    throw new Error('Online checkout service is currently unavailable.');
 };
 
 const transition = async (uid, orderId, action, extra = {}) => {

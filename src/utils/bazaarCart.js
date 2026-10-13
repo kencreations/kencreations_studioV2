@@ -91,14 +91,21 @@ export function clearCart(shopSlug, eventIdentifier = "general") {
 export function calculateCartSummary(items = []) {
     let itemCount = 0;
     let subtotal = 0;
+    let hasInvalidPrice = false;
     for (const item of items) {
-        const qty = Number(item.quantity) || 1;
-        const price = Number(item.finalUnitPrice || item.price || 0);
+        const qty = Math.max(1, Math.floor(Number(item.quantity) || 1));
+        const raw = item.finalUnitPrice ?? item.price;
+        const price = Number(raw);
+        if (raw === undefined || raw === null || !Number.isFinite(price) || price < 0) {
+            hasInvalidPrice = true;
+        } else {
+            subtotal += price * qty;
+        }
         itemCount += qty;
-        subtotal += price * qty;
     }
     return {
         itemCount,
-        subtotal,
+        subtotal: hasInvalidPrice ? NaN : subtotal,
+        hasInvalidPrice,
     };
 }

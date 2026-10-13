@@ -1,0 +1,541 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // AUTHENTICATION & AUTHORIZATION HELPERS
+    // ==========================================
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function admin() {
+      return signedIn() && request.auth.token.get('admin', false) == true;
+    }
+
+    function owner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function studioAccess(uid) {
+      return owner(uid) || admin();
+    }
+
+    function shopOwner(shopId) {
+      return signedIn() && (
+        shopId == 'shop_' + request.auth.uid ||
+        (resource != null && resource.data.ownerUid == request.auth.uid)
+      );
+    }
+
+
+    // Beta validity is always claimedAt + 604800 seconds, never expiresAt.
+    function betaShape(data) {
+      return data.get('licenseType', '') == 'beta_trial' &&
+        data.tier == 'pro' && data.billingType == 'trial' &&
+        data.trialDurationDays == 7 && data.pricePHP == 0 &&
+        data.isPerpetual == false && data.validityStartPolicy == 'at_activation' &&
+        data.entitlements == [] && data.expiresAt == null &&
+        data.get('disabled', false) == false && data.get('revoked', false) == false;
+    }
+
+    function activeBeta(data, uid) {
+      return betaShape(data) && data.status == 'active' &&
+        data.claimedByUid == uid && data.claimedAt is timestamp &&
+        data.claimedAt <= request.time &&
+        request.time < data.claimedAt + duration.value(604800, 's');
+    }
+
+    function betaBazaarLicense(claim) {
+      let license = get(/databases/$(database)/documents/licenses/$(claim.licenseId)).data;
+      return claim.uid == request.auth.uid &&
+        claim.claimedAt == license.claimedAt && activeBeta(license, request.auth.uid);
+    }
+
+    function hasBetaBazaarEntitlement() {
+      return exists(/databases/$(database)/documents/beta_trial_claims/$(request.auth.uid)) &&
+        betaBazaarLicense(get(/databases/$(database)/documents/beta_trial_claims/$(request.auth.uid)).data);
+    }
+
+    function claimBeta(licenseId) {
+      let record = getAfter(/databases/$(database)/documents/beta_trial_claims/$(request.auth.uid)).data;
+      return betaShape(resource.data) && resource.data.status == 'unclaimed' &&
+        resource.data.claimedByUid == null && resource.data.claimedAt == null &&
+        !exists(/databases/$(database)/documents/beta_trial_claims/$(request.auth.uid)) &&
+        record.keys().hasOnly(['uid', 'licenseId', 'claimedAt']) &&
+        record.uid == request.auth.uid && record.licenseId == licenseId && record.claimedAt == request.time &&
+        request.resource.data.claimedByUid == request.auth.uid &&
+        request.resource.data.claimedAt == request.time &&
+        request.resource.data.lastSyncAt == request.time &&
+        request.resource.data.status == 'active' &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['claimedByUid', 'claimedAt', 'lastSyncAt', 'status']);
+    }
+
+    match /beta_trial_claims/{uid} {
+      allow get: if owner(uid) || admin();
+      allow list: if admin();
+      // Both sides of the transaction must transition together, once.
+      allow create: if owner(uid) &&
+        request.resource.data.keys().hasOnly(['uid', 'licenseId', 'claimedAt']) &&
+        request.resource.data.uid == uid &&
+        request.resource.data.licenseId is string &&
+        request.resource.data.claimedAt == request.time &&
+        get(/databases/$(database)/documents/licenses/$(request.resource.data.licenseId)).data.status == 'unclaimed' &&
+        get(/databases/$(database)/documents/licenses/$(request.resource.data.licenseId)).data.claimedByUid == null &&
+        getAfter(/databases/$(database)/documents/licenses/$(request.resource.data.licenseId)).data.claimedAt == request.time &&
+        activeBeta(getAfter(/databases/$(database)/documents/licenses/$(request.resource.data.licenseId)).data, uid);
+      allow update, delete: if false;
+    }
+
+    // Authoritative Bazaar Hub Entitlement Policy:
+    // Accepts existing trusted claims or a live, rules-validated beta trial.
+    // Does NOT authorize from editable user profiles or default maker tiers.
+    function hasBazaarEntitlement() {
+      return signedIn() && (
+        admin() ||
+        request.auth.token.get('bazaarHub', false) == true ||
+        request.auth.token.get('vip', false) == true ||
+        request.auth.token.get('commercial', false) == true ||
+        hasBetaBazaarEntitlement()
+      );
+    }
+
+    // ==========================================
+    // LICENSES & ACCESS CONTROL
+    // ==========================================
+
+    match /licenses/{licenseId} {
+      // ANTI-ENUMERATION: Prevent anonymous users or scraping bots from listing all licenses
+      allow get: if signedIn();
+      allow list: if admin() || (signedIn() && resource.data.claimedByUid == request.auth.uid);
+      allow create, delete: if admin();
+      allow update: if signedIn() && resource.data.get('licenseType', '') == 'beta_trial' && claimBeta(licenseId);
+      allow update: if admin() || (
+        signedIn() && resource.data.get('licenseType', '') != 'beta_trial' && (
+          // CASE 1: Claim a license without an owner.
+          // Supports existing active licenses on Spark.
+          (
+            resource.data.get('claimedByUid', null) == null &&
+            resource.data.status in ['active', 'unclaimed'] &&
+            request.resource.data.claimedByUid == request.auth.uid &&
+            request.resource.data.status == 'active' &&
+            request.resource.data.lastSyncAt == request.time &&
+            request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasOnly([
+                'claimedByUid',
+                'status',
+                'lastSyncAt'
+              ])
+          )
+          ||
+          // CASE 2: Existing license owner heartbeat.
+          (
+            resource.data.claimedByUid == request.auth.uid &&
+            resource.data.status == 'active' &&
+            request.resource.data.diff(resource.data)
+              .affectedKeys()
+              .hasOnly(['lastSyncAt']) &&
+            request.resource.data.lastSyncAt == request.time
+          )
+        )
+      );
+    }
+
+    // ==========================================
+    // USER PROFILES & STUDIO HUB
+    // ==========================================
+
+    match /users/{uid} {
+      allow read: if owner(uid) || admin();
+
+      allow create: if owner(uid) &&
+        request.resource.data.keys().hasOnly([
+          'displayName',
+          'email',
+          'photoURL',
+          'points',
+          'tier',
+          'totalExports',
+          'joinedAt'
+        ]) &&
+        request.resource.data.points == 0 &&
+        request.resource.data.totalExports == 0 &&
+        request.resource.data.tier == 'maker' &&
+        request.resource.data.joinedAt == request.time;
+
+      allow update: if admin() || (
+        owner(uid) &&
+        request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly([
+            'displayName',
+            'photoURL',
+            'customColors',
+            'totalExports',
+            'points',
+            'makerTier'
+          ])
+      );
+
+      allow delete: if admin();
+
+      // Points & Export History
+      match /pointHistory/{entry} {
+        allow read: if owner(uid) || admin();
+        allow create: if owner(uid) &&
+          request.resource.data.keys().hasAll(['action', 'points', 'createdAt']) &&
+          request.resource.data.createdAt == request.time;
+        allow update, delete: if admin();
+      }
+
+      // Studio Hub Subcollections
+      match /filaments/{entry} { allow read, write: if studioAccess(uid); }
+      match /consumables/{entry} { allow read, write: if studioAccess(uid); }
+      match /printer_profiles/{entry} { allow read, write: if studioAccess(uid); }
+      match /cost_estimates/{entry} { allow read, write: if studioAccess(uid); }
+      match /print_jobs/{entry} { allow read, write: if studioAccess(uid); }
+      match /quotations/{entry} { allow read, write: if studioAccess(uid); }
+      match /sales/{entry} { allow read, write: if studioAccess(uid); }
+      match /inventory_movements/{entry} { allow read, write: if studioAccess(uid); }
+      match /studio_settings/{entry} { allow read, write: if studioAccess(uid); }
+    }
+
+    // ==========================================
+    // GENERATOR CATALOG & EXPORT ANALYTICS
+    // ==========================================
+
+    match /generators/{generatorId} {
+      allow read: if true;
+      allow write: if admin();
+
+      match /export_events/{eventId} {
+        allow read: if admin();
+        allow create: if signedIn() &&
+          request.resource.data.keys().hasAll(['format', 'createdAt']) &&
+          request.resource.data.createdAt == request.time;
+        allow update, delete: if admin();
+      }
+    }
+
+    // ==========================================
+    // GLOBAL APP CONFIGURATION & TELEMETRY
+    // ==========================================
+
+    match /app_config/{document=**} { allow read: if true; allow write: if admin(); }
+    match /app_settings/{document=**} { allow read: if true; allow write: if admin(); }
+    match /updates/{document=**} { allow read: if true; allow write: if admin(); }
+    match /notifications/{document=**} { allow read, write: if admin(); }
+    match /telemetry/{document=**} { allow read, write: if admin(); }
+    match /trial_users/{machineId} { allow read, write: if admin(); }
+    match /admin/{document=**} { allow read, write: if admin(); }
+    match /valid_keys/{document=**} { allow read, write: if admin(); }
+
+    // ==========================================
+    // BAZAAR HUB: PRIVATE SELLER SHOPS & SUBCOLLECTIONS
+    // ==========================================
+
+    match /shops/{shopId} {
+      // Deterministic single shop ID: shopId MUST equal 'shop_' + request.auth.uid
+      allow get: if admin() || (signedIn() && (
+                    shopId == 'shop_' + request.auth.uid ||
+                    (resource != null && resource.data.ownerUid == request.auth.uid)
+                  ));
+      allow list: if admin();
+      allow create: if hasBazaarEntitlement() &&
+                    shopId == 'shop_' + request.auth.uid &&
+                    request.resource.data.ownerUid == request.auth.uid &&
+                    request.resource.data.shopId == shopId;
+      allow update: if admin() || (
+                      signedIn() &&
+                      (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid) &&
+                      request.resource.data.ownerUid == request.auth.uid &&
+                      request.resource.data.shopId == shopId
+                    );
+      allow delete: if admin();
+
+      // ── Subcollection 1: Events ──
+      match /events/{eventId} {
+        allow get: if admin() || (signedIn() && (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid));
+        allow list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        // Requires active subscription entitlement to create events
+        allow create: if hasBazaarEntitlement() &&
+                      shopId == 'shop_' + request.auth.uid &&
+                      request.resource.data.ownerUid == request.auth.uid &&
+                      request.resource.data.shopId == shopId;
+        // Allows shop owner to update/manage ongoing events even post-expiry
+        allow update: if admin() || (
+                        signedIn() &&
+                        (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid) &&
+                        request.resource.data.ownerUid == request.auth.uid &&
+                        request.resource.data.shopId == shopId
+                      );
+        allow delete: if admin() || (signedIn() && (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid));
+
+        match /{nestedDoc=**} {
+          allow read, write: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        }
+      }
+
+      // ── Subcollection 2: Products Catalog (Private: Contains BOM & Costing) ──
+      match /products/{productId} {
+        allow get: if admin() || (signedIn() && (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid));
+        allow list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        // Requires active subscription entitlement to create products
+        allow create: if hasBazaarEntitlement() &&
+                      shopId == 'shop_' + request.auth.uid &&
+                      request.resource.data.ownerUid == request.auth.uid &&
+                      request.resource.data.shopId == shopId;
+        allow update: if admin() || (
+                        signedIn() &&
+                        (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid) &&
+                        request.resource.data.ownerUid == request.auth.uid &&
+                        request.resource.data.shopId == shopId
+                      );
+        allow delete: if admin() || (signedIn() && (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid));
+      }
+
+      // ── Subcollection 2b: Event Catalogs & Stock Allocations ──
+      match /event_catalogs/{eventId} {
+        allow get, list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow create: if hasBazaarEntitlement() && shopId == 'shop_' + request.auth.uid;
+        allow update, delete: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+      }
+
+      match /event_allocations/{eventId} {
+        allow get, list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow create: if hasBazaarEntitlement() && shopId == 'shop_' + request.auth.uid;
+        allow update, delete: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+      }
+
+      // ── Subcollection 3: Inventory Balances ──
+      match /inventory/{itemId} {
+        allow get: if admin() || (signedIn() && (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid));
+        allow list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        // Requires active subscription entitlement to create inventory items
+        allow create: if hasBazaarEntitlement() &&
+                      shopId == 'shop_' + request.auth.uid &&
+                      request.resource.data.ownerUid == request.auth.uid &&
+                      request.resource.data.shopId == shopId;
+        allow update: if admin() || (
+                        signedIn() &&
+                        (shopId == 'shop_' + request.auth.uid || resource.data.get('ownerUid', null) == request.auth.uid) &&
+                        request.resource.data.get('ownerUid', request.auth.uid) == request.auth.uid &&
+                        request.resource.data.get('shopId', shopId) == shopId
+                      );
+        allow delete: if admin() || (signedIn() && (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid));
+      }
+
+      // ── Subcollection 4: Inventory Movements (IMMUTABLE AUDIT TRAIL) ──
+      match /inventory_movements/{movementId} {
+        allow get: if admin() || (signedIn() && (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid));
+        allow list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow create: if (admin() || (signedIn() && (shopId == 'shop_' + request.auth.uid || request.resource.data.ownerUid == request.auth.uid))) &&
+                      request.resource.data.ownerUid == request.auth.uid &&
+                      request.resource.data.shopId == shopId &&
+                      request.resource.data.keys().hasAll(['ownerUid', 'shopId', 'type', 'qty', 'createdAt']);
+        allow update, delete: if false; // TAMPER-PROOF: modifications/erasure forbidden
+      }
+
+      // ── Subcollection 5: Financial Movements (IMMUTABLE PAYMENT LEDGER) ──
+      match /financial_movements/{movementId} {
+        allow get: if admin() || (signedIn() && (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid));
+        allow list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow create: if (admin() || (signedIn() && (shopId == 'shop_' + request.auth.uid || request.resource.data.ownerUid == request.auth.uid))) &&
+                      request.resource.data.ownerUid == request.auth.uid &&
+                      request.resource.data.shopId == shopId &&
+                      request.resource.data.keys().hasAll(['ownerUid', 'shopId', 'type', 'amount', 'createdAt']) &&
+                      request.resource.data.amount is number &&
+                      request.resource.data.amount > 0 &&
+                      request.resource.data.type in ['cash', 'gcash', 'refund', 'adjustment'];
+        allow update, delete: if false; // TAMPER-PROOF: financial records cannot be modified or erased
+      }
+
+      // ── Subcollection 6: Orders (Authoritative Queue) ──
+      match /orders/{orderId} {
+        allow get, list: if admin() || (signedIn() && (shopId == 'shop_' + request.auth.uid || resource.data.sellerUid == request.auth.uid));
+        allow create: if admin() || (
+                        signedIn() &&
+                        request.resource.data.sellerUid == request.auth.uid &&
+                        request.resource.data.shopId == shopId
+                      );
+        allow update: if admin() || (
+                        signedIn() &&
+                        (shopId == 'shop_' + request.auth.uid || resource.data.sellerUid == request.auth.uid) &&
+                        request.resource.data.sellerUid == resource.data.sellerUid &&
+                        request.resource.data.shopId == resource.data.shopId &&
+                        request.resource.data.orderId == resource.data.orderId &&
+                        request.resource.data.totalAmount == resource.data.totalAmount
+                      );
+        allow delete: if false; // Historical orders must be preserved; marked cancelled rather than deleted
+      }
+
+      // ── Subcollection 6b: Order Reconciliations (IMMUTABLE AUDIT TRAIL) ──
+      match /order_reconciliations/{reviewId} {
+        allow get, list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow create: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow update, delete: if false; // TAMPER-PROOF: legacy order reconciliation snapshot cannot be modified
+      }
+
+      // ── Subcollection 6c: Custom Keycap Artwork Icons ──
+      match /icons/{iconId} {
+        allow get, list: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+        allow create, update, delete: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+      }
+
+      // ── Subcollection 7: Settings ──
+      match /settings/{settingId} {
+        allow get, list: if admin() || (signedIn() && (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid));
+        allow create: if hasBazaarEntitlement() &&
+                      shopId == 'shop_' + request.auth.uid &&
+                      request.resource.data.ownerUid == request.auth.uid &&
+                      request.resource.data.shopId == shopId;
+        allow update: if admin() || (
+                        signedIn() &&
+                        (resource.data.ownerUid == request.auth.uid || shopId == 'shop_' + request.auth.uid) &&
+                        request.resource.data.ownerUid == request.auth.uid
+                      );
+        allow delete: if admin();
+      }
+
+      // Operational Request Idempotency & Queue Locks
+      match /order_requests/{requestId} {
+        allow read, write: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+      }
+      match /queue_locks/{lockId} {
+        allow read, write: if admin() || (signedIn() && shopId == 'shop_' + request.auth.uid);
+      }
+    }
+
+    // ==========================================
+    // BAZAAR HUB: ATOMIC SLUG REGISTRY
+    // ==========================================
+
+    match /shop_slugs/{slug} {
+      allow get, list: if true;
+      allow create: if hasBazaarEntitlement() &&
+                    request.resource.data.ownerUid == request.auth.uid &&
+                    request.resource.data.shopId == 'shop_' + request.auth.uid &&
+                    request.resource.data.keys().hasOnly(['ownerUid', 'owner_uid', 'shopId', 'shop_id', 'slug', 'createdAt', 'created_at']);
+      allow update: if false; // IMMUTABLE: Slugs cannot be hijacked, transferred, or reassigned
+      allow delete: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
+    // ==========================================
+    // BAZAAR HUB: SANITIZED PUBLIC PROJECTIONS
+    // ==========================================
+
+    // Sanitized public storefront projections (Stripped of wholesale costs, margins, and notes)
+    match /public_shops/{shopId} {
+      allow get: if resource.data.isPublished == true || admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow list: if admin();
+      allow create: if hasBazaarEntitlement() &&
+                    shopId == 'shop_' + request.auth.uid &&
+                    request.resource.data.ownerUid == request.auth.uid &&
+                    request.resource.data.shopId == shopId &&
+                    request.resource.data.keys().hasOnly(['shopId', 'ownerUid', 'name', 'slug', 'description', 'logoUrl', 'bannerUrl', 'pickupInstructions', 'cashEnabled', 'gcashEnabled', 'gcashNumber', 'gcashName', 'gcashQrUrl', 'isPublished', 'updatedAt']);
+      allow update: if admin() || (
+                      signedIn() &&
+                      resource.data.ownerUid == request.auth.uid &&
+                      request.resource.data.ownerUid == resource.data.ownerUid &&
+                      request.resource.data.shopId == resource.data.shopId &&
+                      request.resource.data.keys().hasOnly(['shopId', 'ownerUid', 'name', 'slug', 'description', 'logoUrl', 'bannerUrl', 'pickupInstructions', 'cashEnabled', 'gcashEnabled', 'gcashNumber', 'gcashName', 'gcashQrUrl', 'isPublished', 'updatedAt'])
+                    );
+      allow delete: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
+    match /public_events/{eventId} {
+      allow get: if resource == null ||
+                    (resource.data.get('isPublished', false) == true && resource.data.get('queueStatus', 'open') != 'unpublished') ||
+                    admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow list: if resource.data.isPublished == true || admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create: if hasBazaarEntitlement() &&
+                    request.resource.data.ownerUid == request.auth.uid &&
+                    request.resource.data.keys().hasOnly(['eventId', 'shopId', 'ownerUid', 'name', 'slug', 'venue', 'startDate', 'endDate', 'isAcceptingOrders', 'queueStatus', 'isPublished', 'status', 'catalog', 'updatedAt']);
+      allow update: if admin() || (
+                      signedIn() && resource.data.ownerUid == request.auth.uid &&
+                      request.resource.data.ownerUid == resource.data.ownerUid &&
+                      request.resource.data.keys().hasOnly(['eventId', 'shopId', 'ownerUid', 'name', 'slug', 'venue', 'startDate', 'endDate', 'isAcceptingOrders', 'queueStatus', 'isPublished', 'status', 'catalog', 'updatedAt'])
+                    );
+      allow delete: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
+    match /event_slugs/{slug} {
+      allow get, list: if true;
+      allow create: if hasBazaarEntitlement() &&
+                    request.resource.data.ownerUid == request.auth.uid &&
+                    request.resource.data.keys().hasOnly(['ownerUid', 'shopId', 'eventId', 'slug', 'createdAt']);
+      allow update: if false; // Slugs are immutable
+      allow delete: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
+    // Public customer catalog projection
+    match /public_products/{productId} {
+      allow get: if resource.data.get('isPublished', true) == true || admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow list: if true;
+      allow create: if hasBazaarEntitlement() &&
+                    request.resource.data.ownerUid == request.auth.uid &&
+                    request.resource.data.keys().hasOnly([
+                      'id', 'productId', 'shopId', 'ownerUid', 'name', 'description', 
+                      'category', 'type', 'maxOrderQty', 'variants', 'price', 
+                      'retailPrice', 'images', 'customizationOptions', 'inStock', 
+                      'isPublished', 'badge', 'updatedAt'
+                    ]);
+      allow update: if admin() || (
+                      signedIn() &&
+                      resource.data.ownerUid == request.auth.uid &&
+                      request.resource.data.ownerUid == resource.data.ownerUid &&
+                      request.resource.data.keys().hasOnly([
+                        'id', 'productId', 'shopId', 'ownerUid', 'name', 'description', 
+                        'category', 'type', 'maxOrderQty', 'variants', 'price', 
+                        'retailPrice', 'images', 'customizationOptions', 'inStock', 
+                        'isPublished', 'badge', 'updatedAt'
+                      ])
+                    );
+      allow delete: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
+    // Customer capability-token tracking (ANTI-ENUMERATION: Collection listing forbidden)
+    match /order_tracking/{trackingToken} {
+      allow get: if resource == null || (
+                   resource.data.get('revoked', false) != true &&
+                   (
+                     resource.data.get('expiresAt', null) == null ||
+                     (resource.data.expiresAt is int && resource.data.expiresAt > request.time.toMillis()) ||
+                     (resource.data.expiresAt is timestamp && resource.data.expiresAt > request.time)
+                   )
+                 );
+      allow list: if false; // Prevents scraping/listing other customers' orders
+      allow create: if admin() || (signedIn() && request.resource.data.sellerUid == request.auth.uid);
+      allow update: if admin() || (signedIn() &&
+                      resource.data.sellerUid == request.auth.uid &&
+                      request.resource.data.sellerUid == request.auth.uid &&
+                      request.resource.data.trackingToken == resource.data.trackingToken
+                    );
+      allow delete: if admin() || (signedIn() && resource.data.sellerUid == request.auth.uid);
+    }
+
+    // Protected Order Intake Buffer (Anonymous client writes forbidden)
+    match /order_inbox/{inboxId} {
+      allow get, list: if admin() || (signedIn() && resource.data.sellerUid == request.auth.uid);
+      allow create: if admin(); // Direct anonymous writes strictly denied
+      allow update, delete: if admin() || (signedIn() && resource.data.sellerUid == request.auth.uid);
+    }
+
+    // Physical stock ledger
+    match /bazaar_stock/{stockId} {
+      allow read, write: if admin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+    }
+
+    // ==========================================
+    // DEFAULT — DENY UNLISTED ACCESS
+    // ==========================================
+
+    match /{document=**} {
+      allow read, write: if admin();
+    }
+  }
+}

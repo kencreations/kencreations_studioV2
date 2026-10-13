@@ -631,13 +631,14 @@ export function calculateFinancialSummary({
 
 // ─── Matrix & Variant Inventory Domain Helpers ────────────────────────────────
 
+import { canonicalColorId, buildLetterCapSku } from './configuration.js';
 /**
  * Builds a 2D matrix structure for Letter Caps across colors.
  *
  * @param {Object} params
  * @param {Array<Object>} [params.inventoryItems=[]] - Flat inventory items
  * @param {Array<string>} [params.letters] - Letters array (default A-Z, 0-9)
- * @param {Array<string>} [params.colors] - Colors array (default Pink, Teal, Purple, White, Black)
+ * @param {Array<string|Object>} [params.colors] - Colors array (default Pink, Teal, Purple, White, Black)
  * @returns {Object} Matrix rows, columns, and cell map
  */
 export function buildLetterColorMatrix({
@@ -650,13 +651,22 @@ export function buildLetterColorMatrix({
     const itemMap = new Map();
     for (const item of inventoryItems) {
         if (item.char && item.color) {
+            const cId = canonicalColorId(item.color);
             const key = isIcon
-                ? `cap_icon_${String(item.char).toLowerCase()}_${String(item.color).toLowerCase()}`
-                : `cap_${String(item.char).toUpperCase()}_${String(item.color).toLowerCase()}`;
+                ? `cap_icon_${String(item.char).toLowerCase()}_${cId}`
+                : buildLetterCapSku(item.char, cId);
             itemMap.set(key.toLowerCase(), item);
         }
         if (item.item_key) {
             itemMap.set(item.item_key.toLowerCase(), item);
+            // Also index canonical SKU alias for legacy records (e.g. cap_A_teal_green -> cap_A_teal)
+            const parts = item.item_key.split('_');
+            if (parts[0] === 'cap' && parts.length >= 3 && !isIcon) {
+                const char = parts[1];
+                const rawCol = parts.slice(2).join('_');
+                const canonSku = buildLetterCapSku(char, rawCol);
+                itemMap.set(canonSku.toLowerCase(), item);
+            }
         }
     }
 
@@ -664,19 +674,22 @@ export function buildLetterColorMatrix({
     for (const char of letters) {
         const cells = {};
         for (const col of colors) {
+            const colName = typeof col === 'object' ? (col.name || col.id) : String(col);
+            const colId = canonicalColorId(typeof col === 'object' ? (col.id || col.name) : col);
             const key = isIcon
-                ? `cap_icon_${String(char).toLowerCase()}_${String(col).toLowerCase()}`
-                : `cap_${String(char).toUpperCase()}_${String(col).toLowerCase()}`;
+                ? `cap_icon_${String(char).toLowerCase()}_${colId}`
+                : buildLetterCapSku(char, colId);
             const existing = itemMap.get(key.toLowerCase()) || {};
             const onHand = Number(existing.on_hand ?? existing.onHand ?? 0);
             const reserved = Number(existing.reserved ?? 0);
             const available = Math.max(0, onHand - reserved);
 
-            cells[col] = {
+            const cellObj = {
                 key,
                 itemKey: key,
                 char,
-                color: col,
+                color: colName,
+                colorId: colId,
                 itemType: isIcon ? "icon_cap" : "letter_cap",
                 onHand,
                 reserved,
@@ -684,6 +697,11 @@ export function buildLetterColorMatrix({
                 lowThreshold: Number(existing.low_threshold ?? 5),
                 isLow: onHand <= Number(existing.low_threshold ?? 5),
             };
+
+            cells[colName] = cellObj;
+            if (colId && colId !== colName) {
+                cells[colId] = cellObj;
+            }
         }
         rows.push({
             char,

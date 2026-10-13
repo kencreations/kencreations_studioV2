@@ -136,12 +136,13 @@ export default function StudioHub() {
     // Resolve user ID
     const effectiveUserId = currentUser?.uid || (window.electronAPI ? "desktop_local_user" : null);
 
-    // Evaluate entitlement for Studio Hub
-    const hubDecision = access?.evaluateStudioHub ? access.evaluateStudioHub() : { allowed: true, state: "authorized" };
+    const [previewCalculator, setPreviewCalculator] = useState(false);
+
+    // Evaluate entitlement for Studio Hub (Pro, Pro+, VIP required for full hub)
+    const hubDecision = access?.evaluateStudioHub ? access.evaluateStudioHub() : { allowed: false, state: "unauthorized" };
     const isAuthorized = Boolean(
         hubDecision?.allowed ||
-        access?.hasActiveLicense ||
-        (access?.active && access.active.length > 0)
+        access?.capabilities?.studioHub
     );
 
     // ── Data Loader ──────────────────────────────────────────────────────────
@@ -410,8 +411,73 @@ export default function StudioHub() {
         );
     }
 
-    // Unauthorized / Expired State
+    // Unauthorized / Expired State with Standalone Preview Option
     if (!isAuthorized) {
+        if (previewCalculator) {
+            return (
+                <div className="min-h-screen bg-[#f8f9fc] flex flex-col font-sans">
+                    <nav className="bg-white border-b border-gray-100 px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+                        <div className="flex items-center gap-3">
+                            <Link to="/" className="flex items-center gap-2 text-teal-600 font-bold text-base">
+                                <Wrench size={18} /> KenCreations Studio
+                            </Link>
+                            <span className="text-xs bg-amber-50 text-amber-700 font-bold px-2.5 py-0.5 rounded-full border border-amber-200">
+                                Standalone Calculator Preview
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500 hidden md:inline">
+                                Spool deductions, customer quotes, and print jobs require Studio Pro or Pro+
+                            </span>
+                            <button
+                                onClick={() => setIsPricingModalOpen(true)}
+                                className="text-xs bg-[#14b8a6] hover:bg-[#0f766e] text-white font-bold px-3 py-1.5 rounded-full shadow-sm transition-colors"
+                            >
+                                Upgrade
+                            </button>
+                            <button
+                                onClick={() => setPreviewCalculator(false)}
+                                className="text-xs text-gray-600 hover:text-gray-900 border border-gray-200 px-3 py-1.5 rounded-full transition-colors"
+                            >
+                                Exit Preview
+                            </button>
+                        </div>
+                    </nav>
+
+                    <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 space-y-4">
+                        <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl p-4 text-xs text-amber-900 flex items-start gap-3">
+                            <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                                <p className="font-bold">Offline Sandbox Calculator</p>
+                                <p className="text-amber-800/90 mt-0.5">
+                                    This preview calculates print parameters locally without accessing or modifying protected Firestore inventories. To track physical spools, generate formal PDF customer quotes, and maintain production queues, upgrade to Studio Pro or Pro+.
+                                </p>
+                            </div>
+                        </div>
+
+                        <CostCalculatorTab
+                            filaments={[
+                                { id: "preview_pla", name: "Generic PLA (Preview)", material: "PLA", purchase_price: 850, spool_weight_g: 1000, remaining_weight_g: 1000, color_hex: "#14b8a6" },
+                                { id: "preview_petg", name: "Generic PETG (Preview)", material: "PETG", purchase_price: 950, spool_weight_g: 1000, remaining_weight_g: 1000, color_hex: "#3b82f6" },
+                                { id: "preview_abs", name: "Generic ABS (Preview)", material: "ABS", purchase_price: 900, spool_weight_g: 1000, remaining_weight_g: 1000, color_hex: "#f97316" }
+                            ]}
+                            consumables={[]}
+                            printers={[
+                                { id: "preview_printer", name: "Default 3D Printer", wattage: 350, electricity_rate: 11.5, wear_rate: 5.0, is_default: true }
+                            ]}
+                            userId={null}
+                            onOpenPrinterProfiles={() => {}}
+                            onSaveEstimateSuccess={() => {}}
+                            onCreateJobFromEstimate={() => setIsPricingModalOpen(true)}
+                            onCreateQuoteFromEstimate={() => setIsPricingModalOpen(true)}
+                        />
+                    </main>
+
+                    <PricingModal isOpen={isPricingModalOpen} onClose={() => setIsPricingModalOpen(false)} />
+                </div>
+            );
+        }
+
         const isExpired = hubDecision.state === "expired" || access.hasExpired;
         return (
             <div className="min-h-screen bg-[#f8f9fc] flex flex-col">
@@ -440,7 +506,7 @@ export default function StudioHub() {
                         <p className="text-sm text-gray-500 leading-relaxed">
                             {isExpired
                                 ? "Your Studio Pro subscription has expired. Your inventory records, estimates, and print jobs remain completely safe. Renew your plan to continue accessing the workspace."
-                                : "Studio Hub is an exclusive business management workspace for Studio Pro subscribers. Manage spools, calculate multi-color print costs, and print quotes."}
+                                : "Studio Hub is an exclusive business management workspace for Studio Pro and Pro+ subscribers. Manage spools, calculate multi-color print costs, and print quotes."}
                         </p>
                         <div className="flex flex-col gap-2.5 pt-2">
                             <button
@@ -450,8 +516,14 @@ export default function StudioHub() {
                                 <Sparkles size={16} /> {isExpired ? "Renew Subscription" : "Upgrade to Studio Pro"}
                             </button>
                             <button
+                                onClick={() => setPreviewCalculator(true)}
+                                className="w-full bg-teal-50 hover:bg-teal-100 text-teal-700 font-bold py-2.5 rounded-2xl border border-teal-200 text-xs transition-colors flex items-center justify-center gap-1.5"
+                            >
+                                <Calculator size={15} /> Open Standalone Cost Calculator (Preview)
+                            </button>
+                            <button
                                 onClick={() => setIsActivateModalOpen(true)}
-                                className="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold py-3 rounded-2xl border border-gray-200 text-sm transition-colors"
+                                className="w-full bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold py-2.5 rounded-2xl border border-gray-200 text-xs transition-colors"
                             >
                                 Activate License Key
                             </button>

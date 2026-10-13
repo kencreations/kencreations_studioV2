@@ -35,7 +35,7 @@ export function getCharacterFrequencies(text) {
  * @param {number} [params.quantity=1] - Number of items ordered
  * @returns {Array<Object>} List of required inventory components
  */
-import { clickerOptions, validateClickerConfiguration } from './configuration.js';
+import { clickerOptions, validateClickerConfiguration, canonicalColorId, buildLetterCapSku, buildCasingBaseSku } from './configuration.js';
 export function decomposeProductBOM({
     product,
     customization = {},
@@ -54,16 +54,18 @@ export function decomposeProductBOM({
             const old = components.get(key);
             components.set(key, { component_key: key, name, item_type: type, required_qty: (old?.required_qty || 0) + qty * safeQty });
         };
+        const rawColors = (product.customizationOptions?.colors || product.customization_schema?.colors || []);
         for (const slot of customization.slotsData) {
             if (isIconSlot(slot)) {
                 const icon = schema.available_icons.find(i => i.id === slot.iconId) || slot;
                 const iconComps = icon.components || (icon.inventorySku ? [{ component_key: icon.inventorySku, required_qty: 1, name: icon.name, item_type: 'icon_cap' }] : [{ component_key: `cap_icon_${icon.iconId || icon.id || 'icon'}`, required_qty: 1, name: icon.name || icon.iconName || 'Icon Cap', item_type: 'icon_cap' }]);
                 for (const component of iconComps) add(component.component_key, component.name || icon.name || 'Icon', component.item_type || 'material', component.required_qty || 1);
             } else {
-                const color = schema.colors.find(c => c.id === slot.colorId);
-                const colorName = color?.name || slot.colorName || slot.colorId || 'white';
-                const suffix = slot.styleId ? `_${slot.styleId}` : '';
-                const capKey = `cap_${slot.char}_${colorName.toLowerCase().replace(/\s+/g, '_')}${suffix}`;
+                const color = schema.colors.find(c => c.id === slot.colorId) || rawColors.find(c => c.id === slot.colorId);
+                const cId = canonicalColorId(slot.colorId || color?.id || slot.colorName);
+                const colorName = color?.name || slot.colorName || cId || 'White';
+                const capKey = buildLetterCapSku(slot.char, cId, slot.styleId);
+                const suffix = slot.styleId && slot.styleId !== 'standard' ? ` (${slot.styleId})` : '';
                 add(capKey, `${colorName} keycap ${slot.char}${suffix}`, 'letter_cap');
             }
             const sw = schema.allowed_switch_types.find(s => s.id === (slot.switchId || customization.switch_type_id));
@@ -71,13 +73,14 @@ export function decomposeProductBOM({
             const swName = sw?.name || slot.switchName || customization.switchType?.name || 'Mechanical Switch';
             add(`consumable_${swId}`, swName, 'switch');
         }
-        const base = schema.casing_base_colors.find(c => c.id === customization.casing_color);
-        const baseName = base?.name || customization.casingColor?.name || customization.casing_color || 'black';
+        const rawBases = (product.customizationOptions?.base_colors || product.customization_schema?.base_colors || []);
+        const base = schema.casing_base_colors.find(c => c.id === customization.casing_color) || rawBases.find(c => c.id === customization.casing_color);
+        const baseId = canonicalColorId(customization.casing_color || base?.id || customization.casingColor?.id);
+        const baseName = base?.name || customization.casingColor?.name || baseId || 'Black';
         const style = customization.casing_style_id || customization.casingStyle;
         const slotsCount = customization.slots || customization.slotsData.length || 1;
-        // Existing inventory UI uses this key for the standard casing.
-        const key = `base_casing_${baseName.toLowerCase().replace(/\s+/g, '_')}_${slotsCount}key${style && style !== 'standard' ? `_${style}` : ''}`;
-        add(key, `${baseName} ${slotsCount}-slot casing${style && style !== 'standard' ? ` (${style})` : ''}`, 'casing_base');
+        const casingKey = buildCasingBaseSku(baseId, slotsCount, style);
+        add(casingKey, `${baseName} ${slotsCount}-slot casing${style && style !== 'standard' ? ` (${style})` : ''}`, 'casing_base');
         for (const id of new Set(customization.selected_add_on_ids || [])) {
             const item = schema.add_ons.find(a => a.id === id) || (customization.addons || []).find(a => a.id === id);
             if (item) add(`consumable_${item.consumable_id || item.id}`, item.name, 'consumable');

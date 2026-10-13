@@ -29,7 +29,7 @@ if (
     throw Error("This test only runs against the local demo emulator.");
 const projectId = "demo-kencreations-audit";
 const supplied = await fs.readFile("tests/firestore.supplied.rules", "utf8");
-const proposed = await fs.readFile("docs/firestore.proposed.rules", "utf8");
+const proposed = await fs.readFile("firestore.rules", "utf8");
 let env;
 const seed = async () =>
     env.withSecurityRulesDisabled(async (context) => {

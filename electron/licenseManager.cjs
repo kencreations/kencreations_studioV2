@@ -111,6 +111,9 @@ function verifyLicFile(filePath, hwid) {
     }
 
     // Verify HWID matches this machine
+    if (payload.licenseType === 'beta_trial' || String(payload.licenseKey || '').startsWith('KC-BETA-')) {
+        throw new Error('Beta trials require online account activation, not a local license.');
+    }
     if (payload.hwid !== hwid) {
         throw new Error(
             "This license is bound to a different device.\n" +
@@ -276,6 +279,10 @@ async function activateWithKey(licenseKey, hwid) {
             };
         }
 
+        if (data.licenseType === 'beta_trial' || String(licenseKey).startsWith('KC-BETA-')) {
+            return { success: false, message: 'Sign in to Studio and activate this beta key in the account activation modal.' };
+        }
+
         // Check status
         if (!["active", "unclaimed", "pending"].includes(data.status) || data.disabled === true || data.revoked === true) {
             return {
@@ -369,6 +376,10 @@ function checkLocalLicense(hwid) {
 
     if (!state) {
         return { activated: false, entitlements: [], reason: "no_license" };
+    }
+
+    if (state.certPayload?.licenseType === 'beta_trial' || String(state.licenseKey || '').startsWith('KC-BETA-')) {
+        return { activated: false, entitlements: [], reason: 'beta_requires_account' };
     }
 
     if (state.status !== "active") {

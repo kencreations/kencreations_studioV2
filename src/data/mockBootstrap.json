@@ -5,46 +5,53 @@
   },
   "pricing": [
     {
-      "tier_id": "1mo",
-      "name": "1-Month",
-      "price_formatted": "₱499",
+      "tier_id": "basic_monthly",
+      "name": "Basic Monthly",
+      "price_formatted": "₱199",
       "suffix": "/ mo",
-      "features": ["Unlimited Exports", "Standard Generators"]
+      "features": ["All Basic Generators", "Unlimited STL & 3MF Exports", "Commercial Print Sales Rights"]
     },
     {
-      "tier_id": "6mo",
-      "name": "6-Month",
-      "price_formatted": "₱2,499",
-      "suffix": "/ 6 mos",
-      "features": ["Unlimited Exports", "Standard Generators"]
-    },
-    {
-      "tier_id": "12mo",
-      "name": "12-Month",
-      "price_formatted": "₱3,999",
+      "tier_id": "basic_yearly",
+      "name": "Basic Yearly",
+      "price_formatted": "₱1,990",
       "suffix": "/ yr",
-      "features": ["Unlimited Exports", "Standard Generators"]
+      "features": ["All Basic Generators", "Unlimited STL & 3MF Exports", "Commercial Rights", "Save ₱398 / 17%"]
     },
     {
-      "tier_id": "lifetime",
-      "name": "Lifetime",
+      "tier_id": "pro_monthly",
+      "name": "Pro Monthly",
+      "price_formatted": "₱399",
+      "suffix": "/ mo",
+      "features": ["Everything in Basic", "All Premium Generators", "Full Studio Hub & Bazaar Hub"]
+    },
+    {
+      "tier_id": "pro_yearly",
+      "name": "Pro Yearly",
+      "price_formatted": "₱3,990",
+      "suffix": "/ yr",
+      "features": ["Everything in Basic", "All Premium Generators", "Full Studio Hub & Bazaar Hub", "Save ₱798 / 17%"]
+    },
+    {
+      "tier_id": "pro_plus",
+      "name": "Pro+ Lifetime",
       "price_formatted": "₱5,999",
       "suffix": "/ once",
-      "features": ["Perpetual Base Access", "Unlimited Exports", "No Recurring Billing"]
+      "features": ["Lifetime Pro Access", "Zero Recurring Fees", "Lifetime Studio & Bazaar Hub", "All Premium Generators"]
     },
     {
-      "tier_id": "vip_all_exclusive",
-      "name": "Unlock All Exclusive (VIP)",
+      "tier_id": "vip",
+      "name": "VIP All-Access Lifetime",
       "price_formatted": "₱8,999",
       "suffix": "/ once",
-      "features": ["All Exclusive Generators", "Perpetual Access", "Priority Commercial Use"]
+      "features": ["Everything in Pro+", "All VIP-Eligible Exclusive Generators", "VIP Badge", "Early Beta Access"]
     },
     {
       "tier_id": "single_exclusive",
-      "name": "Unlock Single Exclusive",
+      "name": "Individual Exclusive Generator",
       "price_formatted": "₱2,999",
-      "suffix": "/ per editor",
-      "features": ["Unlock 1 Exclusive Tool", "Perpetual Access to that tool"]
+      "suffix": "/ per tool",
+      "features": ["Lifetime Access to 1 Specific Exclusive Generator", "Permanent Ownership"]
     }
   ],
   "editors": [

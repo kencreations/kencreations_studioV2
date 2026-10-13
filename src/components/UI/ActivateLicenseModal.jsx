@@ -56,7 +56,7 @@ export default function ActivateLicenseModal({ isOpen, onClose }) {
                     </button>
                 </div>
                 <p className="text-sm text-slate-500 mb-6">
-                    If you purchased a license code, enter it below to activate export access.
+                    Enter your purchased license or 7-Day Pro Beta Trial code. Beta access starts when activation succeeds.
                 </p>
 
                 <input

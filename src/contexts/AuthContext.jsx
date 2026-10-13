@@ -3,7 +3,7 @@ import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from
 import { doc, runTransaction, serverTimestamp, collection, query, where, onSnapshot, getDocsFromServer } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { observeAccount } from '../services/accountObserver';
-import { summarizeLicenses, expiryMillis } from '../utils/licensePolicy';
+import { summarizeLicenses, licenseExpiryMillis } from '../utils/licensePolicy';
 
 const AuthContext = createContext();
 export function useAuth() { return useContext(AuthContext); }
@@ -23,7 +23,7 @@ export function AuthProvider({ children }) {
         return stop;
     }, []);
     useEffect(() => {
-        const deadlines = account.licenses.map(l => expiryMillis(l.expiresAt ?? l.expires_at)).filter(t => Number.isFinite(t) && t > now);
+        const deadlines = account.licenses.map(l => licenseExpiryMillis(l)).filter(t => Number.isFinite(t) && t > now);
         if (!deadlines.length) return;
         const timer = setTimeout(() => setNow(Date.now()), Math.min(2147483647, Math.max(1, Math.min(...deadlines) - Date.now() + 1)));
         return () => clearTimeout(timer);
