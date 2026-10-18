@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Camera, Download, Focus, LockKeyhole } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import ExportGateModal from "../ExportGateModal";
+import PricingModal from "./PricingModal";
 
 export default function FloatingExportBar({
     disabled = false,
@@ -16,10 +17,20 @@ export default function FloatingExportBar({
     const { currentUser } = useAuth();
     const isDesktop = !!window.electronAPI;
     const [isGateOpen, setIsGateOpen] = useState(false);
+    const [isPricingOpen, setIsPricingOpen] = useState(false);
     const [pendingExport, setPendingExport] = useState(null); // 'stl' or '3mf'
+
+    const stlAccess = exportAccess?.("stl");
+    const threeMfAccess = exportAccess?.("3mf");
 
     const handleExportClick = (type) => {
         if (disabled) return;
+        const access = type === "stl" ? stlAccess : threeMfAccess;
+        if (access?.reason === "FREE_TRIAL_EXHAUSTED") {
+            setIsPricingOpen(true);
+            return;
+        }
+
         // If desktop, or if already logged in on web, just export
         if (isDesktop || currentUser) {
             if (type === "stl" && onExportSTL) onExportSTL();
@@ -29,8 +40,6 @@ export default function FloatingExportBar({
             setIsGateOpen(true);
         }
     };
-    const stlAccess = exportAccess?.("stl");
-    const threeMfAccess = exportAccess?.("3mf");
 
     // Authentication resolves asynchronously. Keep the dialog result separate
     // from the export action so the next click uses freshly verified access.
@@ -106,6 +115,11 @@ export default function FloatingExportBar({
                 onClose={() => setIsGateOpen(false)}
                 onAuthenticated={handleAuthenticated}
                 exportType={pendingExport === "stl" ? "STL" : "3MF"}
+            />
+
+            <PricingModal
+                isOpen={isPricingOpen}
+                onClose={() => setIsPricingOpen(false)}
             />
         </>
     );

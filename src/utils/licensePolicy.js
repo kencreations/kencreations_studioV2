@@ -1,4 +1,5 @@
 import { isBetaTrial, activeBetaTrial, betaExpiryMillis } from './betaTrialPolicy.js';
+import { DEFAULT_FREE_TRIAL_EXPORT_LIMIT, isFreeTrialEligible } from './freeTrialPolicy.js';
 
 // Authorization uses verified license records, never editable profile tiers/badges.
 export function expiryMillis(value) {
@@ -105,12 +106,19 @@ export function summarizeLicenses(licenses, options) {
         vip: isVip,
     };
 
+    const developerPreview = Boolean(
+        options?.developerPreview ||
+        options?.claims?.developerPreview ||
+        active.some((l) => l.developerPreview === true || l.developer_preview === true || (Array.isArray(l.entitlements) && l.entitlements.includes("developer-preview")))
+    );
+
     return {
         active,
         betaTrial: active.find(isBetaTrial) || null,
         endedBetaTrial: licenses.find(l => isBetaTrial(l) && l.claimedByUid === options?.uid && !active.includes(l) && l.claimedAt != null) || null,
         entitlements,
         isVip,
+        developerPreview,
         tier: highestTier,
         billingType,
         status: active.length > 0 ? "active" : (hasExpired ? "expired" : "unlicensed"),
@@ -131,6 +139,7 @@ export function resolveAccountEntitlements(licenses = [], options = {}) {
         capabilities: summary.capabilities,
         entitlements: summary.entitlements,
         isVip: summary.isVip,
+        developerPreview: summary.developerPreview,
         hasActiveLicense: summary.hasActiveLicense,
         hasExpired: summary.hasExpired,
         active: summary.active,
@@ -138,29 +147,53 @@ export function resolveAccountEntitlements(licenses = [], options = {}) {
 }
 
 export function evaluateGeneratorAccess(generator, access = {}) {
-    const result = (state, reason) => ({
+    const result = (state, reason, metadata = {}) => ({
         state,
         reason,
         allowed: state === "authorized",
+        ...metadata,
     });
     if (!generator) return result("unauthorized", "UNKNOWN_GENERATOR");
-    if (
-        [
-            "maintenance",
-            "under upgrade",
-            "coming soon",
-            "coming_soon",
-            "disabled",
-            "archived",
-            "hidden",
-            "placeholder",
-        ].includes(String(generator.status).toLowerCase())
-    )
+
+    const rawStatus = String(generator.status || "").toLowerCase().trim();
+    const isComingSoon = rawStatus === "coming soon" || rawStatus === "coming_soon";
+    const isMaintenance = rawStatus === "maintenance" || rawStatus === "under maintenance" || rawStatus === "under upgrade";
+    const isUnreleased = isComingSoon || isMaintenance;
+    const isHardBlocked = [
+        "disabled",
+        "archived",
+        "hidden",
+        "placeholder",
+    ].includes(rawStatus);
+
+    if (isHardBlocked) {
         return result("unauthorized", "UNAVAILABLE");
+    }
+
+    const hasDevPreview = access.developerPreview === true;
+
+    // Public users and accounts without explicit developerPreview are blocked immediately from unreleased tools
+    if (isUnreleased && !hasDevPreview) {
+        return result("unauthorized", "UNAVAILABLE");
+    }
 
     if (access.status === "loading")
         return result("loading", "VERIFYING_LICENSE");
     if (access.status === "error") return result("error", "VERIFICATION_ERROR");
+
+    // Helper to wrap the final authorized decision with developer preview metadata if applicable
+    const authorize = (reason) => {
+        if (isUnreleased && hasDevPreview) {
+            return result("authorized", reason, {
+                developerPreview: true,
+                originalStatus: generator.status || (isComingSoon ? "Coming Soon" : "Under Maintenance"),
+                isUnderMaintenance: isMaintenance,
+                isComingSoon: isComingSoon,
+                warningMessage: "This generator is not publicly released. Features may be incomplete or unstable.",
+            });
+        }
+        return result("authorized", reason);
+    };
 
     // VIP is all-access (VIP-eligible exclusives included, non-VIP-eligible require individual entitlement)
     if (access.isVip) {
@@ -168,21 +201,21 @@ export function evaluateGeneratorAccess(generator, access = {}) {
             const hasEntitlement = access.entitlements?.includes(
                 generator.requiredEntitlement || generator.id,
             );
-            if (hasEntitlement) return result("authorized", "ENTITLEMENT");
+            if (hasEntitlement) return authorize("ENTITLEMENT");
             return result("unauthorized", "EXCLUSIVE_PURCHASE_REQUIRED");
         }
-        return result("authorized", "VIP");
+        return authorize("VIP");
     }
 
     // Individual entitlement check (unlocks specific purchased generator regardless of subscription tier)
     const requiredId = generator.requiredEntitlement || generator.id;
     if (access.entitlements?.includes(requiredId)) {
-        return result("authorized", "ENTITLEMENT");
+        return authorize("ENTITLEMENT");
     }
 
     // Promo all-access with active license
     if (access.promoAllAccess && access.hasActiveLicense && !(access.active?.length && access.active.every(isBetaTrial))) {
-        return result("authorized", "PROMO");
+        return authorize("PROMO");
     }
 
     // Determine category: "exclusive", "premium", or "basic"
@@ -194,7 +227,7 @@ export function evaluateGeneratorAccess(generator, access = {}) {
     if (isExclusiveCat) {
         return result(
             "unauthorized",
-            access.hasActiveLicense ? "EXCLUSIVE_PURCHASE_REQUIRED" : "LICENSE_REQUIRED",
+            access.hasActiveLicense || access.freeTrial ? "EXCLUSIVE_PURCHASE_REQUIRED" : "LICENSE_REQUIRED",
         );
     }
 
@@ -211,11 +244,11 @@ export function evaluateGeneratorAccess(generator, access = {}) {
     // Premium generators:
     if (isPremiumCat) {
         if (hasProOrAbove) {
-            return result("authorized", "PRO_LICENSE");
+            return authorize("PRO_LICENSE");
         }
         return result(
             "unauthorized",
-            hasBasicTier ? "PRO_REQUIRED" : (access.hasActiveLicense ? "ENTITLEMENT_REQUIRED" : "LICENSE_REQUIRED"),
+            hasBasicTier || access.freeTrial ? "PRO_REQUIRED" : (access.hasActiveLicense ? "ENTITLEMENT_REQUIRED" : "LICENSE_REQUIRED"),
         );
     }
 
@@ -227,12 +260,22 @@ export function evaluateGeneratorAccess(generator, access = {}) {
         generator.isFree === false;
 
     if (!protectedGenerator) {
-        return result("authorized", "FREE_TOOL");
+        return authorize("FREE_TOOL");
     }
 
     // If protected basic generator:
     if (hasBasicTier || hasProOrAbove || access.hasActiveLicense) {
-        return result("authorized", "BASIC_LICENSE");
+        return authorize("BASIC_LICENSE");
+    }
+
+    // Free basic export trial for non-subscribers accessing basic generators:
+    const freeTrialRemaining = access.freeTrial ? access.freeTrial.remaining : access.exportsLeft;
+    const isFreeEligible = isFreeTrialEligible(access);
+    if (isFreeEligible && Number.isSafeInteger(freeTrialRemaining)) {
+        if (freeTrialRemaining > 0) {
+            return authorize("FREE_TRIAL", { freeTrial: true, remaining: freeTrialRemaining });
+        }
+        return result("unauthorized", "FREE_TRIAL_EXHAUSTED", { freeTrial: true, remaining: 0 });
     }
 
     return result("unauthorized", "LICENSE_REQUIRED");
@@ -245,10 +288,11 @@ export function evaluateGeneratorCustomization(generator, access = {}) {
 }
 
 export function evaluateExportAccess(generator, format, access = {}) {
-    const result = (state, reason) => ({
+    const result = (state, reason, metadata = {}) => ({
         state,
         reason,
         allowed: state === "authorized",
+        ...metadata,
     });
     if (!["stl", "3mf", "threeMf"].includes(format))
         return result("unauthorized", "UNSUPPORTED_EXPORT_FORMAT");
@@ -258,19 +302,80 @@ export function evaluateExportAccess(generator, format, access = {}) {
     if (access.status === "loading")
         return result("loading", "VERIFYING_LICENSE");
     if (access.status === "error") return result("error", "VERIFICATION_ERROR");
-    if (access.desktop && access.trialStatus === "loading")
-        return result("loading", "VERIFYING_TRIAL");
+    const devMeta = generatorAccess.developerPreview ? {
+        developerPreview: true,
+        originalStatus: generatorAccess.originalStatus,
+        isUnderMaintenance: generatorAccess.isUnderMaintenance,
+        isComingSoon: generatorAccess.isComingSoon,
+    } : {};
 
+    // 1. VIP or active paid license has authoritative export authorization
     if (access.isVip || access.hasActiveLicense)
-        return result("authorized", "LICENSE");
-    if (
-        access.desktop &&
-        access.trialStatus === "ready" &&
-        Number.isSafeInteger(access.exportsLeft) &&
-        access.exportsLeft > 0
-    ) {
-        return result("authorized", "TRIAL");
+        return result("authorized", "LICENSE", devMeta);
+
+    // Trial status check for non-subscribers (both web and desktop):
+    if (access.trialStatus === "loading")
+        return result("loading", "VERIFYING_TRIAL");
+    if (access.trialStatus === "error")
+        return result("error", "QUOTA_VERIFICATION_ERROR");
+
+    // Desktop trial fallback
+    if (access.desktop) {
+        if (
+            access.trialStatus === "ready" &&
+            Number.isSafeInteger(access.exportsLeft) &&
+            access.exportsLeft > 0
+        ) {
+            return result("authorized", "TRIAL", devMeta);
+        }
+        return result("unauthorized", "LICENSE_REQUIRED");
     }
+
+    // 2. Free Basic Export Trial (Web):
+    // Free users may export Basic generators only (not Premium or Exclusive)
+    const cat = String(generator?.category || "").toLowerCase();
+    const isBasicGenerator = generator &&
+        cat !== "premium" &&
+        cat !== "exclusive" &&
+        generator.isExclusive !== true;
+
+    if (!isBasicGenerator) {
+        if (cat === "premium") return result("unauthorized", "PRO_REQUIRED", devMeta);
+        return result("unauthorized", "EXCLUSIVE_PURCHASE_REQUIRED", devMeta);
+    }
+
+    if (access.freeTrial) {
+        const freeTrialRemaining = access.freeTrial.remaining;
+        if (Number.isSafeInteger(freeTrialRemaining)) {
+            const limit = access.freeTrial.limit ?? DEFAULT_FREE_TRIAL_EXPORT_LIMIT;
+            if (freeTrialRemaining > 0) {
+                return result("authorized", "FREE_TRIAL", {
+                    ...devMeta,
+                    freeTrial: true,
+                    remaining: freeTrialRemaining,
+                    limit,
+                    used: access.freeTrial.used ?? Math.max(0, limit - freeTrialRemaining),
+                });
+            }
+            return result("unauthorized", "FREE_TRIAL_EXHAUSTED", {
+                ...devMeta,
+                freeTrial: true,
+                remaining: 0,
+                limit,
+                used: access.freeTrial.used ?? limit,
+            });
+        }
+    }
+
+    if (Number.isSafeInteger(access.exportsLeft) && access.exportsLeft > 0) {
+        return result("authorized", "FREE_TRIAL", {
+            ...devMeta,
+            freeTrial: true,
+            remaining: access.exportsLeft,
+            limit: DEFAULT_FREE_TRIAL_EXPORT_LIMIT,
+        });
+    }
+
     return result("unauthorized", "LICENSE_REQUIRED");
 }
 

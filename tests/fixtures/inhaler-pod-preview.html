@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Inhaler Pod — local geometry validation</title><style>
+body{margin:0;background:#f8f9fc;font:14px system-ui;color:#17222e}header{padding:20px 28px;background:white;border-bottom:1px solid #ddd}h1{font-size:22px;margin:0 0 6px}p{margin:6px 0}nav{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:8px;background:white;padding:10px;border-radius:18px}button,select{padding:10px;border:1px solid #c4d7d3;border-radius:10px;background:white}button[aria-pressed=true]{background:#14b8a6;color:white}#scene{height:calc(100vh - 113px)}#status{position:absolute;top:126px;left:24px;padding:10px;background:#fff7dd;border-radius:10px}</style></head><body>
+<header><h1>Katinko Inhaler Pod</h1><p>Local geometry verification • Provisional 16 × 65 mm envelope • Pickup disabled • No physical fit validation</p><small>This isolated fixture does not connect to Firebase, licensing, or export tracking.</small></header><div id="scene"></div><div id="status">Loading…</div><nav><button id="assembled" aria-pressed="true">Assembled</button><button id="exploded" aria-pressed="false">Exploded</button><select id="mode" aria-label="Parts"><option value="kit">Full kit</option><option value="body">Body</option><option value="cap">Cap</option><option value="loop">Loop</option><option value="fitTest">Fit test</option></select><button id="text">Personalized cap</button></nav>
+<script type="module">
+import * as THREE from 'three';import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import wasmUrl from 'manifold-3d/manifold.wasm?url';
+import {initPodKernel,buildPod,podPlacement} from '/src/utils/inhalerPodGeometry.js';
+import {POD_DEFAULTS} from '/src/data/inhalerPodDefaults.js';
+import {load3DFont,BUNDLED_FONTS} from '/src/utils/fontManager.js';
+const host=document.querySelector('#scene'),scene=new THREE.Scene();scene.background=new THREE.Color('#f8f9fc');
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));host.appendChild(renderer.domElement);
+const camera=new THREE.PerspectiveCamera(38,1,0.1,1000);camera.position.set(140,130,230);
+const controls=new OrbitControls(camera,renderer.domElement);controls.target.set(0,65,0);controls.enableDamping=true;
+scene.add(new THREE.HemisphereLight('#ffffff','#a0a5ad',2));const light=new THREE.DirectionalLight('#ffffff',2);light.position.set(50,120,50);scene.add(light);
+const grid=new THREE.GridHelper(180,18,'#cedbd8','#e2e9e7');scene.add(grid);
+const group=new THREE.Group();group.rotation.x=-Math.PI/2;scene.add(group);
+let config={...POD_DEFAULTS},parts={},meshes=[],font;
+await initPodKernel(wasmUrl);
+function rebuild(){meshes.forEach(m=>m.material.dispose());Object.values(parts).forEach(g=>g.dispose());group.clear();parts=buildPod(config,font);meshes=[];
+for(const [part,g] of Object.entries(parts)){const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:g.attributes.color?'white':config[part+'Color'],vertexColors:!!g.attributes.color,roughness:0.5}));m.userData.part=part;const t=podPlacement(config,part);m.rotation.x=t.rx;m.position.z=t.z;group.add(m);meshes.push(m);}
+document.querySelector('#status').textContent='Three-part prototype • Loop retention and material durability untested';}
+rebuild();
+for(const mode of ['assembled','exploded'])document.getElementById(mode).onclick=()=>{config.viewMode=mode;for(const x of ['assembled','exploded'])document.getElementById(x).setAttribute('aria-pressed',String(x===mode));};
+document.querySelector('#mode').onchange=e=>{config.printMode=e.target.value;rebuild();};
+document.querySelector('#text').onclick=async()=>{try{font??=await load3DFont(BUNDLED_FONTS.find(f=>f.id==='BebasNeue'));config.personalized=!config.personalized;config.text='KEN';rebuild();}catch(e){document.querySelector('#status').textContent=e.message;}};
+function resize(){camera.aspect=host.clientWidth/host.clientHeight;camera.updateProjectionMatrix();renderer.setSize(host.clientWidth,host.clientHeight);}window.addEventListener('resize',resize);resize();
+renderer.setAnimationLoop(()=>{for(const m of meshes){const t=podPlacement(config,m.userData.part);m.position.z=THREE.MathUtils.lerp(m.position.z,t.z,0.12);}controls.update();renderer.render(scene,camera);});
+</script></body></html>

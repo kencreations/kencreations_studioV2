@@ -6,7 +6,7 @@ import { unzipSync, strFromU8 } from 'fflate';
 import { serializeModel, prepareExportScene, disposeExportScene } from '../src/engine/export/modelExport.js';
 import { createExportRunner, saveModel } from '../src/services/exportWorkflow.js';
 import { nextExportStats } from '../src/utils/exportStats.js';
-import { normalizeGenerator, catalogStats, exportTotal } from '../src/utils/generatorCatalog.js';
+import { normalizeGenerator, catalogStats, exportTotal, canonicalGeneratorId } from '../src/utils/generatorCatalog.js';
 
 const box = color => new THREE.Mesh(new THREE.BoxGeometry(18, 18, 5), new THREE.MeshStandardMaterial({ color }));
 function parseXml(text) {
@@ -103,4 +103,20 @@ test('statistics initialize missing counters, validate formats and preserve hist
     assert.equal(catalogStats([g, { id: 'future', status: 'coming_soon', totalExports: 0 }]).availableCount, 1);
     assert.equal(catalogStats([g]).totalExports, 5);
     assert.equal(catalogStats([g, { id: 'missing' }]).totalExports, null);
+    // Ready state treats missing as 0 and reconciles with historical counts
+    assert.equal(catalogStats([g, { id: 'missing' }], { isReady: true }).totalExports, 5);
+    // Single-format export resolution (e.g. historical namekeychain with stlExports only)
+    assert.equal(exportTotal({ stlExports: 570 }), 570);
+    assert.equal(exportTotal({ threeMfExports: 154 }), 154);
+    assert.equal(exportTotal({ stlExports: 1, threeMfExports: 154 }), 155);
+    // Canonical generator IDs resolve aliases
+    assert.equal(canonicalGeneratorId('whistle-bagtag'), 'whistlebagtag');
+    assert.equal(canonicalGeneratorId('whistlebagtag'), 'whistlebagtag');
+    assert.equal(canonicalGeneratorId('clicker'), 'clicker-v2');
+    assert.equal(canonicalGeneratorId('keycap-maker'), 'keycap-maker');
+    // Mathematical consistency: total = stl + 3mf
+    const statsSTL = nextExportStats({ stlExports: 570, totalExports: 570 }, 'stl');
+    assert.equal(statsSTL.totalExports, statsSTL.stlExports + statsSTL.threeMfExports);
+    const stats3MF = nextExportStats({ stlExports: 1, threeMfExports: 154, totalExports: 155 }, '3mf');
+    assert.equal(stats3MF.totalExports, stats3MF.stlExports + stats3MF.threeMfExports);
 });

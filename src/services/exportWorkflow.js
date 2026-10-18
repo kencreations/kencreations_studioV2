@@ -2,6 +2,7 @@
 export function createExportRunner({
     authorize,
     serialize,
+    consumeQuota,
     save,
     record,
     onBusy,
@@ -19,19 +20,41 @@ export function createExportRunner({
             onBusy?.(true);
             scene = await getScene(format);
             const blob = await serialize(scene, format, printConfig);
-            // Access may change while geometry/ZIP generation is running.
-            if (!(await authorize()).allowed)
+
+            // Re-verify authorization in case access changed during geometry/ZIP serialization
+            const currentAccess = await authorize();
+            if (!currentAccess.allowed)
                 return { success: false, reason: "access-changed" };
+
+            // Atomically consume/reserve quota at the download authorization boundary BEFORE save
+            const eventId = crypto.randomUUID();
+            if (consumeQuota) {
+                const quotaResult = await consumeQuota({
+                    format,
+                    filename,
+                    access: currentAccess,
+                    eventId,
+                });
+                if (quotaResult && !quotaResult.allowed) {
+                    return {
+                        success: false,
+                        reason: quotaResult.reason || "QUOTA_REJECTED",
+                        error: quotaResult.error,
+                    };
+                }
+            }
+
             const saved = await save(blob, filename, format);
             if (!saved.success) return saved;
-            // Analytics failures (including synchronous failures) cannot cancel a save.
+
+            // Analytics and telemetry failures (including synchronous failures) cannot cancel a save.
             Promise.resolve()
                 .then(() =>
                     record?.({
                         format,
                         filename,
-                        authorization: access.reason,
-                        eventId: crypto.randomUUID(),
+                        authorization: currentAccess.reason,
+                        eventId,
                     }),
                 )
                 .catch(() => {});

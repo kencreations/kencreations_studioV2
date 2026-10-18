@@ -25,6 +25,8 @@ import QRCodeStandeeEditor from "./pages/QRCodeStandeeEditor";
 import LithophaneEditor from "./pages/LithophaneEditor";
 import ModularOrganizerEditor from "./pages/ModularOrganizerEditor";
 import PopSocketEditor from "./pages/PopSocketEditor";
+import KatinkoInhalerPodEditor from "./pages/KatinkoInhalerPodEditor";
+import ScrewTopContainerEditor from "./pages/ScrewTopContainerEditor";
 import MakesGallery from "./pages/MakesGallery";
 import Pricing from "./pages/Pricing";
 import UpdateToast from "./components/UpdateToast";
@@ -423,6 +425,11 @@ function App() {
                                 path="/editor/popsocket"
                                 element={<GeneratorRoute><PopSocketEditor /></GeneratorRoute>}
                             />
+                            <Route
+                                path="/editor/screw-top-container"
+                                element={<GeneratorRoute><ScrewTopContainerEditor /></GeneratorRoute>}
+                            />
+                            <Route path="/editor/katinko-inhaler-pod" element={<GeneratorRoute><KatinkoInhalerPodEditor /></GeneratorRoute>} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                             </Routes>
                         </ErrorBoundary>

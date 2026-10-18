@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAccess } from '../contexts/AccessContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useGenerators } from '../hooks/useGenerators';
+import { canonicalRoute } from '../utils/generatorCatalog';
 import ActivateLicenseModal from './UI/ActivateLicenseModal';
 import PricingModal from './UI/PricingModal';
 
@@ -14,7 +15,8 @@ export default function GeneratorRoute({ children }) {
     const [activate, setActivate] = useState(false);
     const [pricing, setPricing] = useState(false);
     const [error, setError] = useState('');
-    const generator = generators.find(g => g.link === pathname);
+    const canonicalCurrent = canonicalRoute(pathname);
+    const generator = generators.find(g => canonicalRoute(g.link) === canonicalCurrent) || generators.find(g => g.link === pathname);
     const access = evaluate(generator);
     const state = status === 'ready' || window.electronAPI ? access.state : status;
     if (state === 'authorized') return children;

@@ -19,6 +19,18 @@ import { evaluateGeneratorAccess } from "../utils/licensePolicy.js";
 
 export const editors = [
     {
+        id: "katinko-inhaler-pod",
+        title: "Katinko Inhaler Pod",
+        description: "Provisional three-part inhaler capsule. Dimensions and physical fit are unverified; pickup disabled.",
+        status: "Coming Soon",
+        icon: "💊",
+        link: "/editor/katinko-inhaler-pod",
+        category: "basic",
+        isExclusive: false,
+        requiredEntitlement: null,
+        isFree: true,
+    },
+    {
         id: "monograminsert",
         title: "Monogram Insert",
         description: "Custom monogram inserts.",
@@ -222,6 +234,19 @@ export const editors = [
         status: "Beta",
         icon: "📱",
         link: "/editor/popsocket",
+        category: "basic",
+        isExclusive: false,
+        requiredEntitlement: null,
+        isFree: true,
+    },
+    {
+        id: "screw-top-container",
+        title: "Screw Top Container",
+        description:
+            "A round container with a screw-on lid for small items, gifts, samples, or balm-style packaging. Supports personalized lid text.",
+        status: "Beta",
+        icon: "🫙",
+        link: "/editor/screw-top-container",
         category: "basic",
         isExclusive: false,
         requiredEntitlement: null,

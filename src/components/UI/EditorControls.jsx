@@ -402,7 +402,10 @@ export const editorIcons = {
 export function ControlColorPicker({ label, value, onChange, options }) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
+    const buttonRef = useRef(null);
     const [selectedGroup, setSelectedGroup] = useState("BambuLab");
+    const [openUpward, setOpenUpward] = useState(false);
+    const [alignRight, setAlignRight] = useState(false);
 
     const groupedOptions = useMemo(() => {
         const groups = {};
@@ -438,6 +441,18 @@ export function ControlColorPicker({ label, value, onChange, options }) {
             document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
+    const toggleOpen = () => {
+        if (!isOpen && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            // If less than 380px below and space above, flip upward
+            setOpenUpward(spaceBelow < 380 && rect.top > 250);
+            // If button is in the right half of the container/sidebar, align right
+            setAlignRight(rect.left > 130);
+        }
+        setIsOpen((prev) => !prev);
+    };
+
     const selected =
         options.find((option) => option.value === value);
 
@@ -449,8 +464,9 @@ export function ControlColorPicker({ label, value, onChange, options }) {
 
             <div className="relative">
                 <button
+                    ref={buttonRef}
                     type="button"
-                    onClick={() => setIsOpen((prev) => !prev)}
+                    onClick={toggleOpen}
                     className={`flex w-full items-center justify-between rounded-xl border bg-gray-50 px-3 py-2.5 text-sm transition-all shadow-sm ${
                         isOpen
                             ? "border-[#14b8a6] bg-white ring-2 ring-[#14b8a6]/20"
@@ -491,13 +507,17 @@ export function ControlColorPicker({ label, value, onChange, options }) {
                 </button>
 
                 {isOpen && (
-                    <div className="absolute left-0 right-0 z-50 mt-1.5 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl p-3 max-h-[480px]">
-                        <div className="flex gap-4 mb-4 border-b pb-2 border-gray-100 overflow-x-auto custom-scrollbar">
+                    <div
+                        className={`absolute z-50 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl p-3 w-[275px] max-w-[calc(100vw-32px)] ${
+                            openUpward ? "bottom-full mb-2" : "top-full mt-2"
+                        } ${alignRight ? "right-0" : "left-0"}`}>
+                        <div className="flex gap-4 mb-3 border-b pb-2 border-gray-100 overflow-x-auto custom-scrollbar">
                             {Object.keys(groupedOptions).map((groupName) => (
                                 <button
                                     key={groupName}
+                                    type="button"
                                     onClick={() => setSelectedGroup(groupName)}
-                                    className={`pb-1 text-[10px] font-bold uppercase tracking-[0.12em] transition-colors ${
+                                    className={`pb-1 text-[10px] font-bold uppercase tracking-[0.12em] whitespace-nowrap transition-colors ${
                                         selectedGroup === groupName
                                             ? "text-[#14b8a6] border-b-2 border-[#14b8a6]"
                                             : "text-gray-400 hover:text-gray-600"
@@ -516,6 +536,7 @@ export function ControlColorPicker({ label, value, onChange, options }) {
                                         key={color.value + color.label}
                                         className="flex flex-col items-center overflow-hidden">
                                         <button
+                                            type="button"
                                             onClick={() => {
                                                 onChange(color.value);
                                                 setIsOpen(false);
@@ -532,7 +553,7 @@ export function ControlColorPicker({ label, value, onChange, options }) {
                                             title={color.label}
                                         />
                                         <span
-                                            className="mt-1.5 w-full truncate text-center text-[0.6rem] font-medium text-gray-500"
+                                            className="mt-1 w-full truncate text-center text-[0.6rem] font-medium text-gray-500"
                                             title={color.label}>
                                             {color.label}
                                         </span>
@@ -541,8 +562,9 @@ export function ControlColorPicker({ label, value, onChange, options }) {
                             })}
                         </div>
                         <button
+                            type="button"
                             onClick={() => setIsOpen(false)}
-                            className="mt-4 w-full text-xs text-white bg-gray-900 py-2 rounded-lg hover:bg-black transition-colors font-bold shadow-sm">
+                            className="mt-3 w-full text-xs text-white bg-gray-900 py-1.5 rounded-lg hover:bg-black transition-colors font-bold shadow-sm">
                             Close
                         </button>
                     </div>

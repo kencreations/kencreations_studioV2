@@ -71,8 +71,8 @@ export default function ExportGateModal({
                         <strong className="text-gray-700">
                             {exportType || "3D Model"}
                         </strong>{" "}
-                        file. Sign in to verify your account, then activate a
-                        license to export.
+                        file. Sign in with your Google account to get 5 free basic
+                        exports, or access your active license.
                     </p>
 
                     <div className="space-y-3">

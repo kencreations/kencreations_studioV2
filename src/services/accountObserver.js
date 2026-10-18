@@ -6,7 +6,7 @@ export function observeAccount(adapter, publish) {
     const stopAuth = adapter.auth(user => {
         reset();
         const epoch = generation;
-        let state = { currentUser: user, userData: null, licenses: [], status: user ? 'loading' : 'ready', error: null };
+        let state = { currentUser: user, userData: null, licenses: [], claims: {}, developerPreview: false, status: user ? 'loading' : 'ready', error: null };
         let timeout;
         const emit = patch => {
             if (generation !== epoch) return;
@@ -26,6 +26,22 @@ export function observeAccount(adapter, publish) {
                 emit({ licenses: verified ? licenses : [], status: verified ? 'ready' : 'loading', error: null });
             },
             error => { clearTimeout(timeout); emit({ licenses: [], status: 'error', error }); }));
-    }, error => { reset(); publish({ currentUser: null, userData: null, licenses: [], status: 'error', error }); });
+        if (adapter.claims) {
+            cleanups.push(adapter.claims(user,
+                claims => {
+                    if (generation !== epoch) return;
+                    emit({
+                        claims: claims || {},
+                        developerPreview: claims?.developerPreview === true,
+                    });
+                },
+                () => {
+                    if (generation !== epoch) return;
+                    emit({ claims: {}, developerPreview: false });
+                }
+            ));
+        }
+    }, error => { reset(); publish({ currentUser: null, userData: null, licenses: [], claims: {}, developerPreview: false, status: 'error', error }); });
     return () => { reset(); stopAuth(); };
 }
+

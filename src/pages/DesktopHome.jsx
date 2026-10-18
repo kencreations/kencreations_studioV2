@@ -63,7 +63,7 @@ export default function DesktopHome({ isWeb = false }) {
     const [activeCategory, setActiveCategory] = useState("All");
 
 
-    const { availableCount: activeGeneratorsCount, totalExports: globalExports, visible: visibleEditors } = catalogStats(editors);
+    const { availableCount: activeGeneratorsCount, totalExports: globalExports, visible: visibleEditors } = catalogStats(editors, { isReady: catalogStatus === 'ready' });
     const accessibleIds = new Set(editors.filter(editor => access.evaluate(editor).allowed).map(editor => editor.id));
 
     const categories = [
@@ -394,16 +394,20 @@ export default function DesktopHome({ isWeb = false }) {
                                     : "";
                                 const isMaintenance =
                                     rawStatus === "maintenance" ||
+                                    rawStatus === "under maintenance" ||
                                     rawStatus === "under upgrade";
                                 const isComingSoon =
                                     rawStatus === "coming soon" ||
                                     rawStatus === "coming_soon";
                                 const isBeta = rawStatus === "beta";
+                                const isUpdated = editor.isRecentlyUpdated === true;
 
                                 const decision = access.evaluate(editor);
-                                const isLocked = decision.state === 'unauthorized';
                                 const isDisabled = decision.reason === 'UNAVAILABLE';
-                                const exportCount = exportTotal(editor);
+                                const isLocked = decision.state === 'unauthorized' && !isDisabled;
+                                const isDevPreview = decision.developerPreview === true;
+                                const rawExportCount = exportTotal(editor);
+                                const exportCount = catalogStatus === 'ready' ? (rawExportCount ?? 0) : rawExportCount;
 
                                 return (
                                     <div
@@ -457,6 +461,23 @@ export default function DesktopHome({ isWeb = false }) {
                                                         Beta
                                                     </div>
                                                 )}
+                                                {isDevPreview && (
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                        <div className="bg-amber-400 text-slate-950 text-[10px] font-black uppercase px-2 py-0.5 rounded-md shadow-sm border border-amber-200 backdrop-blur-md">
+                                                            Developer Preview
+                                                        </div>
+                                                        {isComingSoon && (
+                                                            <div className="bg-teal-900/80 text-teal-200 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm border border-teal-500/40 backdrop-blur-md">
+                                                                Coming Soon
+                                                            </div>
+                                                        )}
+                                                        {isMaintenance && (
+                                                            <div className="bg-orange-950/80 text-orange-200 text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm border border-orange-500/40 backdrop-blur-md">
+                                                                Under Maintenance
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div className="absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur text-gray-900 w-8 h-8 rounded-full flex items-center justify-center shadow-md">
@@ -474,7 +495,7 @@ export default function DesktopHome({ isWeb = false }) {
                                             </div>
 
                                             {/* Overlays */}
-                                            {isMaintenance && (
+                                            {isMaintenance && !isDevPreview && (
                                                 <div className="absolute inset-0 backdrop-blur-sm bg-white/70 flex flex-col items-center justify-center z-20">
                                                     <Wrench
                                                         className="text-gray-800 mb-2"
@@ -485,7 +506,7 @@ export default function DesktopHome({ isWeb = false }) {
                                                     </span>
                                                 </div>
                                             )}
-                                            {isComingSoon && (
+                                            {isComingSoon && !isDevPreview && (
                                                 <div className="absolute inset-0 backdrop-blur-sm bg-white/70 flex flex-col items-center justify-center z-20">
                                                     <Clock
                                                         className="text-teal-600 mb-2"
@@ -503,9 +524,15 @@ export default function DesktopHome({ isWeb = false }) {
                                             <h3 className="text-base font-black text-gray-900 mb-1 leading-tight group-hover:text-[#14b8a6] transition-colors">
                                                 {editor.title}
                                             </h3>
-                                            <p className="text-xs text-gray-500 font-medium line-clamp-2 flex-1 mb-4">
+                                            <p className="text-xs text-gray-500 font-medium line-clamp-2 flex-1 mb-2">
                                                 {editor.description}
                                             </p>
+
+                                            {isDevPreview && (
+                                                <div className="mb-3 p-2 bg-amber-50 rounded-lg border border-amber-200/70 text-[10px] text-amber-900 leading-tight">
+                                                    <span className="font-bold">Developer Preview:</span> This generator is not publicly released. Features may be incomplete or unstable.
+                                                </div>
+                                            )}
 
                                             <div className="flex items-center gap-1 text-[#14b8a6] font-bold text-xs bg-teal-50/50 w-fit px-2 py-1 rounded-md border border-teal-100/50">
                                                 <svg

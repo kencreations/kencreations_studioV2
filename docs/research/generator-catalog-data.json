@@ -1,0 +1,1349 @@
+{
+  "source": "audit-artifacts/pixnprints-input/chunks/Di08Zc4b.js",
+  "method": "Acorn AST literal extraction; competitor code never executed",
+  "count": 54,
+  "entries": [
+    {
+      "id": "nameCoinBank",
+      "title": "Name Coin Bank",
+      "description": "Chunky name-shaped coin bank with a hollow body, drop-in front plate, coin slot and twist-lock cap.",
+      "category": "decor",
+      "image": "/images/catalog/name-coin-bank.png",
+      "imageAlt": "Name Coin Bank preview",
+      "ogImage": "/images/og/name-coin-bank.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "comingSoon": false
+      },
+      "updateNote": "New Flat bottom slider: raise it to cut the base lower so letters that float because of the font shape sit flat.",
+      "symbol": "r",
+      "sourceLine": 2,
+      "sourceColumn": 43,
+      "definitionExpression": "()=>a(()=>import(\"./4L5Wywzv.js\"),__vite__mapDeps([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56])).then(e=>e.nameCoinBank)",
+      "imports": [
+        {
+          "path": "./4L5Wywzv.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/name-coin-bank"
+    },
+    {
+      "id": "personalizedCoinBank",
+      "title": "Classic Coin Bank",
+      "description": "Ready-made coin bank with your text on the front: embossed, as puzzle inserts, or inlaid for multicolor.",
+      "category": "decor",
+      "image": "/images/catalog/classic-coin-bank.png",
+      "imageAlt": "Classic Coin Bank preview",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "tier": "pro"
+      },
+      "updateNote": "New: turn off the access cap for a sealed bank, and pick from six colour presets. The front plate no longer shows dark smudges.",
+      "symbol": "n",
+      "sourceLine": 2,
+      "sourceColumn": 755,
+      "definitionExpression": "()=>a(()=>import(\"./C0Fxf5N9.js\"),__vite__mapDeps([57,1,2,3,4,5,6,7,14,10,15,12,8,9,11,18,19,20,21,16,22,23,28,24,25,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,58,50,51,52,53,54,55,59,56])).then(e=>e.personalizedCoinBank)",
+      "imports": [
+        {
+          "path": "./C0Fxf5N9.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/classic-coin-bank"
+    },
+    {
+      "id": "fidgetClicker",
+      "title": "Name Fidget Clicker",
+      "description": "Text-shaped mechanical clicker — thick silhouette base and keycap, molded or shell, optional keyring.",
+      "category": "keychains",
+      "image": "/images/catalog/name-fidget-clicker.png",
+      "imageAlt": "Name Fidget Clicker preview",
+      "ogImage": "/images/og/name-fidget-clicker.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "Up to 3 lines of text — each line has its own font, size, justify and colour, and the clicker outline wraps them all.",
+      "symbol": "s",
+      "sourceLine": 2,
+      "sourceColumn": 1470,
+      "definitionExpression": "()=>a(()=>import(\"./BhQR1nAL.js\"),__vite__mapDeps([60,1,2,3,4,5,6,7,14,10,15,16,17,61,62,27,23,30,28,63,64,19,20,21,65,8,9,11,18,66,22,26,24,25,29,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,58,50,51,52,53,54,55,67,68,69])).then(e=>e.fidgetClicker)",
+      "imports": [
+        {
+          "path": "./BhQR1nAL.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/name-fidget-clicker"
+    },
+    {
+      "id": "imageToClicker",
+      "title": "Image to Clicker",
+      "description": "Turn a character from your Art gallery into a mechanical clicker: a hollow base shaped like it and a matching multicolor keycap.",
+      "category": "keychains",
+      "image": "/images/catalog/image-to-clicker.png",
+      "imageAlt": "Image to Clicker preview",
+      "ogImage": "/images/og/image-to-clicker.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "tier": "pro",
+        "subscriberOnly": true
+      },
+      "updateNote": "Smoother outlines: Fill gaps closes deep notches between letters, so the keycap and base have no thin slivers. Click a colour part to drag its height arrow, now in the exploded view too, with a live see-through preview.",
+      "symbol": "g",
+      "sourceLine": 2,
+      "sourceColumn": 2214,
+      "definitionExpression": "()=>a(()=>import(\"./_mbw_tyt.js\"),__vite__mapDeps([70,1,2,3,4,5,6,7,62,27,23,30,28,63,64,19,20,21,10,65,8,9,11,18,15,66,71,16,22,72,24,25,26,29,31,32,33,34,35,36,37,38,39,14,40,41,42,43,44,45,46,47,48,49,50,51,52,53,67,73,74,75,76,77,56,78,79,69])).then(e=>e.imageToClicker)",
+      "imports": [
+        {
+          "path": "./_mbw_tyt.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/image-to-clicker"
+    },
+    {
+      "id": "nameDeskStandee",
+      "title": "Name Desk Standee",
+      "description": "Multi-line desk name with a solid stand bar; optional outline.",
+      "category": "decor",
+      "image": "/images/catalog/name-desk-standee.png",
+      "imageAlt": "Name Desk Standee preview",
+      "ogImage": "/images/og/name-desk-standee.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "l",
+      "sourceLine": 2,
+      "sourceColumn": 3127,
+      "definitionExpression": "()=>a(()=>import(\"./VL4ABEE-.js\"),__vite__mapDeps([80,81,6,7,11,9,10,20,21,14,15,3,82,2,23,28,24,4,25,5,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,83,56,59])).then(e=>e.nameDeskStandee)",
+      "imports": [
+        {
+          "path": "./VL4ABEE-.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/name-desk-standee"
+    },
+    {
+      "id": "sweepingNameStandee",
+      "title": "Sweeping Name Standee",
+      "description": "Name text swept along an arc into a self-standing curved wedge with a name-shaped foot.",
+      "category": "decor",
+      "image": "/images/catalog/sweeping-name-standee.png",
+      "imageAlt": "Sweeping Name Standee preview",
+      "ogImage": "/images/og/sweeping-name-standee.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "",
+      "symbol": "c",
+      "sourceLine": 2,
+      "sourceColumn": 3656,
+      "definitionExpression": "()=>a(()=>import(\"./BDp6mqH6.js\"),__vite__mapDeps([84,81,6,7,20,21,14,10,15,3,82,2,23,5,24,4,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,52,53,54,83,56])).then(e=>e.sweepingNameStandee)",
+      "imports": [
+        {
+          "path": "./BDp6mqH6.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/sweeping-name-standee"
+    },
+    {
+      "id": "letterRail",
+      "title": "Letter Rail",
+      "description": "Big initial with your name running across it — placement tuned for every letter A–Z.",
+      "updateNote": "",
+      "category": "keychains",
+      "image": "/images/catalog/letter-rail.png",
+      "imageAlt": "Letter Rail preview",
+      "ogImage": "/images/og/letter-rail.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "d",
+      "sourceLine": 2,
+      "sourceColumn": 4237,
+      "definitionExpression": "()=>a(()=>import(\"./DhMDeRS4.js\"),__vite__mapDeps([85,48,86,81,6,7,87,20,21,14,10,15,3,11,9,22,83,56,88,89,18,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,49,58,50,52,53,55])).then(e=>e.letterRail)",
+      "imports": [
+        {
+          "path": "./DhMDeRS4.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/letter-rail"
+    },
+    {
+      "id": "textBlocks",
+      "title": "Text Blocks",
+      "description": "Stacked blocks with a different letter on each side; spin them to spell names or words.",
+      "category": "decor",
+      "image": "/images/catalog/text-blocks.png",
+      "imageAlt": "Text Blocks preview",
+      "ogImage": "/images/og/text-blocks.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "m",
+      "sourceLine": 2,
+      "sourceColumn": 4787,
+      "definitionExpression": "()=>a(()=>import(\"./CiqLHj2R.js\"),__vite__mapDeps([90,81,6,86,7,48,14,10,15,3,11,9,16,22,83,56,66,8,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,49,58,50,52,53,54,55])).then(e=>e.textBlocks)",
+      "imports": [
+        {
+          "path": "./CiqLHj2R.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/text-blocks"
+    },
+    {
+      "id": "articulated",
+      "title": "Flexi Name Keychain",
+      "description": "Flexible keychain where each letter of your name links together.",
+      "category": "keychains",
+      "image": "/images/catalog/flexi-name-keychain.png",
+      "imageAlt": "Flexi Name Keychain preview",
+      "ogImage": "/images/og/flexi-name-keychain.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "",
+      "symbol": "p",
+      "sourceLine": 2,
+      "sourceColumn": 5315,
+      "definitionExpression": "()=>a(()=>import(\"./D8EuboZH.js\"),__vite__mapDeps([91,48,14,10,15,3,86,81,6,1,2,4,5,7,83,56,8,9,82,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,49,50,52,53,54,69])).then(e=>e.articulated)",
+      "imports": [
+        {
+          "path": "./D8EuboZH.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/flexi-name-keychain"
+    },
+    {
+      "id": "multicolorWhistle",
+      "title": "Multicolor Whistle",
+      "description": "Working whistle in up to three colors, with your name on top.",
+      "updateNote": "",
+      "category": "whistles",
+      "image": "/images/catalog/multicolor-whistle.png",
+      "imageAlt": "Multicolor Whistle Keychain preview",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "h",
+      "sourceLine": 2,
+      "sourceColumn": 5859,
+      "definitionExpression": "()=>a(()=>import(\"./CmWWKdn6.js\"),__vite__mapDeps([92,86,81,6,7,14,10,15,3,66,9,11,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,83,56])).then(e=>e.multicolorWhistle)",
+      "imports": [
+        {
+          "path": "./CmWWKdn6.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/multicolor-whistle"
+    },
+    {
+      "id": "whistleBagTag",
+      "title": "Whistle Bag Tag",
+      "description": "Whistle bag tag with your name — great for backpacks and luggage.",
+      "updateNote": "",
+      "category": "whistles",
+      "image": "/images/catalog/whistle-bag-tag.png",
+      "imageAlt": "Whistle Bag Tag preview",
+      "ogImage": "/images/og/whistle-bag-tag.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "subscriberOnly": true
+      },
+      "symbol": "u",
+      "sourceLine": 2,
+      "sourceColumn": 6377,
+      "definitionExpression": "()=>a(()=>import(\"./C5LF4Xkq.js\"),__vite__mapDeps([93,94,95,2,3,23,96,4,20,21,72,9,10,97,86,81,6,7,48,14,15,11,98,83,56,8,82,28,99,5,100,31,25,26,27,43,33,34,30,35,41,101,29,50,24,32,36,37,38,39,40,42,44,45,46,47,49,102,103,51,52,53,54,55,59])).then(e=>e.whistleBagTag)",
+      "imports": [
+        {
+          "path": "./C5LF4Xkq.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/whistle-bag-tag"
+    },
+    {
+      "id": "standaloneName",
+      "title": "Name Keychain",
+      "description": "Your name or words as a keychain, with optional border, text outline and keyring.",
+      "category": "keychains",
+      "image": "/images/catalog/name-keychain.png",
+      "imageAlt": "Name Keychain preview",
+      "ogImage": "/images/og/name-keychain.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "",
+      "symbol": "y",
+      "sourceLine": 2,
+      "sourceColumn": 6986,
+      "definitionExpression": "()=>a(()=>import(\"./DO7EAprE.js\"),__vite__mapDeps([104,86,7,48,14,10,15,3,16,22,105,20,21,82,2,23,28,24,4,25,5,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,49,58,50,51,52,53,54,55,56,59])).then(e=>e.standaloneName)",
+      "imports": [
+        {
+          "path": "./DO7EAprE.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/name-keychain"
+    },
+    {
+      "id": "qrCodeMaker",
+      "title": "QR Code Maker",
+      "description": "Scannable QR keychain for a link, message, Wi‑Fi, or contact info.",
+      "category": "keychains",
+      "image": "/images/catalog/qr-code-maker.png",
+      "imageAlt": "QR Code Maker preview",
+      "ogImage": "/images/og/qr-code-maker.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "",
+      "symbol": "w",
+      "sourceLine": 2,
+      "sourceColumn": 7541,
+      "definitionExpression": "()=>a(()=>import(\"./Bh_rebx7.js\"),__vite__mapDeps([106,81,6,7,16,20,21,11,9,10,14,15,3,82,2,23,4,25,24,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,107,83,56])).then(e=>e.qrCodeMaker)",
+      "imports": [
+        {
+          "path": "./Bh_rebx7.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/qr-code-maker"
+    },
+    {
+      "id": "spotifyCode",
+      "title": "Spotify Code Keychain",
+      "description": "Paste a Spotify link and get a scannable song code keychain.",
+      "category": "keychains",
+      "image": "/images/catalog/spotify-code-keychain.png",
+      "imageAlt": "Spotify Code Keychain preview",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "_",
+      "sourceLine": 2,
+      "sourceColumn": 8073,
+      "definitionExpression": "()=>a(()=>import(\"./D8NOSleC.js\"),__vite__mapDeps([108,86,81,6,7,16,11,9,10,83,66,56,82,2,3,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,14,15,40,41,42,43,44,45,46,47,48,49,50,52,53])).then(e=>e.spotifyCode)",
+      "imports": [
+        {
+          "path": "./D8NOSleC.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/spotify-code-keychain"
+    },
+    {
+      "id": "freeformDesignCanvas",
+      "title": "Freeform Design Canvas",
+      "description": "Arrange text and shapes on a canvas, then turn it into a 3D print.",
+      "category": "others",
+      "image": "/images/catalog/freeform-design-canvas.png",
+      "imageAlt": "Freeform Design Canvas preview",
+      "ogImage": "/images/og/freeform-design-canvas.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "Heads up: this designer will be retired soon, replaced by Artwork Maker (lay out text, shapes and art) and the upcoming Artwork to 3D designer. Export anything you want to keep.",
+      "symbol": "k",
+      "sourceLine": 2,
+      "sourceColumn": 8560,
+      "definitionExpression": "()=>a(()=>import(\"./Ce-JR0R_.js\"),__vite__mapDeps([109,48,14,10,15,3,110,111,20,21,95,2,23,96,4,72,9,97,86,7,16,89,11,18,82,112,28,31,5,37,38,35,39,100,25,26,27,43,33,34,30,41,101,29,102,103,24,32,36,40,42,44,45,46,47,49,58,50,51,52,53,54,113,114,115,59,116,56])).then(e=>e.freeformDesignCanvas)",
+      "imports": [
+        {
+          "path": "./Ce-JR0R_.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/freeform-design-canvas"
+    },
+    {
+      "id": "motorcyclePlateBar",
+      "title": "Motorcycle Plate Bar",
+      "description": "Custom bar accessory for motorcycle plates — add your text.",
+      "category": "others",
+      "image": "/images/catalog/motorcycle-plate-bar.png",
+      "imageAlt": "Motorcycle Plate Bar preview",
+      "ogImage": "/images/og/motorcycle-plate-bar.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "Faster with decorative fonts like Kablammo, and reloading on the layout no longer shows a half-drawn bar first.",
+      "symbol": "f",
+      "sourceLine": 2,
+      "sourceColumn": 9379,
+      "definitionExpression": "()=>a(()=>import(\"./63IsgDwW.js\"),__vite__mapDeps([117,111,20,21,95,2,3,23,96,4,72,9,10,97,14,15,110,7,11,89,18,56,82,28,31,5,24,25,26,27,29,30,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,58,50,52,53,54,59,116,113])).then(e=>e.motorcyclePlateBar)",
+      "imports": [
+        {
+          "path": "./63IsgDwW.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/motorcycle-plate-bar"
+    },
+    {
+      "id": "cakeTopper",
+      "title": "Cake Topper",
+      "description": "Birthday topper with your message — pick one or two sticks.",
+      "category": "toppers",
+      "image": "/images/catalog/cake-topper.png",
+      "imageAlt": "Cake Topper preview",
+      "ogImage": "/images/og/cake-topper.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "v",
+      "sourceLine": 2,
+      "sourceColumn": 10076,
+      "definitionExpression": "()=>a(()=>import(\"./BG69-bn6.js\"),__vite__mapDeps([118,81,6,7,20,21,14,10,15,3,82,2,23,28,24,4,25,5,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,58,50,52,53,54,83,56,59])).then(e=>e.cakeTopper)",
+      "imports": [
+        {
+          "path": "./BG69-bn6.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/cake-topper"
+    },
+    {
+      "id": "idNameTag",
+      "title": "Wavy ID Badge",
+      "description": "Badge-style name tag you can customize with text and colors.",
+      "category": "nameTags",
+      "image": "/images/catalog/wavy-id-badge.png",
+      "imageAlt": "Wavy ID Badge preview",
+      "ogImage": "/images/og/wavy-id-badge.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "b",
+      "sourceLine": 2,
+      "sourceColumn": 10566,
+      "definitionExpression": "()=>a(()=>import(\"./CZG2Eqy7.js\"),__vite__mapDeps([119,81,6,7,11,9,10,89,14,15,3,82,18,112,2,23,28,24,4,25,5,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,58,50,51,52,53,54,83,56,59])).then(e=>e.idNameTag)",
+      "imports": [
+        {
+          "path": "./CZG2Eqy7.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/wavy-id-badge"
+    },
+    {
+      "id": "idNameTagV2",
+      "title": "Shaped ID Tag",
+      "description": "Pick a ready-made tag shape, then add your name and colors.",
+      "category": "nameTags",
+      "image": "/images/catalog/shaped-id-tag.png",
+      "imageAlt": "Shaped ID Tag preview",
+      "ogImage": "/images/og/shaped-id-tag.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "subscriberOnly": true
+      },
+      "updateNote": "New default colorways (Creamberry, Sky Peach, Matcha Rose and more) with separate border, nickname and full-name colors.",
+      "symbol": "I",
+      "sourceLine": 2,
+      "sourceColumn": 11076,
+      "definitionExpression": "()=>a(()=>import(\"./C1zDlYGX.js\"),__vite__mapDeps([120,48,14,10,15,3,81,6,7,11,9,22,20,21,18,112,8,82,2,23,28,24,4,25,5,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,49,58,50,51,52,53,54,55,83,56,59])).then(e=>e.idNameTagV2)",
+      "imports": [
+        {
+          "path": "./C1zDlYGX.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/shaped-id-tag"
+    },
+    {
+      "id": "classicNameTag",
+      "title": "Classic Name Tag",
+      "description": "Flat name tag with multiple text lines, alignment, hole styles and optional icons.",
+      "updateNote": "",
+      "category": "nameTags",
+      "image": "/images/catalog/classic-name-tag.png",
+      "imageAlt": "Classic Name Tag preview",
+      "ogImage": "/images/og/classic-name-tag.jpg",
+      "previewImage": "/images/catalog/classic-name-tag-preview.png",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "subscriberOnly": true
+      },
+      "symbol": "A",
+      "sourceLine": 2,
+      "sourceColumn": 11761,
+      "definitionExpression": "()=>a(()=>import(\"./BACk-XZG.js\"),__vite__mapDeps([121,48,14,10,15,3,20,21,94,95,2,23,96,4,72,9,97,86,7,11,22,83,56,82,28,99,5,100,31,25,26,27,43,33,34,30,35,41,101,29,50,24,32,36,37,38,39,40,42,44,45,46,47,49,102,103,58,51,52,53,54,122,55,59])).then(e=>e.classicNameTag)",
+      "imports": [
+        {
+          "path": "./BACk-XZG.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/classic-name-tag"
+    },
+    {
+      "id": "addressNumberSign",
+      "title": "Address Number Sign",
+      "description": "House or unit number sign with optional frame and screw holes.",
+      "category": "decor",
+      "image": "/images/catalog/address-number-sign.png",
+      "imageAlt": "Address Number Sign preview",
+      "ogImage": "/images/og/address-number-sign.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "T",
+      "sourceLine": 2,
+      "sourceColumn": 12454,
+      "definitionExpression": "()=>a(()=>import(\"./NIrc_dzj.js\"),__vite__mapDeps([123,81,6,7,20,21,11,9,10,14,15,3,82,112,2,23,28,24,4,25,5,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,58,50,51,52,53,54,55,83,56,59])).then(e=>e.addressNumberSign)",
+      "imports": [
+        {
+          "path": "./NIrc_dzj.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/address-number-sign"
+    },
+    {
+      "id": "doorNamePlaque",
+      "title": "Door Name Plaque",
+      "description": "Decorative door or room sign with raised name and fancy border.",
+      "category": "decor",
+      "image": "/images/catalog/door-name-plaque.png",
+      "imageAlt": "Door Name Plaque preview",
+      "ogImage": "/images/og/door-name-plaque.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "E",
+      "sourceLine": 2,
+      "sourceColumn": 13006,
+      "definitionExpression": "()=>a(()=>import(\"./3BxCUslp.js\"),__vite__mapDeps([124,94,95,2,3,23,96,4,20,21,72,9,10,97,48,14,15,86,81,6,7,11,16,22,112,83,56,8,82,28,99,5,100,31,25,26,27,43,33,34,30,35,41,101,29,50,24,32,36,37,38,39,40,42,44,45,46,47,49,102,103,58,52,53,54,55,59])).then(e=>e.doorNamePlaque)",
+      "imports": [
+        {
+          "path": "./3BxCUslp.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/door-name-plaque"
+    },
+    {
+      "id": "keycapSetMaker",
+      "title": "Letter Keycap Set",
+      "description": "Type custom letters and symbols for a full keyboard keycap set.",
+      "category": "others",
+      "image": "/images/catalog/letter-keycap-set.png",
+      "imageAlt": "Letter Keycap Set preview",
+      "ogImage": "/images/og/letter-keycap-set.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "P",
+      "sourceLine": 2,
+      "sourceColumn": 13583,
+      "definitionExpression": "()=>a(()=>import(\"./ZhIatps1.js\"),__vite__mapDeps([125,81,6,7,11,9,10,14,15,3,8,126,82,2,4,24,23,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,83,56])).then(e=>e.keycapSetMaker)",
+      "imports": [
+        {
+          "path": "./ZhIatps1.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/letter-keycap-set"
+    },
+    {
+      "id": "letterBeads",
+      "title": "Letter Beads",
+      "description": "Chunky rounded beads for each letter or number with a cord hole — defaults to A–Z and 0–9.",
+      "category": "others",
+      "image": "/images/catalog/letter-beads.png",
+      "imageAlt": "Letter Beads preview",
+      "ogImage": "/images/og/letter-beads.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "tier": "pro",
+        "subscriberOnly": true
+      },
+      "updateNote": "Letter Beads is now a Pro designer: anyone can design with it, and exports come with Pro.",
+      "maintenanceNote": "Temporarily offline while we fix bead export reliability. Other designers remain available.",
+      "symbol": "N",
+      "sourceLine": 2,
+      "sourceColumn": 14110,
+      "definitionExpression": "()=>a(()=>import(\"./2nF41W7N.js\"),__vite__mapDeps([127,81,6,7,16,22,10,14,15,3,20,21,18,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54])).then(e=>e.letterBeads)",
+      "imports": [
+        {
+          "path": "./2nF41W7N.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/letter-beads"
+    },
+    {
+      "id": "engraveNamePlate",
+      "title": "Engraved Name Tag",
+      "description": "Raised border with recessed name — fill in color on a second piece.",
+      "category": "nameTags",
+      "image": "/images/catalog/engraved-name-tag.png",
+      "imageAlt": "Engraved Name Tag preview",
+      "ogImage": "/images/og/engraved-name-tag.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "D",
+      "sourceLine": 2,
+      "sourceColumn": 14884,
+      "definitionExpression": "()=>a(()=>import(\"./gcXI_add.js\"),__vite__mapDeps([128,48,14,10,15,3,86,81,6,7,11,9,20,21,89,18,16,98,105,112,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,49,58,50,51,52,53,54,83,56])).then(e=>e.engraveNamePlate)",
+      "imports": [
+        {
+          "path": "./gcXI_add.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/engraved-name-tag"
+    },
+    {
+      "id": "bumpyText",
+      "title": "Bumpy Text",
+      "description": "Fun 3D name where each letter sticks out a different height.",
+      "category": "keychains",
+      "image": "/images/catalog/bumpy-text.png",
+      "imageAlt": "Bumpy Text preview",
+      "ogImage": "/images/og/bumpy-text.jpg",
+      "previewImage": "/images/catalog/bumpy-text-preview.png",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "C",
+      "sourceLine": 2,
+      "sourceColumn": 15447,
+      "definitionExpression": "()=>a(()=>import(\"./C9M-o-Wj.js\"),__vite__mapDeps([129,48,14,10,15,3,86,81,6,7,87,20,21,105,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,49,58,50,51,52,53,54,83,56])).then(e=>e.bumpyText)",
+      "imports": [
+        {
+          "path": "./C9M-o-Wj.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/bumpy-text"
+    },
+    {
+      "id": "ribbonBow",
+      "title": "Ribbon Bow",
+      "description": "Bow-shaped keychain with your name — sweet for bags and keys.",
+      "category": "keychains",
+      "image": "/images/catalog/ribbon-bow.png",
+      "imageAlt": "Ribbon Bow preview",
+      "ogImage": "/images/og/ribbon-bow.jpg",
+      "previewImage": "/images/catalog/ribbon-bow-preview.png",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "New: move the name anywhere on the bow with the Pos X and Pos Y sliders.",
+      "symbol": "R",
+      "sourceLine": 2,
+      "sourceColumn": 15998,
+      "definitionExpression": "()=>a(()=>import(\"./DtTJmE7Z.js\"),__vite__mapDeps([130,86,7,48,14,10,15,3,94,95,2,23,96,4,20,21,72,9,97,11,83,56,82,99,28,5,100,31,25,26,27,43,33,34,30,35,41,101,29,50,24,32,36,37,38,39,40,42,44,45,46,47,49,102,103,58,51,52,53,54])).then(e=>e.ribbonBow)",
+      "imports": [
+        {
+          "path": "./DtTJmE7Z.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/ribbon-bow"
+    },
+    {
+      "id": "pickleballPaddle",
+      "title": "Pickleball Paddle",
+      "description": "Paddle-shaped keychain with an icon of your choice on the face, in two colors.",
+      "category": "keychains",
+      "image": "/images/catalog/pickleball-paddle.png",
+      "imageAlt": "Pickleball Paddle preview",
+      "ogImage": "/images/og/pickleball-paddle.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "",
+      "symbol": "O",
+      "sourceLine": 2,
+      "sourceColumn": 16663,
+      "definitionExpression": "()=>a(()=>import(\"./BUS6wQA_.js\"),__vite__mapDeps([131,81,6,7,100,2,3,23,28,31,4,25,5,26,27,43,33,34,30,35,96,41,101,29,14,10,15,132,72,9,11,83,56,82,24,32,36,37,38,39,40,42,44,45,46,47,48,49,58,50,52,53])).then(e=>e.pickleballPaddle)",
+      "imports": [
+        {
+          "path": "./BUS6wQA_.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/pickleball-paddle"
+    },
+    {
+      "id": "pickleballPaddleEndCap",
+      "title": "Pickleball Paddle End Cap",
+      "description": "Custom circular paddle end cap with adjustable size, raised border, and curved text.",
+      "category": "keychains",
+      "image": "/images/catalog/pickleball-paddle-end-cap.png",
+      "imageAlt": "Pickleball Paddle End Cap preview",
+      "ogImage": "/images/og/pickleball-paddle-end-cap.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "subscriberOnly": true
+      },
+      "updateNote": "The face is now artwork: lay out text, icons, shapes and gallery art in Artwork Maker (kept inside the border, which the editor shows), then give each colour its own raised height and colour. Older designs open with their text and icons as artwork.",
+      "symbol": "L",
+      "sourceLine": 2,
+      "sourceColumn": 17235,
+      "definitionExpression": "()=>a(()=>import(\"./C__Za_ab.js\"),__vite__mapDeps([133,134,135,136,20,21,72,9,10,137,2,35,3,42,23,27,5,113,110,26,4,30,28,101,138,31,100,25,43,33,34,96,41,29,73,37,38,39,24,32,36,14,15,40,44,45,46,47,48,49,52,74,75,76,77,95,97,139,140,116,59,141,142,143,115,53,58,50,51,54,144,145,71,7,18,16,83,86,81,6,94,87,82,146,147,148,149,150,151,78,152,153,154,155,156,157,56])).then(e=>e.pickleballPaddleEndCap)",
+      "imports": [
+        {
+          "path": "./C__Za_ab.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/pickleball-paddle-end-cap"
+    },
+    {
+      "id": "badgeChip",
+      "title": "Round Badge & Chip",
+      "description": "Round badge or chip with adjustable size, raised border, curved text, and an optional keyring hole.",
+      "category": "nameTags",
+      "image": "/images/catalog/round-badge-chip.png",
+      "imageAlt": "Round Badge & Chip preview",
+      "ogImage": "/images/og/round-badge-chip.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "The face is now artwork: lay out text, icons, shapes and gallery art in Artwork Maker (kept inside the border, which the editor shows), then give each colour its own raised height and colour. Older designs open with their text and icons as artwork.",
+      "symbol": "V",
+      "sourceLine": 2,
+      "sourceColumn": 18294,
+      "definitionExpression": "()=>a(()=>import(\"./C0P97cvm.js\"),__vite__mapDeps([158,134,135,136,20,21,72,9,10,137,2,35,3,42,23,27,5,113,110,26,4,30,28,101,138,31,100,25,43,33,34,96,41,29,73,37,38,39,24,32,36,14,15,40,44,45,46,47,48,49,52,74,75,76,77,95,97,139,140,116,59,141,142,143,115,53,58,50,51,54,144,145,71,7,18,16,83,94,87,86,81,6,82,146,147,148,149,150,151,78,152,153,154,155,156,157,56])).then(e=>e.badgeChip)",
+      "imports": [
+        {
+          "path": "./C0P97cvm.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/round-badge-chip"
+    },
+    {
+      "id": "instagramTag",
+      "title": "Instagram Tag",
+      "description": "Capsule keychain with Instagram logo and @username — auto-fit width, two colors, left keyring.",
+      "category": "keychains",
+      "image": "/images/catalog/instagram-tag.png",
+      "imageAlt": "Instagram Tag keychain preview",
+      "catalog": {
+        "listed": false
+      },
+      "symbol": "x",
+      "sourceLine": 2,
+      "sourceColumn": 19282,
+      "definitionExpression": "()=>a(()=>import(\"./Dw8Yleml.js\"),__vite__mapDeps([159,86,81,6,7,20,21,72,9,10,14,15,3,87,82,2,23,28,4,24,25,5,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,52,53,54,83,56])).then(e=>e.instagramTag)",
+      "imports": [
+        {
+          "path": "./Dw8Yleml.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/instagram-tag"
+    },
+    {
+      "id": "hoopTag",
+      "title": "Basketball Hoop Tag",
+      "description": "Mini basketball hoop keychain with your name and team colors.",
+      "category": "keychains",
+      "image": "/images/catalog/basketball-hoop-tag.png",
+      "imageAlt": "Basketball Hoop Tag keychain preview",
+      "ogImage": "/images/og/basketball-hoop-tag.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "j",
+      "sourceLine": 2,
+      "sourceColumn": 19796,
+      "definitionExpression": "()=>a(()=>import(\"./BzNc3m45.js\"),__vite__mapDeps([160,86,81,6,7,11,9,10,22,20,21,72,14,15,3,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,58,50,52,53,54,83,56])).then(e=>e.hoopTag)",
+      "imports": [
+        {
+          "path": "./BzNc3m45.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/basketball-hoop-tag"
+    },
+    {
+      "id": "namePuzzle",
+      "title": "Name Puzzle",
+      "description": "Letters pop in and out of a board — kids spell the name as they play.",
+      "category": "decor",
+      "image": "/images/catalog/name-puzzle.png",
+      "imageAlt": "Name Puzzle preview",
+      "ogImage": "/images/og/name-puzzle.jpg",
+      "previewImage": "/images/catalog/name-puzzle-preview.png",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "Exported boards now have the same corner rounding as the preview, including with very round corners.",
+      "symbol": "B",
+      "sourceLine": 2,
+      "sourceColumn": 20336,
+      "definitionExpression": "()=>a(()=>import(\"./ZMaXh1jd.js\"),__vite__mapDeps([161,86,48,81,6,7,16,22,10,20,21,11,9,89,14,15,3,18,112,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,49,50,52,53,83,56])).then(e=>e.namePuzzle)",
+      "imports": [
+        {
+          "path": "./ZMaXh1jd.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/name-puzzle"
+    },
+    {
+      "id": "layeredMonogram",
+      "title": "Layered Monogram",
+      "description": "Big initial with your full name beside it on one layered keychain.",
+      "category": "keychains",
+      "image": "/images/catalog/layered-monogram.png",
+      "imageAlt": "Layered Monogram preview",
+      "ogImage": "/images/og/layered-monogram.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "",
+      "access": {
+        "subscriberOnly": true
+      },
+      "symbol": "$",
+      "sourceLine": 2,
+      "sourceColumn": 21015,
+      "definitionExpression": "()=>a(()=>import(\"./D1t4z5Wr.js\"),__vite__mapDeps([162,94,95,2,3,23,96,4,20,21,72,9,10,97,48,14,15,86,7,11,22,105,83,56,82,99,28,5,100,31,25,26,27,43,33,34,30,35,41,101,29,50,24,32,36,37,38,39,40,42,44,45,46,47,49,102,103,58,51,52,53,54,55])).then(e=>e.layeredMonogram)",
+      "imports": [
+        {
+          "path": "./D1t4z5Wr.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/layered-monogram"
+    },
+    {
+      "id": "monogramInsert",
+      "title": "Monogram Insert",
+      "description": "Large initial with a name piece that presses into it, for a clean two-color print.",
+      "category": "keychains",
+      "image": "/images/catalog/monogram-insert.png",
+      "imageAlt": "Monogram Insert preview",
+      "ogImage": "/images/og/monogram-insert.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "The 3D preview shows the initial cleanly: no more dark, shiny streaks on its flat faces.",
+      "symbol": "S",
+      "sourceLine": 2,
+      "sourceColumn": 21632,
+      "definitionExpression": "()=>a(()=>import(\"./bU72lt6U.js\"),__vite__mapDeps([163,7,11,9,10,89,16,14,15,3,88,20,21,18,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,52,53,54,113,56])).then(e=>e.monogramInsert)",
+      "imports": [
+        {
+          "path": "./bU72lt6U.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/monogram-insert"
+    },
+    {
+      "id": "floralInitial",
+      "title": "Floral Initial",
+      "description": "Flower-shaped keychain with your initial in the center.",
+      "category": "keychains",
+      "image": "/images/catalog/floral-initial.png",
+      "imageAlt": "Flower & Initial preview",
+      "ogImage": "/images/og/floral-initial.jpg",
+      "previewImage": "/images/catalog/floral-initial-preview.png",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "M",
+      "sourceLine": 2,
+      "sourceColumn": 22277,
+      "definitionExpression": "()=>a(()=>import(\"./DvAhGOZV.js\"),__vite__mapDeps([164,48,100,2,3,23,28,31,4,25,5,26,27,43,33,34,30,35,96,41,101,29,14,10,15,81,6,7,11,9,132,72,8,82,24,32,36,37,38,39,40,42,44,45,46,47,49,58,50,52,53,54,102,103,95,20,21,97,83,56])).then(e=>e.floralInitial)",
+      "imports": [
+        {
+          "path": "./DvAhGOZV.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/floral-initial"
+    },
+    {
+      "id": "dogtag",
+      "title": "Pet ID Tag",
+      "description": "Classic pet tag shape — add your dog or cat's name.",
+      "updateNote": "",
+      "category": "nameTags",
+      "image": "/images/catalog/pet-id-tag.png",
+      "imageAlt": "Pet ID Tag preview",
+      "ogImage": "/images/og/pet-id-tag.jpg",
+      "previewImage": "/images/catalog/pet-id-tag-preview.png",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "z",
+      "sourceLine": 2,
+      "sourceColumn": 22879,
+      "definitionExpression": "()=>a(()=>import(\"./Bp-UJOVd.js\"),__vite__mapDeps([165,86,81,6,7,11,9,10,22,20,21,14,15,3,8,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,122,55,83,56])).then(e=>e.dogtag)",
+      "imports": [
+        {
+          "path": "./Bp-UJOVd.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/pet-id-tag"
+    },
+    {
+      "id": "iconCharm",
+      "title": "Icon Charm",
+      "description": "Pick an icon and turn it into a thick charm for cord or chain.",
+      "category": "keychains",
+      "image": "/images/catalog/icon-charm.png",
+      "imageAlt": "Icon Charm preview",
+      "ogImage": "/images/og/icon-charm.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "subscriberOnly": true
+      },
+      "updateNote": "Exports now work with a base offset of 0, and the cord hole always runs through the whole charm, also on large charms and in the vertical direction.",
+      "symbol": "K",
+      "sourceLine": 2,
+      "sourceColumn": 23435,
+      "definitionExpression": "()=>a(()=>import(\"./CMxh42lq.js\"),__vite__mapDeps([166,81,6,100,2,3,23,28,31,4,25,5,26,27,43,33,34,30,35,96,41,101,29,7,16,20,21,11,9,10,72,89,14,15,18,112,82,24,32,36,37,38,39,40,42,44,45,46,47,48,49,58,50,52,53,83,56])).then(e=>e.iconCharm)",
+      "imports": [
+        {
+          "path": "./CMxh42lq.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/icon-charm"
+    },
+    {
+      "id": "keycapMaker",
+      "title": "Icon Keycap",
+      "description": "Add a small icon or logo on top of a single keycap.",
+      "updateNote": "",
+      "category": "others",
+      "image": "/images/catalog/icon-keycap.png",
+      "imageAlt": "Icon Keycap preview",
+      "ogImage": "/images/og/icon-keycap.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "F",
+      "sourceLine": 2,
+      "sourceColumn": 24139,
+      "definitionExpression": "()=>a(()=>import(\"./BRgP76n8.js\"),__vite__mapDeps([167,86,81,6,100,2,3,23,28,31,4,25,5,26,27,43,33,34,30,35,96,41,101,29,7,98,20,21,10,95,72,9,97,14,15,8,126,82,24,32,36,37,38,39,40,42,44,45,46,47,48,49,58,50,52,53,102,103,83,56])).then(e=>e.keycapMaker)",
+      "imports": [
+        {
+          "path": "./BRgP76n8.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/icon-keycap"
+    },
+    {
+      "id": "basicWhistle",
+      "title": "Basic Whistle",
+      "description": "Simple working whistle keychain personalized with your name.",
+      "category": "whistles",
+      "image": "/images/catalog/basic-whistle.png",
+      "imageAlt": "Basic Whistle preview",
+      "ogImage": "/images/og/basic-whistle.jpg",
+      "previewImage": "/images/catalog/basic-whistle-preview.png",
+      "catalog": {
+        "listed": true
+      },
+      "updateNote": "",
+      "symbol": "W",
+      "sourceLine": 2,
+      "sourceColumn": 24672,
+      "definitionExpression": "()=>a(()=>import(\"./p9uuFBTs.js\"),__vite__mapDeps([168,86,81,6,7,8,9,10,14,15,3,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,58,50,52,53,54,83,56])).then(e=>e.basicWhistle)",
+      "imports": [
+        {
+          "path": "./p9uuFBTs.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/basic-whistle"
+    },
+    {
+      "id": "strawNameClip",
+      "title": "Straw Name Clip",
+      "description": "Clips onto a straw so everyone knows whose drink is whose.",
+      "updateNote": "",
+      "category": "toppers",
+      "image": "/images/catalog/straw-name-clip.png",
+      "imageAlt": "Straw Name Clip preview",
+      "ogImage": "/images/og/straw-name-clip.jpg",
+      "previewImage": "/images/catalog/straw-name-clip-preview.png",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "q",
+      "sourceLine": 2,
+      "sourceColumn": 25245,
+      "definitionExpression": "()=>a(()=>import(\"./BmF_S1Ba.js\"),__vite__mapDeps([169,86,81,6,7,48,14,10,15,3,16,11,9,98,20,21,89,105,83,56,18,112,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,49,58,50,52,53,54])).then(e=>e.strawNameClip)",
+      "imports": [
+        {
+          "path": "./BmF_S1Ba.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/straw-name-clip"
+    },
+    {
+      "id": "pencilNameSleeve",
+      "title": "Pencil Name Sleeve",
+      "description": "Name sleeve that slides onto a pencil for school or gifts.",
+      "updateNote": "",
+      "category": "toppers",
+      "image": "/images/catalog/pencil-name-sleeve.png",
+      "imageAlt": "Pencil Name Sleeve preview",
+      "ogImage": "/images/og/pencil-name-sleeve.jpg",
+      "previewImage": "/images/catalog/pencil-name-sleeve-preview.png",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "G",
+      "sourceLine": 2,
+      "sourceColumn": 25854,
+      "definitionExpression": "()=>a(()=>import(\"./DnN9FKUO.js\"),__vite__mapDeps([170,86,81,6,7,48,14,10,15,3,16,11,9,98,20,21,89,105,83,56,18,112,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,49,58,50,52,53,54])).then(e=>e.pencilNameSleeve)",
+      "imports": [
+        {
+          "path": "./DnN9FKUO.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/pencil-name-sleeve"
+    },
+    {
+      "id": "puffyLetterKeychain",
+      "title": "Puffy Letter Keychain",
+      "description": "Puffy two-part name keychain: a balloon cushion with letter pockets and separate puffy letters that press in after printing.",
+      "category": "keychains",
+      "image": "/images/catalog/puffy-letter-keychain.png",
+      "imageAlt": "Puffy Letter Keychain preview",
+      "ogImage": "/images/og/puffy-letter-keychain.jpg",
+      "updateNote": "",
+      "catalog": {
+        "listed": true
+      },
+      "symbol": "H",
+      "sourceLine": 2,
+      "sourceColumn": 26484,
+      "definitionExpression": "()=>a(()=>import(\"./CzpiPjG3.js\"),__vite__mapDeps([171,1,2,3,4,5,6,7,16,172,18,15,19,20,21,10,14,17,28,24,23,25,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,52,53,83])).then(e=>e.puffyLetterKeychain)",
+      "imports": [
+        {
+          "path": "./CzpiPjG3.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/puffy-letter-keychain"
+    },
+    {
+      "id": "valorantKeychain",
+      "title": "Valorant Keychain",
+      "description": "Valorant-inspired keychain with layered red border and logo over white text on a black base.",
+      "category": "keychains",
+      "image": "/images/catalog/valorant-keychain.png",
+      "imageAlt": "Valorant Keychain preview",
+      "catalog": {
+        "listed": false
+      },
+      "symbol": "Y",
+      "sourceLine": 2,
+      "sourceColumn": 27113,
+      "definitionExpression": "()=>a(()=>import(\"./RPQLSzep.js\"),__vite__mapDeps([173,81,6,7,14,10,15,3,72,9,11,20,21,82,2,23,24,4,25,5,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,52,83])).then(e=>e.valorantKeychain)",
+      "imports": [
+        {
+          "path": "./RPQLSzep.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/valorant-keychain"
+    },
+    {
+      "id": "decal3d",
+      "title": "3D Model Decal",
+      "description": "Put text, icons or your Art gallery artwork on a flat face of your own STL or 3MF model, extruded or inlaid in color.",
+      "category": "others",
+      "image": "/images/catalog/3d-model-decal.png",
+      "imageAlt": "3D Model Decal preview",
+      "ogImage": "/images/og/3d-model-decal.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "tier": "pro",
+        "subscriberOnly": true
+      },
+      "updateNote": "Turned pieces now come out turned the way the layout shows them (they were mirrored before). Lay out art with Artwork Maker in the layout step, or pick an Artwork Maker design from your gallery.",
+      "symbol": "Q",
+      "sourceLine": 2,
+      "sourceColumn": 27624,
+      "definitionExpression": "()=>a(()=>import(\"./oUmszuFA.js\"),__vite__mapDeps([174,7,71,3,10,11,9,137,2,35,42,23,27,5,113,110,26,4,30,28,101,138,31,100,25,43,33,34,96,41,29,73,37,38,39,24,32,36,14,15,40,44,45,46,47,48,49,52,74,75,76,21,77,95,20,72,97,139,140,116,59,141,142,143,115,53,58,50,51,54,144,18,82,16,8,147,148,149,150,151,78,152,153,154,155,79,175,176,177,178])).then(e=>e.decal3d)",
+      "imports": [
+        {
+          "path": "./oUmszuFA.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/3d-model-decal"
+    },
+    {
+      "id": "charmMaker",
+      "title": "Charm Maker",
+      "description": "Turn your Art gallery artwork into a thick charm for cord or chain, in stacked or side-by-side colors.",
+      "category": "keychains",
+      "image": "/images/catalog/charm-maker.png",
+      "imageAlt": "Charm Maker preview",
+      "ogImage": "/images/og/charm-maker.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "tier": "pro",
+        "subscriberOnly": true
+      },
+      "updateNote": "Click colour parts in the preview to select them (shift-click for more) and drag the orange arrow to change their height or the layer depth.",
+      "symbol": "J",
+      "sourceLine": 2,
+      "sourceColumn": 28572,
+      "definitionExpression": "()=>a(()=>import(\"./DGzBXz-F.js\"),__vite__mapDeps([179,1,2,3,4,5,7,11,9,10,71,16,20,21,72,18,15,24,23,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,14,40,41,42,43,44,45,46,47,48,49,50,52,53,73,74,75,76,77,56,78,79])).then(e=>e.charmMaker)",
+      "imports": [
+        {
+          "path": "./DGzBXz-F.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/charm-maker"
+    },
+    {
+      "id": "trinketTrayMaker",
+      "title": "Trinket Tray Maker",
+      "description": "Turn your Art gallery artwork into a trinket tray: the artwork inlaid flush in the floor, with a wall that follows its outline.",
+      "category": "decor",
+      "image": "/images/catalog/trinket-tray-maker.png",
+      "imageAlt": "Trinket Tray Maker preview",
+      "ogImage": "/images/og/trinket-tray-maker.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "tier": "pro",
+        "subscriberOnly": true
+      },
+      "symbol": "U",
+      "sourceLine": 2,
+      "sourceColumn": 30395,
+      "definitionExpression": "()=>a(()=>import(\"./BVLHid48.js\"),__vite__mapDeps([181,1,2,3,4,5,7,11,9,10,16,20,21,72,18,15,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,14,40,41,42,43,44,45,46,47,48,49,50,52,73,74,75,76,77,56,78,53])).then(e=>e.trinketTrayMaker)",
+      "imports": [
+        {
+          "path": "./BVLHid48.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/trinket-tray-maker"
+    },
+    {
+      "id": "screwTopContainer",
+      "title": "Screw Top Container",
+      "description": "A round container with a screw-on lid that closes in about one turn: a keychain pill box, a charm case or a small jar, with text on the lid.",
+      "category": "keychains",
+      "image": "/images/catalog/screw-top-container.png",
+      "imageAlt": "Screw Top Container preview",
+      "ogImage": "/images/og/screw-top-container.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "tier": "pro",
+        "subscriberOnly": true
+      },
+      "updateNote": "Lid artwork now prints at the size you lay it out on the whole lid (anything past the flat top is cut off, never shrunk). Click artwork parts in the preview or the parts list, and with Embossed drag the arrow to raise each part to its own height.",
+      "symbol": "Z",
+      "sourceLine": 2,
+      "sourceColumn": 29319,
+      "definitionExpression": "()=>a(()=>import(\"./CuqQSxPi.js\"),__vite__mapDeps([180,7,71,3,10,65,8,9,19,20,21,11,18,15,16,145,14,135,136,72,83,137,2,35,42,23,27,5,113,110,26,4,30,28,101,138,31,100,25,43,33,34,96,41,29,73,37,38,39,24,32,36,40,44,45,46,47,48,49,52,74,75,76,77,95,97,139,140,116,59,141,142,143,115,53,58,50,51,54,144,56,147,148,149,150,151,78,152,153,154,155,156,157])).then(e=>e.screwTopContainer)",
+      "imports": [
+        {
+          "path": "./CuqQSxPi.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/screw-top-container"
+    },
+    {
+      "id": "snapFitBox",
+      "title": "Snap-Fit Box",
+      "description": "A personalized storage box with a compact snap-together hinge. Print the body and lid separately; no hinge pin needed.",
+      "category": "others",
+      "image": "/images/catalog/snap-fit-box.png",
+      "imageAlt": "Rounded storage box with a teal lid, cream inlay, and integrated hinge",
+      "catalog": {
+        "listed": true,
+        "beta": true
+      },
+      "updateNote": "Create lid artwork right in the designer with Artwork Maker, then insert it or save it to your gallery. The lid now closes flush, and lid art reads the right way up from the latch side.",
+      "symbol": "X",
+      "sourceLine": 2,
+      "sourceColumn": 31043,
+      "definitionExpression": "()=>a(()=>import(\"./CW6pVYLx.js\"),__vite__mapDeps([182,7,18,15,145,10,16,14,3,95,2,23,96,4,20,21,72,9,97,75,42,76,5,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,43,44,45,46,47,48,49,50,52,53,54,147,148,149,150,151,137,113,110,101,138,100,73,74,77,139,140,116,59,141,142,143,115,58,51,144,78,152,153,154,155,156,157,83,56])).then(e=>e.snapFitBox)",
+      "imports": [
+        {
+          "path": "./CW6pVYLx.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/snap-fit-box"
+    },
+    {
+      "id": "phoneGripTopper",
+      "title": "Phone Grip Topper",
+      "description": "A name topper for a round phone grip: groovy lettering packed into the circle, printed as a flat multicolor topper.",
+      "category": "toppers",
+      "image": "/images/catalog/phone-grip-topper.png",
+      "imageAlt": "Phone Grip Topper preview: chunky pink bubble lettering filling a round yellow topper",
+      "ogImage": "/images/og/phone-grip-topper.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "subscriberOnly": true
+      },
+      "updateNote": "New Topper diameter slider: make the printed disc smaller than the grip top, and the art scales with it.",
+      "symbol": "ee",
+      "sourceLine": 2,
+      "sourceColumn": 31952,
+      "definitionExpression": "()=>a(()=>import(\"./CI906wMx.js\"),__vite__mapDeps([183,7,136,184,2,35,3,23,27,5,28,4,24,25,26,29,30,31,32,33,34,36,37,38,39,14,10,15,40,41,42,43,44,45,46,47,48,49,50,51,52,53,78,96,185,75,76,21,186,187,20,71,18,16,145,11,9,83,56,135,72,58,73,74,77,152,188,157])).then(e=>e.phoneGripTopper)",
+      "imports": [
+        {
+          "path": "./CI906wMx.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/phone-grip-topper"
+    },
+    {
+      "id": "christmasOrnament",
+      "title": "Christmas Ornament",
+      "description": "Personalized round ornament in four holiday styles: a name on a nameplate with snowflakes, evergreen trees and an integrated hanging loop, in up to four colors.",
+      "category": "decor",
+      "image": "/images/catalog/christmas-ornament.png",
+      "imageAlt": "Christmas Ornament preview: an ivory-framed round ornament with a red nameplate, green fields and ivory snowflakes",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "comingSoon": true
+      },
+      "symbol": "ae",
+      "sourceLine": 2,
+      "sourceColumn": 32805,
+      "definitionExpression": "()=>a(()=>import(\"./BD197YRE.js\"),__vite__mapDeps([189,7,18,15,16,145,10,14,3,20,21,98,2,23,28,4,24,25,5,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,58,50,51,52,53,54,83,56])).then(e=>e.christmasOrnament)",
+      "imports": [
+        {
+          "path": "./BD197YRE.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/christmas-ornament"
+    },
+    {
+      "id": "vialCase",
+      "title": "Vial Case",
+      "description": "A holder for your vials with one reversible snap-on shell: a protective cap over the vials, or flip it to make a stable base. Sized from your vial measurements, 1–24 vials.",
+      "category": "others",
+      "image": "/images/catalog/vial-case.png",
+      "imageAlt": "Vial Case: a cream two-vial holder with glass vials and black caps, its purple snap-on shell lifted above",
+      "ogImage": "/images/og/vial-case.jpg",
+      "catalog": {
+        "listed": true,
+        "beta": true
+      },
+      "updateNote": "Cap artwork parts can now be selected in the preview, and embossed art can be pulled taller with the orange arrow, part by part.",
+      "symbol": "te",
+      "sourceLine": 2,
+      "sourceColumn": 33509,
+      "definitionExpression": "()=>a(()=>import(\"./DE4kjosk.js\"),__vite__mapDeps([190,1,2,3,4,5,7,71,10,83,137,35,42,23,27,113,110,26,30,28,101,138,31,100,25,43,33,34,96,41,29,73,37,38,39,24,32,36,14,15,40,44,45,46,47,48,49,52,74,75,76,21,77,95,20,72,9,97,139,140,116,59,141,142,143,115,53,58,50,51,54,144,56,18,145,16,134,135,136,147,148,149,150,151,78,152,153,154,155,156,157])).then(e=>e.vialCase)",
+      "imports": [
+        {
+          "path": "./DE4kjosk.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/vial-case"
+    },
+    {
+      "id": "stackableBasket",
+      "title": "Stackable Basket",
+      "description": "Create customizable stackable storage baskets and organizer trays with adjustable dimensions, shapes, textures, handles, and dividers.",
+      "category": "others",
+      "image": "/images/catalog/stackable-basket.png",
+      "imageAlt": "Stackable Basket preview: two sage-green fluted storage baskets stacked, with rounded handle slots, beside a folded towel and a small plant",
+      "ogImage": "/images/og/stackable-basket.jpg",
+      "catalog": {
+        "listed": true,
+        "beta": true
+      },
+      "symbol": "ie",
+      "sourceLine": 2,
+      "sourceColumn": 34492,
+      "definitionExpression": "()=>a(()=>import(\"./CXlVgM03.js\"),__vite__mapDeps([191,1,2,3,4,5,7,18,15,145,10,14,16,23,28,24,25,26,27,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,83,56,177,143,192])).then(e=>e.stackableBasket)",
+      "imports": [
+        {
+          "path": "./CXlVgM03.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/stackable-basket"
+    },
+    {
+      "id": "imageToKeychain",
+      "title": "Image to Keychain",
+      "description": "Turn your Art gallery artwork into an outlined keychain with a keyring tab you can move around the edge.",
+      "category": "keychains",
+      "image": "/images/catalog/image-to-keychain.png",
+      "imageAlt": "Image to Keychain preview",
+      "ogImage": "/images/og/image-to-keychain.jpg",
+      "catalog": {
+        "listed": true
+      },
+      "access": {
+        "comingSoon": true
+      },
+      "symbol": "oe",
+      "sourceLine": 2,
+      "sourceColumn": 35217,
+      "definitionExpression": "()=>a(()=>import(\"./DgSBIRiz.js\"),__vite__mapDeps([193,1,2,3,4,5,7,11,9,10,71,16,20,21,72,18,15,63,64,65,8,19,24,23,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,14,40,41,42,43,44,45,46,47,48,49,50,52,53,73,74,75,76,77,56,78,79])).then(e=>e.imageToKeychain)",
+      "imports": [
+        {
+          "path": "./DgSBIRiz.js",
+          "present": false
+        }
+      ],
+      "inferredRoute": "/image-to-keychain"
+    }
+  ],
+  "routeMethod": "Independent application of statically observed slug rule in DR0tZGP-.js:r and DDp_pUQ9.js:n/f; no live route verification"
+}

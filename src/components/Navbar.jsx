@@ -2,11 +2,14 @@ import React, { useState, useRef, useEffect } from "react";
 import { Search, Download, Wrench, ChevronDown, LogOut, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useSecureTrial } from "../contexts/TrialContext";
+import { formatFreeTrialBadgeText, DEFAULT_FREE_TRIAL_EXPORT_LIMIT } from "../utils/freeTrialPolicy";
 import ActivateLicenseModal from "./UI/ActivateLicenseModal";
 
 export default function Navbar({ searchQuery, setSearchQuery, isLicensed, onPricingClick }) {
     const navigate = useNavigate();
     const { currentUser, userData, loginWithGoogle, logout } = useAuth();
+    const { exportsLeft, freeTrial, loadingTrial, trialStatus } = useSecureTrial() || {};
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isActivateModalOpen, setIsActivateModalOpen] = useState(false);
     const dropdownRef = useRef(null);
@@ -87,6 +90,23 @@ export default function Navbar({ searchQuery, setSearchQuery, isLicensed, onPric
                 >
                     Studio Hub
                 </button>
+
+                {!isSubscribed && currentUser && (
+                    <button
+                        onClick={onPricingClick}
+                        className={`text-xs font-bold px-3.5 py-1.5 rounded-full transition-all shadow-sm ${
+                            trialStatus === "error"
+                                ? "bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"
+                                : "bg-teal-50 border border-teal-200/80 hover:bg-teal-100 text-teal-700"
+                        }`}
+                    >
+                        {loadingTrial
+                            ? "Free Trial…"
+                            : trialStatus === "error"
+                              ? "Trial Quota Unavailable"
+                              : formatFreeTrialBadgeText(exportsLeft, freeTrial?.limit ?? DEFAULT_FREE_TRIAL_EXPORT_LIMIT)}
+                    </button>
+                )}
 
                 {!isSubscribed && (
                     <button

@@ -302,7 +302,56 @@ export const POPSOCKET_DEFAULTS = {
     textColor: "#F1FAEE",  // Text color
 
     // ── Geometry ──────────────────────────────────────────────────────────────
-    topRadius: 19.5,       // mm — radius of the circular top plate (~39mm dia)
-    topThickness: 2.0,     // mm — thickness of the top plate
+    topRadius: 19.5,       // mm - radius of the circular top plate (~39mm dia)
+    topThickness: 2.0,     // mm - thickness of the top plate
+};
+
+// --- Screw Top Container Generator -------------------------------------------
+export const SCREW_CONTAINER_DEFAULTS = {
+    // What to Print
+    printMode: "full",            // 'full' | 'lid' | 'body' | 'fitTest'
+
+    // Style
+    containerStyle: "classic",    // 'classic' | 'knurled'
+    lidStyle: "plain",            // 'plain' | 'personalized'
+
+    // Preset / Size
+    preset: "katinko",            // 'katinko' | 'small' | 'medium' | 'large' | 'custom'
+
+    // Dimensions
+    innerDiameter: 50,            // mm - inner cavity diameter
+    innerHeight: 12.5,            // mm - inner cavity height
+    wallThickness: 2,             // mm - wall thickness
+    bottomThickness: 1.2,         // mm - bottom floor thickness
+    lidTopThickness: 1.2,         // mm - solid cap thickness
+    lidHeight: 10,                // mm - total lid height
+    threadHeight: 10,             // mm - threaded portion height
+    clearance: 0.25,              // mm - print tolerance / thread clearance
+    lipDepth: 2.5,                // mm - thread engagement / lip overlap
+
+    // Colors
+    bodyColor: "#14B8A6",         // Studio teal
+    lidColor: "#647D94",          // Slate blue
+    textColor: "#FFFFFF",         // Crisp white
+
+    // Personalization
+    personalized: false,
+    personText: "MY NAME",
+    personFont: "BebasNeue",
+    personStyle: "embossed",      // 'embossed' | 'engraved'
+    personDepth: 0.8,             // mm - text relief depth
+    personSize: 8,                // mm - text height
+    personAutoFit: true,          // auto-scale text to fit lid safe area
+
+    // Viewport
+    viewMode: "assembled",        // 'assembled' | 'exploded'
+    addKeychainHole: false,
+    keychainHoleDiameter: 4.2,    // mm - clean through-hole diameter
+    keychainWallThickness: 3.2,   // mm - solid wall around hole
+    keychainLugLength: 4.0,       // mm - extension from flange
+
+    // Base / Push-out Hole
+    pushOutHoleEnabled: false,    // default OFF: solid base
+    pushOutHoleDiameterMm: 12,    // mm - push-out hole diameter
 };
 

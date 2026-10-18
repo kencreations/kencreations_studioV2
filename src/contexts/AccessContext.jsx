@@ -99,12 +99,22 @@ export function AccessProvider({ children }) {
         vip: isVip,
     };
 
+    const isDeveloperPreview = Boolean(
+        auth.developerPreview ||
+        auth.claims?.developerPreview ||
+        desktopSummary?.developerPreview ||
+        desktop.license?.developerPreview ||
+        combinedActive.some((l) => l.developerPreview === true || l.developer_preview === true || (Array.isArray(l.entitlements) && l.entitlements.includes("developer-preview"))) ||
+        auth.licenses?.some((l) => (l.status === "active" || l.status == null) && (l.developerPreview === true || l.developer_preview === true || (Array.isArray(l.entitlements) && l.entitlements.includes("developer-preview"))))
+    );
+
     const summary = {
         active: combinedActive,
         betaTrial: auth.betaTrial,
         endedBetaTrial: auth.endedBetaTrial,
         entitlements,
         isVip,
+        developerPreview: isDeveloperPreview,
         tier: resolvedTier,
         billingType: resolvedBilling,
         capabilities,
@@ -113,9 +123,10 @@ export function AccessProvider({ children }) {
         status,
         desktop: isDesktop,
         currentUser: auth.currentUser,
+        refreshClaims: auth.refreshClaims,
     };
     const promoAllAccess = combinedActive.some(l => !isBetaTrial(l)) && promo?.promo_all_access === true && expiryMillis(promo.promo_expiry) > now;
-    const value = { ...summary, promoAllAccess, desktop: isDesktop, currentUser: auth.currentUser };
+    const value = { ...summary, promoAllAccess, desktop: isDesktop, currentUser: auth.currentUser, developerPreview: isDeveloperPreview };
     return (
         <AccessContext.Provider
             value={{

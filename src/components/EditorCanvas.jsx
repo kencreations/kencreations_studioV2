@@ -99,6 +99,7 @@ export default function EditorCanvas({
     children,
     cameraPosition = [0, 80, 120],
     cameraTarget = [0, 0, 0],
+    productLighting = false,
     getCustomExportScene,
     leftToolbarActions,
     ref,
@@ -190,6 +191,10 @@ export default function EditorCanvas({
                 */}
                 {/* ── Lights ── */}
                 <ambientLight intensity={0.5} />
+                {productLighting && <>
+                    <hemisphereLight args={['#ffffff', '#b5c6ce', 1.4]} />
+                    <directionalLight position={[-60, 80, -40]} intensity={1.5} />
+                </>}
                 <directionalLight
                     position={[10, 10, 5]}
                     intensity={1}

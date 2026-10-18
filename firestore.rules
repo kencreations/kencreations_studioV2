@@ -191,6 +191,30 @@ service cloud.firestore {
         allow update, delete: if admin();
       }
 
+      // Free Basic Export Trial Quota
+      match /quota/export_trial {
+        allow read: if owner(uid) || admin();
+        allow create: if (owner(uid) || admin()) &&
+          request.resource.data.ownerUid == uid &&
+          request.resource.data.limit in [3, 5] &&
+          request.resource.data.used >= 0 &&
+          request.resource.data.used <= request.resource.data.limit &&
+          request.resource.data.remaining == (request.resource.data.limit - request.resource.data.used);
+        allow update: if admin() || (
+          owner(uid) &&
+          request.resource.data.ownerUid == uid &&
+          request.resource.data.limit == resource.data.limit &&
+          (
+            (request.resource.data.used == resource.data.used &&
+             request.resource.data.remaining == resource.data.remaining) ||
+            (request.resource.data.used == resource.data.used + 1 &&
+             request.resource.data.used <= resource.data.limit &&
+             request.resource.data.remaining == (resource.data.limit - request.resource.data.used))
+          )
+        );
+        allow delete: if admin();
+      }
+
       // Studio Hub Subcollections
       match /filaments/{entry} { allow read, write: if studioAccess(uid); }
       match /consumables/{entry} { allow read, write: if studioAccess(uid); }

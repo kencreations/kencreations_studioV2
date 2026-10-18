@@ -12,21 +12,45 @@ export function normalizeGenerator(id, data = {}) {
         ...fallback, ...data, id,
         title: typeof data.title === 'string' ? data.title : fallback?.title || id,
         description: typeof data.description === 'string' ? data.description : fallback?.description || '',
+        status: typeof data.status === 'string' ? data.status : fallback?.status || 'Stable',
         isExclusive: data.isExclusive === true || data.is_exclusive === true || (data.isExclusive == null && data.is_exclusive == null && fallback?.isExclusive === true),
+        isRecentlyUpdated: data.isRecentlyUpdated === true,
+        recentlyUpdatedAt: data.recentlyUpdatedAt || '',
         link: canonicalRoute(fallback?.link || `/editor/${id}`),
     };
 }
+export const generatorIdAliases = {
+    'whistle-bagtag': 'whistlebagtag',
+    'clicker': 'clicker-v2',
+    'lithophanekeychain': 'lithophane',
+};
+export const canonicalGeneratorId = id => (id && generatorIdAliases[id]) ? generatorIdAliases[id] : id;
+
 export function exportTotal(generator) {
-    const valid = value => Number.isSafeInteger(value) && value >= 0;
+    if (!generator || typeof generator !== 'object') return null;
+    const valid = value => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
     if (valid(generator.totalExports)) return generator.totalExports;
-    if (valid(generator.stlExports) && valid(generator.threeMfExports)) return generator.stlExports + generator.threeMfExports;
+    const hasStl = valid(generator.stlExports);
+    const hasThreeMf = valid(generator.threeMfExports);
+    if (hasStl || hasThreeMf) {
+        return (hasStl ? generator.stlExports : 0) + (hasThreeMf ? generator.threeMfExports : 0);
+    }
     return null;
 }
-export function catalogStats(generators) {
+export function catalogStats(generators = [], options = {}) {
+    const isReady = typeof options === 'boolean' ? options : options.isReady === true || options.treatMissingAsZero === true;
     const visible = generators.filter(g => !['hidden', 'archived', 'placeholder'].includes(String(g.status).toLowerCase()));
-    const available = visible.filter(g => !['disabled', 'coming_soon', 'coming soon', 'maintenance', 'under upgrade'].includes(String(g.status).toLowerCase()));
+    const available = visible.filter(g => !['disabled', 'coming_soon', 'coming soon', 'maintenance', 'under maintenance', 'under upgrade'].includes(String(g.status).toLowerCase()));
+    let totalExports = null;
+    if (visible.length > 0) {
+        if (visible.every(g => exportTotal(g) !== null)) {
+            totalExports = visible.reduce((n, g) => n + exportTotal(g), 0);
+        } else if (isReady) {
+            totalExports = visible.reduce((n, g) => n + (exportTotal(g) ?? 0), 0);
+        }
+    }
     return {
         visible, availableCount: available.length,
-        totalExports: visible.length && visible.every(g => exportTotal(g) !== null) ? visible.reduce((n, g) => n + exportTotal(g), 0) : null,
+        totalExports,
     };
 }
