@@ -177,7 +177,7 @@ test('4. Combination: push-out hole works alongside knurled style and keychain l
         const d = containerDimensions(cfg);
         const mesh = new THREE.Mesh(withLoopAndHole, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
         mesh.updateMatrixWorld();
-        const rayLoop = new THREE.Raycaster(new THREE.Vector3(-d.flangeRadius - 4, 0, 10), new THREE.Vector3(0, 0, -1));
+        const rayLoop = new THREE.Raycaster(new THREE.Vector3(0, d.flangeRadius + 4, 10), new THREE.Vector3(0, 0, -1));
         assert.equal(rayLoop.intersectObject(mesh).length, 0, 'Keychain hole remains open');
 
         // Check push-out hole remains open

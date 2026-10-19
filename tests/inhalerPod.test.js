@@ -42,3 +42,20 @@ dispose(parts);
 });
 for(const part of ['body','cap','loop'])test(`${part} only export contains exactly one part`,()=>{const c=podConfig({printMode:part}),parts=buildPod(c),scene=podPrintScene(c,parts);assert.equal(scene.children.length,1);assert.equal(scene.children[0].name,`Pod_${part}`);disposeExportScene(scene);dispose(parts);});
 test('exploded parts stay coaxial and above housing, original capped envelope fits without pickup',()=>{const c=podConfig(POD_DEFAULTS),d=podDimensions(c);assert.ok(c.floor+c.length<d.capSeat-c.floor);assert.ok(d.inner>c.diameter/2);assert.ok(podPlacement({...c,viewMode:'exploded'},'loop').z>d.bodyHeight);assert.ok(podPlacement({...c,viewMode:'exploded'},'cap').z-d.capHeight>d.bodyHeight);});
+test('accessory tab clears housing and cap; exploded bounds preserve complete vertical sequence',()=>{
+    for(const patch of [{},{holeDiameter:6,threadLength:8,exposure:20},{diameter:30,length:100,wall:3.2}]){
+        const c=podConfig(patch),parts=buildPod(c),placed={};
+        for(const [part,g] of Object.entries(parts)){
+            const t=podPlacement(c,part),solid=podSolid(g),rotated=solid.rotate([t.rx*180/Math.PI,0,0]);
+            placed[part]=rotated.translate([0,0,t.z]);rotated.delete();solid.delete();
+        }
+        for(const pair of [['body','loop'],['cap','loop'],['body','cap']]){
+            const overlap=placed[pair[0]].intersect(placed[pair[1]]);assert.ok(Math.abs(overlap.volume())<1e-3,pair.join('/'));overlap.delete();
+        }
+        const boxes={};for(const [part,g] of Object.entries(parts)){
+            g.computeBoundingBox();const t=podPlacement({...c,viewMode:'exploded'},part),m=new THREE.Matrix4().makeRotationX(t.rx);m.setPosition(0,0,t.z);boxes[part]=g.boundingBox.clone().applyMatrix4(m);
+        }
+        assert.ok(boxes.loop.min.z>boxes.body.max.z);assert.ok(boxes.cap.min.z>boxes.loop.max.z);
+        Object.values(placed).forEach(s=>s.delete());dispose(parts);
+    }
+});

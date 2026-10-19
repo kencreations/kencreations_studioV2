@@ -60,11 +60,14 @@ export function podDimensions(input) {
     const threadStart=bodyHeight-c.threadLength;
     const seat=threadStart-3.2-grooveHeight;
     const bodyRadius=loopInner+1;
-    const capInner=neck+c.threadClearance, capRadius=capInner+depth+c.wall;
+    const capInner=neck+c.threadClearance, capRadius=bead+c.threadClearance+c.wall+0.6;
     const headspace=fit?1:c.exposure+c.axialClearance;
     const threadMouth=c.floor+headspace+c.threadLength;
     const bellHeight=3.2,capHeight=threadMouth+bellHeight,capBellRadius=bead+c.threadClearance+c.wall;
-    return {inner,neck,depth,groove,bead,loopInner,loopOuter,loopHeight,grooveHeight,
+    const capRound=Math.min(6,capRadius-capInner+c.floor-0.9,capHeight/2);
+    const baseRound=Math.min(7,bodyRadius-inner+c.floor-0.8,seat/2);
+    const tabDrop=11,tabReach=10;
+    return {inner,neck,depth,groove,bead,loopInner,loopOuter,loopHeight,grooveHeight,capRound,baseRound,tabDrop,tabReach,
         bodyHeight,threadStart,seat,bodyRadius,capInner,capRadius,headspace,capHeight,threadMouth,bellHeight,capBellRadius,
         capSeat:bodyHeight+headspace+c.floor,loopSeat:seat+c.loopClearance,
         pickupEnabled:false,verified:false};
@@ -72,9 +75,9 @@ export function podDimensions(input) {
 function ridge(z,a,pitch){const phase=((z/pitch-a/(2*Math.PI))%1+1)%1;return Math.max(0,Math.min(1,(0.4-Math.abs(phase-0.5))/0.2));}
 export function makePodBody(input) {
     const c=podConfig(input),d=podDimensions(c),r=d.bodyRadius;
-    const p=[[0,0],[r-2,0]];
+    const round=d.baseRound,p=[[0,0],[r-round,0]];
     // Rounded lower shoulder with a flat printable foot.
-    for(let i=1;i<=12;i++){const a=i*Math.PI/24;p.push([r-2+2*Math.sin(a),2-2*Math.cos(a)]);}
+    for(let i=1;i<=24;i++){const a=i*Math.PI/48;p.push([r-round+round*Math.sin(a),round-round*Math.cos(a)]);}
     p.push([r,d.seat-0.3],[r-0.3,d.seat],[d.groove,d.seat],
         [d.groove,d.seat+d.grooveHeight],[d.bead,d.seat+d.grooveHeight],
         [d.bead,d.seat+d.grooveHeight+0.5],[d.neck,d.threadStart], [d.neck,d.threadStart+0.02]);
@@ -84,11 +87,13 @@ export function makePodBody(input) {
         [d.inner,c.floor],[0,c.floor]);return revolve(p);
 }
 export function makePodCap(input) {
-    const c=podConfig(input),d=podDimensions(c),r=d.capRadius,round=Math.min(4,c.wall+1.5);
+    const c=podConfig(input),d=podDimensions(c),r=d.capRadius,round=d.capRound;
     const p=[[0,0],[r-round,0]];
-    for(let i=1;i<=20;i++){const a=i*Math.PI/40;p.push([r-round+round*Math.sin(a),round-round*Math.cos(a)]);}
-    // Flared skirt covers the body's retention-bead lead-in without touching it.
-    p.push([r,d.threadMouth-0.3],[d.capBellRadius,d.capHeight-0.3],[d.capBellRadius-0.3,d.capHeight],
+    const crownHeight=Math.min(d.capHeight*0.65,d.capHeight-2);
+    for(let i=1;i<=32;i++){const a=i*Math.PI/64;p.push([r-round+round*Math.sin(a),crownHeight*(1-Math.cos(a))]);}
+    // Broad crown and rolled lower edge form a pebble, with no bell-shaped skirt.
+    for(let i=1;i<=24;i++){const a=i*Math.PI/48;p.push([r-0.6+0.6*Math.cos(a),crownHeight+(d.capHeight-crownHeight)*Math.sin(a)]);}
+    p.push(
         [d.bead+c.threadClearance+0.15,d.capHeight]);
     const steps=Math.ceil((d.capHeight-c.floor-0.15)/0.1);
     for(let i=0;i<=steps;i++){
@@ -119,11 +124,17 @@ export function makePodLoop(input) {
         arm.closePath();
         const tool=extrude(arm,d.loopHeight),merged=combine(result,tool);result.dispose();tool.dispose();result=merged;
     }
-    const center=d.loopOuter+4, lugR=c.holeDiameter/2+2.6;
-    const lug=new THREE.Shape();lug.moveTo(d.loopOuter-3,-lugR);
-    lug.lineTo(center,-lugR);lug.absarc(center,0,lugR,-Math.PI/2,Math.PI/2,false);lug.lineTo(d.loopOuter-3,lugR);lug.closePath();
-    const bore=new THREE.Path();bore.absarc(center,0,c.holeDiameter/2,0,Math.PI*2,true);lug.holes.push(bore);
-    const tool=extrude(lug,d.loopHeight);const merged=combine(result,tool);result.dispose();tool.dispose();return merged;
+    // Downturned accessory ribbon, rather than a washer's horizontal screw lug.
+    // Its rounded slot is extruded through Y; the ribbon stays outside the body.
+    const x=d.loopOuter, lug=new THREE.Shape();
+    lug.moveTo(x-1.4,2.8);lug.quadraticCurveTo(x+5,3,x+8,-2);
+    lug.quadraticCurveTo(x+13,-10,x+7,-d.tabDrop);
+    lug.quadraticCurveTo(x+2,-d.tabDrop-0.5,x+1,-6);
+    lug.lineTo(x-1,-1);lug.closePath();
+    const bore=new THREE.Shape();bore.absellipse(x+5.5,-5.3,c.holeDiameter/2,3.5,0,Math.PI*2,false,-0.3);
+    const blank=extrude(lug,3.2),cutter=extrude(bore,5);cutter.translate(0,0,-0.9);
+    const tool=combine(blank,cutter,true);blank.dispose();cutter.dispose();tool.rotateX(Math.PI/2);tool.translate(0,1.6,0);
+    const merged=combine(result,tool);result.dispose();tool.dispose();return merged;
 }
 export function personalizePodCap(shell,input,font) {
     const c=podConfig(input),d=podDimensions(c);
@@ -134,7 +145,7 @@ export function personalizePodCap(shell,input,font) {
     const cutter=new THREE.ExtrudeGeometry(shapes,{depth:depth+0.1,bevelEnabled:false,curveSegments:16});
     cutter.computeBoundingBox();const b=cutter.boundingBox,size=b.getSize(new THREE.Vector3()),center=b.getCenter(new THREE.Vector3());
     if(!Number.isFinite(size.x)||size.x===0){cutter.dispose();throw new Error('Text has no printable outline.');}
-    const scale=Math.min(1,2*(d.capRadius-Math.min(4,c.wall+1.5)-0.8)/Math.hypot(size.x,size.y));
+    const scale=Math.min(1,2*(d.capRadius-d.capRound-0.8)/Math.hypot(size.x,size.y));
     cutter.translate(-center.x,-center.y,0);cutter.scale(scale,scale,1);cutter.rotateX(Math.PI);
     cutter.translate(0,0,c.textStyle==='engraved'?depth:0.1);
     try{return combine(shell,cutter,c.textStyle==='engraved',[c.capColor,c.textColor]);}finally{cutter.dispose();}
@@ -152,15 +163,19 @@ export function buildPod(input,font) {
     }catch(error){Object.values(parts).forEach(g=>g.dispose());throw error;}
 }
 export function podPlacement(input,part) {
-    const c=podConfig(input),d=podDimensions(c),pair=['kit','fitTest'].includes(c.printMode),gap=c.viewMode==='exploded'&&pair?14:0;
+    const c=podConfig(input),d=podDimensions(c),pair=['kit','fitTest'].includes(c.printMode),gap=c.viewMode==='exploded'&&pair?10:0;
     if(part==='body')return {z:0,rx:0};
-    if(part==='loop')return {z:pair?(gap?d.bodyHeight+gap:d.loopSeat):0,rx:0};
-    return {z:pair?d.capSeat+(gap?d.capHeight+gap*2:0):d.capHeight,rx:Math.PI};
+    const loopZ=d.bodyHeight+d.tabDrop+gap;
+    if(part==='loop')return {z:pair?(gap?loopZ:d.loopSeat):d.tabDrop+1,rx:0};
+    return {z:pair?(gap?loopZ+d.loopHeight+gap+d.capHeight:d.capSeat):d.capHeight,rx:Math.PI};
 }
 export function podPrintScene(input,parts) {
     const c=podConfig(input),scene=new THREE.Group();let cursor=0;
     for(const part of ['body','cap','loop'])if(parts[part]){
-        const geo=parts[part].clone();geo.computeBoundingBox();const b=geo.boundingBox;
+        const geo=parts[part].clone();
+        // Loop top face on bed; the downturned ribbon rises in print orientation.
+        if(part==='loop')geo.rotateX(Math.PI);
+        geo.computeBoundingBox();const b=geo.boundingBox;
         const width=b.max.x-b.min.x;geo.translate(-b.min.x,0,-b.min.z);
         const vc=!!geo.attributes.color;
         const mesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:vc?'#ffffff':c[part+'Color'],vertexColors:vc}));

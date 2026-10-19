@@ -47,7 +47,8 @@ export default function KatinkoInhalerPodEditor() {
                 <p className="text-xs text-gray-500">Body height: {d.bodyHeight.toFixed(1)} mm · Closed height: {d.capSeat.toFixed(1)} mm. Single-start right-hand threads; prototype fit only.</p>
             </SidebarSection>
             <SidebarSection title="Independent loop retention" icon={Link}>
-                {slider('loopClearance','Arm-to-groove clearance',0.05)}{slider('armThickness','Flexible arm radial thickness')}{slider('holeDiameter','Keychain hole diameter')}
+                {slider('loopClearance','Arm-to-groove clearance',0.05)}{slider('armThickness','Flexible arm radial thickness')}{slider('holeDiameter','Keychain slot width')}
+                <p className="text-xs text-gray-500">Print the loop top-face down with its curved tab rising upward. Check tab overhangs in your slicer; supports may be needed.</p>
                 <p className="text-xs text-amber-800">Three internal spring arms pass the lead-in bead and engage the body groove. The outer ring stays closed. Flex, fatigue and pull-off strength are UNTESTED. Print the short fit kit first; do not rely on this prototype to secure valuables.</p>
                 <p className="text-xs text-gray-500">Assembly: insert capped inhaler → push loop down until seated → screw on outer cap. Pickup disabled; opening does not automatically withdraw the inhaler.</p>
             </SidebarSection>
@@ -65,11 +66,14 @@ export default function KatinkoInhalerPodEditor() {
                 <p className="text-xs text-gray-500">3MF retains surface colors; STL is geometry only. Engraved text color is a surface assignment, not a separate inlay.</p>
             </SidebarSection>
         </>}>
+        <style>{'@media (max-width:767px){section:has([data-pod-viewport]){min-height:600px}}'}</style>
+        <div data-pod-viewport className="h-full w-full">
         <EditorCanvas title="Katinko Inhaler Pod" cameraPosition={[140,130,230]} cameraTarget={[0,65,0]}
             getCustomExportScene={()=>{if(status.loading||status.error||!model.current)throw new Error(status.error||'Pod geometry is loading.');return model.current.getPrintScene();}}
             leftToolbarActions={<div className="flex gap-1 rounded-xl bg-white p-1 border border-teal-200">{['assembled','exploded'].map(mode=><button key={mode} aria-pressed={c.viewMode===mode} onClick={()=>update({viewMode:mode})} className={`rounded-lg px-3 py-2 text-xs font-bold capitalize ${c.viewMode===mode?'bg-teal-600 text-white':'text-gray-600'}`}>{mode}</button>)}</div>}>
             <InhalerPodMesh ref={model} config={c} onStatus={receiveStatus}/>
         </EditorCanvas>
+        </div>
         <div role="status" className="absolute top-4 left-4 max-w-xs rounded-xl bg-white/90 p-3 text-xs shadow pointer-events-none">
             {status.error?<span className="text-red-700">{status.error}</span>:status.loading?'Building printable geometry…':'Provisional dimensions · Pickup disabled · No physical fit validation'}
         </div>

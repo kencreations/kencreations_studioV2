@@ -524,6 +524,15 @@ export default function ScrewTopContainerEditor() {
                             </p>
                             {config.addKeychainHole && (
                                 <div className="space-y-2.5 pt-2 border-t border-gray-100">
+                                    <ControlSelect
+                                        label="Lug Position"
+                                        value={config.attachmentPosition ?? "top"}
+                                        options={[
+                                            { value: "top", label: "Top (12 o’clock)" },
+                                            { value: "side", label: "Side (9 o’clock)" },
+                                        ]}
+                                        onChange={v => updateConfig({ attachmentPosition: v })}
+                                    />
                                     <ControlSlider
                                         label="Hole Diameter"
                                         value={config.keychainHoleDiameter ?? 4.2}
@@ -672,9 +681,9 @@ export default function ScrewTopContainerEditor() {
                     cameraPosition={[28, 65, 88]}
                     cameraTarget={[0, 18, 0]}
                     productLighting={true}
-                    getCustomExportScene={() => {
+                    getCustomExportScene={(format) => {
                         if (config !== deferredConfig || !modelRef.current) throw new Error("Model is updating. Please wait before exporting.");
-                        return modelRef.current.getPrintScene();
+                        return modelRef.current.getPrintScene(format);
                     }}
                     leftToolbarActions={
                         <div role="group" aria-label="Container preview" className="flex rounded-xl border border-teal-200 bg-white p-1 gap-1">

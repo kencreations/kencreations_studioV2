@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import Module from 'manifold-3d';
+import { toCreasedNormals, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // Shared by preview and export: 256 samples keep chord error below 0.006 mm
 // even at the largest supported diameter. Z is the printing axis.
@@ -37,7 +38,11 @@ function booleanGeometry(shell, tool, subtract = false) {
         geo.setAttribute('position', new THREE.Float32BufferAttribute(data.vertProperties, 3));
         geo.setIndex(new THREE.BufferAttribute(new Uint32Array(data.triVerts), 1));
         geo.computeVertexNormals();
-        return geo;
+        const creased = toCreasedNormals(geo, (35 * Math.PI) / 180);
+        const smooth = mergeVertices(creased, 1e-6);
+        geo.dispose();
+        creased.dispose();
+        return smooth;
     } finally { a.delete(); b.delete(); result?.delete(); }
 }
 
@@ -193,19 +198,32 @@ export function createLidTextGeometry(c, font) {
     const centerY = (minY + maxY) / 2;
     const halfDiag = Math.hypot(textWidth / 2, textHeight / 2);
 
-    // Max scale that fits inside usable circular radius (with 10% safety edge margin)
-    const maxAllowedScale = (usableRadius * 0.90) / Math.max(halfDiag, 0.001);
+    const hasTopLug = Boolean(c.addKeychainHole ?? c.enableKeychainHole) && c.attachmentPosition !== 'side';
+    // Safe margin from top lid edge when lug is at 12 o'clock
+    const topMargin = hasTopLug ? 2.5 : 0;
+    // Lower vertical shift (towards 6 o'clock) to leave generous headroom below the 12 o'clock lug
+    const yShift = hasTopLug ? 1.5 : 0;
+
+    // Max scale that fits inside usable circular radius and respects top/bottom margins
+    const maxCircularScale = (usableRadius * 0.90) / Math.max(halfDiag, 0.001);
+    const maxTopScale = hasTopLug
+        ? (usableRadius - topMargin - yShift) / Math.max(maxY - centerY, 0.001)
+        : maxCircularScale;
+    const maxBottomScale = hasTopLug
+        ? (usableRadius * 0.90 - yShift) / Math.max(centerY - minY, 0.001)
+        : maxCircularScale;
+    const maxAllowedScale = Math.min(maxCircularScale, maxTopScale, maxBottomScale);
 
     let scale;
     if (c.personAutoFit) {
         // Auto-fit scales text to fill the circular area nicely,
         // with an upper cap so short names (e.g. 1-3 letters) stay proportional
-        const maxFontHeight = Math.min(18, usableRadius * 1.05);
+        const maxFontHeight = Math.min(18, (usableRadius - (hasTopLug ? topMargin : 0)) * 1.05);
         scale = Math.min(maxAllowedScale, maxFontHeight / baseSize);
     } else {
         const manualSize = Number(c.personSize) || 8;
         const requestedScale = manualSize / baseSize;
-        // Never allow manual text to clip past the circular safety margin
+        // Never allow manual text to clip past the circular safety margin or top margin
         scale = Math.min(requestedScale, maxAllowedScale);
     }
 
@@ -224,13 +242,14 @@ export function createLidTextGeometry(c, font) {
         // places cutter at [-0.10, +reliefDepth], cleanly cutting through exterior face.
         textZOffset = reliefDepth;
     } else {
-        // Embossed: raised above the lid exterior surface (from z = -reliefDepth to z = +0.20).
-        // Anchors 0.20 mm into the solid roof (z > 0) for a seamless 100% manifold fusion.
+        // Embossed: raised above the lid exterior surface (from z = -reliefDepth to z = +0.40).
+        // Anchors 0.40 mm into the solid roof (z > 0) for a seamless 100% manifold fusion (2 layers at 0.2mm).
+        const overlap = 0.40;
         reliefDepth = Math.max(0.4, Math.min(2.5, Number(c.personDepth) || 0.8));
-        extrudeDepth = reliefDepth + 0.20;
-        // After rotateX(PI), z spans [-extrudeDepth, 0]. Translating +0.20
-        // places raised text at [-reliefDepth, +0.20].
-        textZOffset = 0.20;
+        extrudeDepth = reliefDepth + overlap;
+        // After rotateX(PI), z spans [-extrudeDepth, 0]. Translating +overlap
+        // places raised text at [-reliefDepth, +overlap].
+        textZOffset = overlap;
     }
 
     const textGeo = new THREE.ExtrudeGeometry(shapes, {
@@ -239,8 +258,11 @@ export function createLidTextGeometry(c, font) {
         curveSegments: 16,
     });
 
-    // Center in XY
-    textGeo.translate(-centerX, -centerY, 0);
+    // Center in XY, with downward offset for top lug clearance if keychain enabled
+    // Note: rotateX(PI) inverts Y (Y_lid = -Y_font).
+    // So to shift text towards +Y_lid (6 o'clock, down away from 12 o'clock lug),
+    // we translate by -yShift / scale in font coordinates.
+    textGeo.translate(-centerX, -centerY - (yShift / scale), 0);
     // Scale uniformly
     textGeo.scale(scale, scale, 1);
     // Rotate 180 degrees around X: aligns text front-facing and upright when viewed from top,
@@ -276,14 +298,16 @@ export function containerLayout(c) {
     const pair = c.printMode === 'full' || c.printMode === 'fitTest';
     const bodyR = (c.printMode === 'fitTest' ? d.neck + d.threadDepth : d.flangeRadius) + (c.containerStyle === 'knurled' ? 0.25 : 0);
     const lidR = d.radius + (c.containerStyle === 'knurled' ? 0.25 : 0);
-    const extension = c.addKeychainHole && c.printMode !== 'lid' && c.printMode !== 'fitTest' ? d.flangeRadius + 12 - bodyR : 0;
-    const width = (pair ? 2 * bodyR + 10 + 2 * lidR : 2 * (c.printMode === 'body' ? bodyR : lidR)) + extension;
+    const isSide = c.attachmentPosition === 'side';
+    const sideExtension = isSide && c.addKeychainHole && c.printMode !== 'lid' && c.printMode !== 'fitTest' ? d.flangeRadius + 12 - bodyR : 0;
+    const width = (pair ? 2 * bodyR + 10 + 2 * lidR : 2 * (c.printMode === 'body' ? bodyR : lidR)) + sideExtension;
+    const topExtension = !isSide && c.addKeychainHole && c.printMode !== 'lid' && c.printMode !== 'fitTest' ? d.flangeRadius + 12 - bodyR : 0;
     // Loop points away from the lid in the print arrangement.
     return {
-        bodyX: pair ? -width / 2 + bodyR + extension : extension / 2,
+        bodyX: pair ? -width / 2 + bodyR + sideExtension : sideExtension / 2,
         lidX: pair ? width / 2 - lidR : 0,
         x: width,
-        y: 2 * (pair ? Math.max(bodyR, lidR) : c.printMode === 'body' ? bodyR : lidR),
+        y: 2 * (pair ? Math.max(bodyR, lidR) : c.printMode === 'body' ? bodyR : lidR) + topExtension,
         z: c.printMode === 'fitTest' ? d.threadLength + 2 : Math.max(
             c.printMode === 'lid' ? 0 : d.bodyHeight,
             c.printMode === 'body' ? 0 : d.lidHeight
@@ -331,50 +355,115 @@ export function addBodyKeychainLoop(shell, c) {
 
     const rHole = holeDiameter / 2;
     const rLug = rHole + wallThickness;
-    const D = Rf + lugLength; // Center distance of lug hole along -X axis
+    const D = Rf + lugLength;
 
-    // Calculate external tangent angle from flange circle (0, 0, Rf) to lug circle (-D, 0, rLug)
-    const cosVal = Math.max(-0.999, Math.min(0.999, (Rf - rLug) / D));
-    const psi = Math.acos(cosVal);
+    const isSide = c.attachmentPosition === 'side';
 
-    // Tangent points on circle 1 (flange, center [0, 0])
-    const p1x = -Rf * Math.cos(psi);
-    const p1y = Rf * Math.sin(psi);
-    const p4x = -Rf * Math.cos(psi);
-    const p4y = -Rf * Math.sin(psi);
+    if (isSide) {
+        // Legacy side lug along -X axis
+        const Rb = Math.min(6.0, Math.max(2.0, lugLength * 1.5));
+        let xb = ((rLug + Rb) ** 2 - (Rf + Rb) ** 2 - D ** 2) / (2 * D);
+        let term = (Rf + Rb) ** 2 - xb ** 2;
+        let effectiveRb = Rb;
+        while (term <= 0.5 && effectiveRb > 1.0) {
+            effectiveRb -= 0.5;
+            xb = ((rLug + effectiveRb) ** 2 - (Rf + effectiveRb) ** 2 - D ** 2) / (2 * D);
+            term = (Rf + effectiveRb) ** 2 - xb ** 2;
+        }
+        const yb = Math.sqrt(Math.max(0.1, term));
 
-    // Tangent points on circle 2 (lug tip, center [-D, 0])
-    const p2x = -D - rLug * Math.cos(psi);
-    const p2y = rLug * Math.sin(psi);
-    const p3x = -D - rLug * Math.cos(psi);
-    const p3y = -rLug * Math.sin(psi);
+        const tLugX = -D + (rLug / (rLug + effectiveRb)) * (xb - (-D));
+        const tLugY = (rLug / (rLug + effectiveRb)) * yb;
+        const tFlangeX = (Rf / (Rf + effectiveRb)) * xb;
+        const tFlangeY = (Rf / (Rf + effectiveRb)) * yb;
+
+        const shape = new THREE.Shape();
+        const a1_f = Math.atan2(tFlangeY - yb, tFlangeX - xb);
+        const a1_l = Math.atan2(tLugY - yb, tLugX - xb);
+        const a_tip1 = Math.atan2(tLugY, tLugX - (-D));
+        const rawTip2 = Math.atan2(-tLugY, tLugX - (-D));
+        const a_tip2 = rawTip2 < 0 ? rawTip2 + 2 * Math.PI : rawTip2;
+        const a2_l = Math.atan2(-tLugY - (-yb), tLugX - xb);
+        const a2_f = Math.atan2(-tFlangeY - (-yb), tFlangeX - xb);
+
+        shape.moveTo(tFlangeX, tFlangeY);
+        shape.absarc(xb, yb, effectiveRb, a1_f, a1_l, true);
+        shape.absarc(-D, 0, rLug, a_tip1, a_tip2, false);
+        shape.absarc(xb, -yb, effectiveRb, a2_l, a2_f, true);
+        shape.closePath();
+
+        const hole = new THREE.Path();
+        hole.absarc(-D, 0, rHole, 0, Math.PI * 2, true);
+        shape.holes.push(hole);
+
+        const tabGeo = new THREE.ExtrudeGeometry(shape, {
+            depth: Hf,
+            bevelEnabled: false,
+            curveSegments: 128,
+        });
+
+        try {
+            return booleanGeometry(shell, tabGeo, false);
+        } finally {
+            tabGeo.dispose();
+        }
+    }
+
+    // Default 'top' attachment: lug centered at 12 o'clock along +Y axis at (0, +D)
+    const Rb = Math.min(6.0, Math.max(2.0, lugLength * 1.5));
+    let yb = ((Rf + Rb) ** 2 + D ** 2 - (rLug + Rb) ** 2) / (2 * D);
+    let term = (Rf + Rb) ** 2 - yb ** 2;
+    let effectiveRb = Rb;
+    while (term <= 0.5 && effectiveRb > 1.0) {
+        effectiveRb -= 0.5;
+        yb = ((Rf + effectiveRb) ** 2 + D ** 2 - (rLug + effectiveRb) ** 2) / (2 * D);
+        term = (Rf + effectiveRb) ** 2 - yb ** 2;
+    }
+    const xb = Math.sqrt(Math.max(0.1, term));
+
+    // Tangent points on flange circle (center (0, 0))
+    const tFlangeXR = (Rf / (Rf + effectiveRb)) * xb;
+    const tFlangeYR = (Rf / (Rf + effectiveRb)) * yb;
+    const tFlangeXL = -tFlangeXR;
+    const tFlangeYL = tFlangeYR;
+
+    // Tangent points on lug tip circle (center (0, D))
+    const tLugXR = (rLug / (rLug + effectiveRb)) * xb;
+    const tLugYR = D + (rLug / (rLug + effectiveRb)) * (yb - D);
+    const tLugXL = -tLugXR;
+    const tLugYL = tLugYR;
 
     const shape = new THREE.Shape();
-    // Start at upper flange tangent point
-    shape.moveTo(p1x, p1y);
-    // Tangent line to upper lug tangent point
-    shape.lineTo(p2x, p2y);
-    // Circular arc around lug tip (-D, 0) from (PI - psi) to (PI + psi)
-    // Counter-clockwise (clockwise = false) smoothly wraps around the outer tip (-D - rLug, 0)
-    shape.absarc(-D, 0, rLug, Math.PI - psi, Math.PI + psi, false);
-    // Tangent line back to lower flange tangent point
-    shape.lineTo(p4x, p4y);
-    // Inset arc inside the solid flange from P4 back to P1 (clockwise through -X)
-    // Overlaps seamlessly into the flange without intruding into the center push-out hole
-    const rInset = Math.max(d.neck + 0.2, Rf - 2.0);
-    shape.absarc(0, 0, rInset, Math.PI + psi, Math.PI - psi, true);
+    // 1. Right blend fillet from flange tangent to lug tangent (around (+xb, yb), clockwise)
+    const a1_f = Math.atan2(tFlangeYR - yb, tFlangeXR - xb);
+    const a1_l = Math.atan2(tLugYR - yb, tLugXR - xb);
+
+    // 2. Convex outer lug tip around (0, D) (from tLugR to tLugL over the top, counter-clockwise)
+    const a_tip1 = Math.atan2(tLugYR - D, tLugXR);
+    const a_tip2 = Math.atan2(tLugYL - D, tLugXL);
+
+    // 3. Left blend fillet from lug tangent to flange tangent (around (-xb, yb), clockwise)
+    const a2_l = Math.atan2(tLugYL - yb, tLugXL - (-xb));
+    const a2_f = Math.atan2(tFlangeYL - yb, tFlangeXL - (-xb));
+
+    // Closed tangent chord across the base flange circle (y = tFlangeYR < Rf).
+    // Every point on this chord is strictly inside the solid flange cylinder,
+    // eliminating chamfer collisions, pinched wedges, or surface steps.
+    shape.moveTo(tFlangeXR, tFlangeYR);
+    shape.absarc(xb, yb, effectiveRb, a1_f, a1_l, true);
+    shape.absarc(0, D, rLug, a_tip1, a_tip2, false);
+    shape.absarc(-xb, yb, effectiveRb, a2_l, a2_f, true);
     shape.closePath();
 
-    // Clean circular through-hole concentric with the lug tip at (-D, 0)
-    // Clockwise winding for inner hole cutout in Three.js
+    // Clean circular through-hole concentric with the lug tip at (0, D)
     const hole = new THREE.Path();
-    hole.absarc(-D, 0, rHole, 0, Math.PI * 2, true);
+    hole.absarc(0, D, rHole, 0, Math.PI * 2, true);
     shape.holes.push(hole);
 
     const tabGeo = new THREE.ExtrudeGeometry(shape, {
         depth: Hf,
         bevelEnabled: false,
-        curveSegments: 64,
+        curveSegments: 128,
     });
 
     try {
@@ -435,52 +524,85 @@ export function addBodyPushOutHole(shell, c) {
 // Fresh owned resources for the existing export pipeline. Preview transforms
 // (including mid-animation transforms) never enter the export scene.
 export function createContainerPrintScene(c, geometries, format = '3mf') {
-    const layout = containerLayout(c), scene = new THREE.Group();
+    const layout = containerLayout(c);
+    const scene = new THREE.Scene();
+    scene.name = 'Screw Top Container';
     const isStl = format === 'stl';
     const isEmbossedMultiColor = !isStl && c.personalized && c.personStyle === 'embossed' && geometries.lidBase && geometries.text;
 
-    for (const part of ['body', 'lid']) {
-        if (c.printMode === (part === 'body' ? 'lid' : 'body')) continue;
-        if (!geometries[part]) throw new Error('Container geometry is still loading.');
-        // For STL: use geometries[part] directly (single 100% closed manifold solid)
-        // For 3MF: use lidBase if embossed text is exported as a separate colored part
-        const sourceGeo = (part === 'lid' && isEmbossedMultiColor)
-            ? geometries.lidBase
-            : geometries[part];
-        const clonedGeo = sourceGeo.clone();
-
-        // Ensure exported part rests flat on print bed with lowest vertex at Z = 0
-        clonedGeo.computeBoundingBox();
-        const minZ = clonedGeo.boundingBox?.min.z ?? 0;
+    // 1. Container Body
+    if (c.printMode !== 'lid') {
+        if (!geometries.body) throw new Error('Container body geometry is still loading.');
+        const clonedBody = geometries.body.clone();
+        clonedBody.computeBoundingBox();
+        const minZ = clonedBody.boundingBox?.min.z ?? 0;
         if (Math.abs(minZ) > 0.001) {
-            clonedGeo.translate(0, 0, -minZ);
+            clonedBody.translate(0, 0, -minZ);
         }
-
-        const mesh = new THREE.Mesh(clonedGeo, new THREE.MeshStandardMaterial({
-            color: (part === 'body' ? c.bodyColor : c.lidColor)?.slice(0, 7) || '#14B8A6',
+        const bodyMesh = new THREE.Mesh(clonedBody, new THREE.MeshStandardMaterial({
+            color: (c.bodyColor || '#14B8A6')?.slice(0, 7),
         }));
-        mesh.name = `Container_${part}`;
-        mesh.position.x = part === 'body' ? layout.bodyX : layout.lidX;
-        mesh.position.y = 0;
-        mesh.position.z = 0;
-        scene.add(mesh);
+        bodyMesh.name = 'Container Body';
+        bodyMesh.position.set(layout.bodyX, 0, 0);
+        scene.add(bodyMesh);
     }
-    // Only export separate text mesh for multi-color 3MF format
-    if (isEmbossedMultiColor && c.personText?.trim() && c.printMode !== 'body' && c.printMode !== 'fitTest') {
-        const clonedText = geometries.text.clone();
-        clonedText.computeBoundingBox();
-        const minZ = clonedText.boundingBox?.min.z ?? 0;
-        if (Math.abs(minZ) > 0.001) {
-            clonedText.translate(0, 0, -minZ);
+
+    // 2. Personalized Lid (or Container Lid)
+    if (c.printMode !== 'body') {
+        if (isEmbossedMultiColor) {
+            // Group for Bambu Studio assembly object:
+            // Top-level object: Personalized Lid
+            // Sub-parts: Lid Base and Lid Text
+            const lidGroup = new THREE.Group();
+            lidGroup.name = 'Personalized Lid';
+            lidGroup.position.set(layout.lidX, 0, 0);
+
+            const clonedLidBase = geometries.lidBase.clone();
+            const clonedText = geometries.text.clone();
+
+            clonedLidBase.computeBoundingBox();
+            clonedText.computeBoundingBox();
+
+            // Coordinate both parts together using their combined minimum Z
+            // so they undergo the EXACT same print bed placement translation
+            const minZ = Math.min(
+                clonedLidBase.boundingBox?.min.z ?? 0,
+                clonedText.boundingBox?.min.z ?? 0
+            );
+            if (Math.abs(minZ) > 0.001) {
+                clonedLidBase.translate(0, 0, -minZ);
+                clonedText.translate(0, 0, -minZ);
+            }
+
+            const lidBaseMesh = new THREE.Mesh(clonedLidBase, new THREE.MeshStandardMaterial({
+                color: (c.lidColor || '#647D94')?.slice(0, 7),
+            }));
+            lidBaseMesh.name = 'Lid Base';
+            lidGroup.add(lidBaseMesh);
+
+            const textMesh = new THREE.Mesh(clonedText, new THREE.MeshStandardMaterial({
+                color: (c.textColor || '#FFFFFF')?.slice(0, 7),
+            }));
+            textMesh.name = 'Lid Text';
+            lidGroup.add(textMesh);
+
+            scene.add(lidGroup);
+        } else {
+            // Single 100% closed manifold solid for STL export or non-embossed/single-color lid
+            if (!geometries.lid) throw new Error('Container lid geometry is still loading.');
+            const clonedLid = geometries.lid.clone();
+            clonedLid.computeBoundingBox();
+            const minZ = clonedLid.boundingBox?.min.z ?? 0;
+            if (Math.abs(minZ) > 0.001) {
+                clonedLid.translate(0, 0, -minZ);
+            }
+            const lidMesh = new THREE.Mesh(clonedLid, new THREE.MeshStandardMaterial({
+                color: (c.lidColor || '#647D94')?.slice(0, 7),
+            }));
+            lidMesh.name = c.personalized ? 'Personalized Lid' : 'Container Lid';
+            lidMesh.position.set(layout.lidX, 0, 0);
+            scene.add(lidMesh);
         }
-        const textMesh = new THREE.Mesh(clonedText, new THREE.MeshStandardMaterial({
-            color: (c.textColor || '#FFFFFF')?.slice(0, 7),
-        }));
-        textMesh.name = 'Container_text';
-        textMesh.position.x = layout.lidX;
-        textMesh.position.y = 0;
-        textMesh.position.z = 0;
-        scene.add(textMesh);
     }
     return scene;
 }

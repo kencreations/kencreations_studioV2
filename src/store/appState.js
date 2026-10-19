@@ -343,9 +343,10 @@ export const SCREW_CONTAINER_DEFAULTS = {
     personSize: 8,                // mm - text height
     personAutoFit: true,          // auto-scale text to fit lid safe area
 
-    // Viewport
+    // Viewport & Attachment
     viewMode: "assembled",        // 'assembled' | 'exploded'
     addKeychainHole: false,
+    attachmentPosition: "top",    // 'top' | 'side'
     keychainHoleDiameter: 4.2,    // mm - clean through-hole diameter
     keychainWallThickness: 3.2,   // mm - solid wall around hole
     keychainLugLength: 4.0,       // mm - extension from flange

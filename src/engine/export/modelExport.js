@@ -10,8 +10,10 @@ const xml = text => String(text).replaceAll('&', '&amp;').replaceAll('<', '&lt;'
 export function prepareExportScene(source) {
     if (!source) throw new Error('The model is not ready to export.');
     source.updateMatrixWorld(true);
-    const result = new THREE.Group();
-    const addMesh = (node, matrix, instanceColor) => {
+    const result = new THREE.Scene();
+    result.name = source.name || 'ExportScene';
+    let partCount = 0;
+    const addMeshTo = (target, node, matrix, instanceColor) => {
         const geometry = node.geometry;
         const positions = geometry?.getAttribute('position');
         if (!positions?.count) return; // e.g. a keycap with no legend
@@ -60,27 +62,69 @@ export function prepareExportScene(source) {
             const material = originalMaterial.clone();
             if (instanceColor && material.color) material.color.multiply(instanceColor);
             const mesh = new THREE.Mesh(out, material);
+            partCount++;
             // The upstream writer interpolates names without XML escaping.
-            mesh.name = xml(node.name || `Part ${result.children.length + 1}`);
-            result.add(mesh);
+            mesh.name = xml(node.name || `Part ${partCount}`);
+            target.add(mesh);
         }
     };
     try {
-        source.traverseVisible(node => {
-            if (!node.isMesh || node.userData?.excludeFromExport) return;
-            for (let parent = node.parent; parent; parent = parent.parent) {
-                if (parent.userData?.excludeFromExport) return;
-                if (parent === source) break;
-            }
-            if (node.isInstancedMesh) {
-                for (let i = 0; i < node.count; i++) {
-                    const local = new THREE.Matrix4(); node.getMatrixAt(i, local);
-                    const color = node.instanceColor ? new THREE.Color() : null;
-                    if (color) node.getColorAt(i, color);
-                    addMesh(node, node.matrixWorld.clone().multiply(local), color);
+        if (source.type === 'Scene') {
+            const topChildren = source.children || [];
+            for (const child of topChildren) {
+                if (child.userData?.excludeFromExport || !child.visible) continue;
+                if (child.isMesh) {
+                    if (child.isInstancedMesh) {
+                        for (let i = 0; i < child.count; i++) {
+                            const local = new THREE.Matrix4(); child.getMatrixAt(i, local);
+                            const color = child.instanceColor ? new THREE.Color() : null;
+                            if (color) child.getColorAt(i, color);
+                            addMeshTo(result, child, child.matrixWorld.clone().multiply(local), color);
+                        }
+                    } else {
+                        addMeshTo(result, child, child.matrixWorld);
+                    }
+                } else if (child.isGroup || child.type === 'Group') {
+                    const targetGroup = new THREE.Group();
+                    targetGroup.name = xml(child.name || `Group ${result.children.length + 1}`);
+                    child.traverseVisible(node => {
+                        if (!node.isMesh || node.userData?.excludeFromExport) return;
+                        for (let parent = node.parent; parent && parent !== child; parent = parent.parent) {
+                            if (parent.userData?.excludeFromExport) return;
+                        }
+                        if (node.isInstancedMesh) {
+                            for (let i = 0; i < node.count; i++) {
+                                const local = new THREE.Matrix4(); node.getMatrixAt(i, local);
+                                const color = node.instanceColor ? new THREE.Color() : null;
+                                if (color) node.getColorAt(i, color);
+                                addMeshTo(targetGroup, node, node.matrixWorld.clone().multiply(local), color);
+                            }
+                        } else {
+                            addMeshTo(targetGroup, node, node.matrixWorld);
+                        }
+                    });
+                    if (targetGroup.children.length > 0) {
+                        result.add(targetGroup);
+                    }
                 }
-            } else addMesh(node, node.matrixWorld);
-        });
+            }
+        } else {
+            source.traverseVisible(node => {
+                if (!node.isMesh || node.userData?.excludeFromExport) return;
+                for (let parent = node.parent; parent; parent = parent.parent) {
+                    if (parent.userData?.excludeFromExport) return;
+                    if (parent === source) break;
+                }
+                if (node.isInstancedMesh) {
+                    for (let i = 0; i < node.count; i++) {
+                        const local = new THREE.Matrix4(); node.getMatrixAt(i, local);
+                        const color = node.instanceColor ? new THREE.Color() : null;
+                        if (color) node.getColorAt(i, color);
+                        addMeshTo(result, node, node.matrixWorld.clone().multiply(local), color);
+                    }
+                } else addMeshTo(result, node, node.matrixWorld);
+            });
+        }
         if (!result.children.length) throw new Error('The model has no printable geometry yet.');
         result.updateMatrixWorld(true);
         return result;
@@ -105,11 +149,15 @@ async function build3MF(scene, printConfig) {
     const maxId = Math.max(...Array.from(model.matchAll(/<object id="(\d+)"/g), m => Number(m[1])));
     let nextId = maxId + 1;
     const baseId = nextId++;
-    const base = scene.children.map(mesh => `<base name="${mesh.name}" displaycolor="#${(mesh.material.color || new THREE.Color()).getHexString().toUpperCase()}FF"/>`).join('');
+    const allMeshes = [];
+    scene.traverse(node => {
+        if (node.isMesh) allMeshes.push(node);
+    });
+    const base = allMeshes.map(mesh => `<base name="${mesh.name}" displaycolor="#${(mesh.material.color || new THREE.Color()).getHexString().toUpperCase()}FF"/>`).join('');
     const resources = [`<basematerials id="${baseId}">${base}</basematerials>`];
     let partIndex = 0;
     model = model.replace(/<object ([^>]+)><mesh>([\s\S]*?)<\/mesh><\/object>/g, (_, attributes, meshXml) => {
-        const mesh = scene.children[partIndex];
+        const mesh = allMeshes[partIndex];
         const materialIndex = partIndex++;
         const colors = mesh.geometry.getAttribute('color');
         if (colors && mesh.material.vertexColors) {
@@ -129,7 +177,7 @@ async function build3MF(scene, printConfig) {
         }
         return `<object ${attributes} pid="${baseId}" pindex="${materialIndex}"><mesh>${meshXml}</mesh></object>`;
     });
-    if (partIndex !== scene.children.length) throw new Error('3MF exporter returned an unexpected part layout.');
+    if (partIndex !== allMeshes.length) throw new Error('3MF exporter returned an unexpected part layout.');
     model = model.replace('<model ', '<model xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02" ')
         .replace('<resources>', `<resources>${resources.join('')}`);
     files['3D/3dmodel.model'] = strToU8(model);

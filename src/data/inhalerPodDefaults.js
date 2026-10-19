@@ -1,11 +1,11 @@
 export const POD_DEFAULTS = Object.freeze({
-    preset: 'provisional', diameter: 16, length: 65, exposure: 12,
+    preset: 'provisional', diameter: 16, length: 65, exposure: 8,
     fitClearance: 0.35, axialClearance: 1, wall: 2, floor: 2,
     threadClearance: 0.3, threadLength: 5, loopClearance: 0.25,
     armThickness: 1.2, holeDiameter: 4.5,
     personalized: false, text: 'MY POD', font: 'BebasNeue', textStyle: 'engraved', textDepth: 0.6,
     bodyColor: '#C6D8AC', capColor: '#D9B6DB', loopColor: '#D89DB1', textColor: '#FFFFFF',
-    viewMode: 'assembled', printMode: 'kit', showReference: false,
+    viewMode: 'assembled', printMode: 'kit', showReference: true,
 });
 export const POD_LIMITS = Object.freeze({
     diameter: [12,30], length: [45,100], exposure: [8,20], fitClearance: [0.15,0.8],
